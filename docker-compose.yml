@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgis/postgis:11-2.5-alpine
+    environment:
+      - POSTGRES_USER=ckan
+      - POSTGRES_PASSWORD=ckan
+      - POSTGRES_DB=ckan
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ckan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  solr:
+    image: ckan/ckan-solr:2.9
+    volumes:
+      - solr_data:/opt/solr/server/solr/ckan/data
+
+  redis:
+    image: redis:6-alpine
+
+  ckan:
+    image: ckan/ckan-base:2.9.5
+    ports:
+      - "5000:5000"
+    environment:
+      - TZ=UTC
+      - CKAN_SQLALCHEMY_URL=postgresql://ckan:ckan@db/ckan
+      - CKAN_DATASTORE_WRITE_URL=postgresql://ckan:ckan@db/datastore
+      - CKAN_DATASTORE_READ_URL=postgresql://datastore_ro:ckan@db/datastore
+      - CKAN_DATAPUSHER_URL=http://datapusher:8800
+      - CKAN_SOLR_URL=http://solr:8983/solr/ckan
+      - CKAN_REDIS_URL=redis://redis:6379/1
+      - CKAN_SITE_URL=http://localhost:5000
+    depends_on:
+      db:
+        condition: service_healthy
+      solr:
+        condition: service_started
+      redis:
+        condition: service_started
+
+volumes:
+  pg_data:
+  solr_data:
