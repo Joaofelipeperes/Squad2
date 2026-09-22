@@ -119,6 +119,7 @@ O script `importar_ckan_goias.py` carrega os metadados de `metadados_ckan_goias.
 
 http://localhost:5000/api/3/action/status_show (Status do Ckan, versão, saúde, extenções)
 http://localhost:5000/api/3/action/dsaudit_activity_list?id=SUBSTITUIRPORIDDODATASET&limit=500   (Consulta por HTTP para as alterações do dataset)
+
 docker compose exec db psql -U ckan -d ckan -c "SELECT timestamp, activity_type, data FROM activity WHERE activity_type LIKE '%datastore%' ORDER BY timestamp DESC LIMIT 20;"   (Consulta diretamente no banco as alterações linha a linha)
 
 Observação, ao substituir nas requisições HTTP o localhost pela API de dadosabertos.go.gov.br, podemos obter informações do sistema Ckan do portal de dados abertos.
