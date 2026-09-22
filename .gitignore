@@ -1,6 +1,0 @@
-*.log
-.env
-pg_data/
-solr_data/
-.idea/
-.vscode/
