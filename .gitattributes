@@ -1,1 +1,6 @@
-init-db.sh text eol=lf
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.html text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf

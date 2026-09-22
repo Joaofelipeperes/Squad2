@@ -1,29 +1,39 @@
 services:
   db:
     image: postgis/postgis:11-2.5-alpine
+    container_name: ckansquad2-db-1
+    restart: unless-stopped
     environment:
       - POSTGRES_USER=ckan
       - POSTGRES_PASSWORD=ckan
       - POSTGRES_DB=ckan
     volumes:
       - pg_data:/var/lib/postgresql/data
-      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./init-db:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ckan"]
+      test: ["CMD-SHELL", "pg_isready -U ckan -d ckan"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   solr:
     image: ckan/ckan-solr:2.9
+    container_name: ckansquad2-solr-1
+    restart: unless-stopped
     volumes:
-      - solr_data:/opt/solr/server/solr/ckan/data
+      # a imagem ckan/ckan-solr:2.9 (Solr 8) guarda o core em /var/solr.
+      # Volume novo (o antigo solr_data apontava para um caminho que o Solr nao usa).
+      - solr_index:/var/solr
 
   redis:
     image: redis:6-alpine
+    container_name: ckansquad2-redis-1
+    restart: unless-stopped
 
   ckan:
-    image: ckan/ckan-base:2.9.5
+    build: .
+    container_name: ckansquad2-ckan-1
+    restart: unless-stopped
     ports:
       - "5000:5000"
     environment:
@@ -31,10 +41,24 @@ services:
       - CKAN_SQLALCHEMY_URL=postgresql://ckan:ckan@db/ckan
       - CKAN_DATASTORE_WRITE_URL=postgresql://ckan:ckan@db/datastore
       - CKAN_DATASTORE_READ_URL=postgresql://datastore_ro:ckan@db/datastore
-      - CKAN_DATAPUSHER_URL=http://datapusher:8800
       - CKAN_SOLR_URL=http://solr:8983/solr/ckan
       - CKAN_REDIS_URL=redis://redis:6379/1
       - CKAN_SITE_URL=http://localhost:5000
+      # IMPORTANTE: NAO incluir "activity" -- no CKAN 2.9 o activity stream e
+      # parte do core; o plugin "activity" so existe a partir do 2.10 e causava
+      # PluginNotFoundException -> "Internal Server Error".
+      # "envvars" deve ser o ultimo da lista.
+      - CKAN__PLUGINS=image_view text_view recline_view datastore dsaudit envvars
+      # Auditoria (opcionais):
+      # - CKANEXT__DSAUDIT__PREVIEW_RECORDS=12     linhas exibidas por evento
+      # - CKANEXT__DSAUDIT__MAX_DIFF_RECORDS=1000  limite p/ capturar valor anterior
+      # Interface em portugues (opcional):
+      # - CKAN__LOCALE_DEFAULT=pt_BR
+      - CKAN_SYSADMIN_NAME=admin
+      - CKAN_SYSADMIN_PASSWORD=Admin12345
+      - CKAN_SYSADMIN_EMAIL=admin@localhost
+    volumes:
+      - ckan_storage:/var/lib/ckan
     depends_on:
       db:
         condition: service_healthy
@@ -45,4 +69,5 @@ services:
 
 volumes:
   pg_data:
-  solr_data:
+  solr_index:
+  ckan_storage:
