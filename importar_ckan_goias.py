@@ -3,7 +3,7 @@ import requests
 
 # Configurações da instância local
 CKAN_URL = "http://localhost:5000"
-API_KEY = "43f7f1fe-a2e7-4f1b-a272-a88d366c2f27" 
+API_KEY = "7446a8f0-5431-4e39-a1d5-aede1a387167" 
 
 HEADERS = {
     "Authorization": API_KEY,

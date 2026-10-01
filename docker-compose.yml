@@ -49,9 +49,21 @@ services:
       # PluginNotFoundException -> "Internal Server Error".
       # "envvars" deve ser o ultimo da lista.
       - CKAN__PLUGINS=image_view text_view recline_view datastore dsaudit envvars
-      # Auditoria (opcionais):
+      # Auditoria -- garantia de nao perder o diff "antes -> depois":
+      #   MAX_DIFF_RECORDS=0  -> sem limite de linhas por chamada
+      #   STRICT=true         -> se a auditoria completa nao puder ser gravada,
+      #                          a alteracao e RECUSADA (nada muda no DataStore)
+      #   CAPTURE_DROP=true   -> guarda o conteudo da tabela excluida por inteiro
+      - CKANEXT__DSAUDIT__MAX_DIFF_RECORDS=0
+      - CKANEXT__DSAUDIT__STRICT=true
+      - CKANEXT__DSAUDIT__CAPTURE_DROP=true
+      # Arquivos enviados (CSV/XLSX): colunas-chave para casar as linhas entre
+      # versoes (separadas por espaco). Sem chave unica -> compara por posicao.
+      # Por recurso: campo "chave_auditoria" (ex.: "codigo" ou "ano,municipio").
+      - CKANEXT__DSAUDIT__FILE_KEY_COLUMNS=id codigo cod_ibge
       # - CKANEXT__DSAUDIT__PREVIEW_RECORDS=12     linhas exibidas por evento
-      # - CKANEXT__DSAUDIT__MAX_DIFF_RECORDS=1000  limite p/ capturar valor anterior
+      # Timeout por requisicao (segundos) -- cargas grandes precisam de mais tempo
+      - UWSGI_HARAKIRI=300
       # Interface em portugues (opcional):
       # - CKAN__LOCALE_DEFAULT=pt_BR
       - CKAN_SYSADMIN_NAME=admin

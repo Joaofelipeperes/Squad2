@@ -14,8 +14,10 @@
 # ---------------------------------------------------------------------------
 param(
     [string]$Org = "agencia-goiana-de-infraestrtutura-e-transportes-goinfra",
-    [string]$Token = "a4a52af9-1b74-4ceb-80be-11a5f9d08789",
-    [string]$Url = "http://localhost:5000"
+    [string]$Token = "7446a8f0-5431-4e39-a1d5-aede1a387167",
+    [string]$Url = "http://localhost:5000",
+    # teste de volume: upsert com N linhas (0 = nao executa)
+    [int]$Linhas = 5000
 )
 $ErrorActionPreference = "Stop"
 
@@ -96,6 +98,38 @@ Write-Host "UPSERT : id=3 nome c -> C ; id=4 nova linha"
 Api "datastore_delete" @{ resource_id = $rid; filters = @{ id = 1 } } | Out-Null
 Write-Host "DELETE : id=1"
 
+# 4b) teste de volume: N linhas inseridas e depois TODAS alteradas -----------
+if ($Linhas -gt 0) {
+    $ini = 1000
+    $base = @(); for ($i = 1; $i -le $Linhas; $i++) { $base += @{ id = $ini + $i; nome = "v$i"; valor = $i } }
+    Api "datastore_upsert" @{ resource_id = $rid; method = "insert"; records = $base } | Out-Null
+    $alt = @(); for ($i = 1; $i -le $Linhas; $i++) { $alt += @{ id = $ini + $i; valor = $i * 10 } }
+    Api "datastore_upsert" @{ resource_id = $rid; method = "update"; records = $alt } | Out-Null
+    Write-Host "VOLUME : $Linhas linhas alteradas em uma unica chamada (valor x10)"
+}
+
+# 4c) arquivo enviado (upload, como pela interface) e substituicao ------------
+# usa curl.exe (Windows 10+) para o envio multipart
+function Upload([string]$Action, [hashtable]$Fields, [string]$File) {
+    $cargs = @("-s", "-X", "POST", "$Url/api/3/action/$Action", "-H", "Authorization: $Token")
+    foreach ($k in $Fields.Keys) { $cargs += @("-F", "$k=$($Fields[$k])") }
+    $cargs += @("-F", "upload=@$File")
+    $r = (& curl.exe @cargs) | ConvertFrom-Json
+    if (-not $r.success) { throw "ERRO em $Action : $($r.error | ConvertTo-Json -Compress)" }
+    return $r.result
+}
+$tmp1 = Join-Path $env:TEMP "dados_v1.csv"; $tmp2 = Join-Path $env:TEMP "dados_v2.csv"
+[IO.File]::WriteAllText($tmp1, "id;nome;valor`n1;Ana;10`n2;Bruno;20`n3;Carla;30`n")
+[IO.File]::WriteAllText($tmp2, "id;nome;valor`n1;Ana;10`n2;Bruno;25`n4;Davi;40`n")
+$fres = Upload "resource_create" @{ package_id = $ds; name = "Arquivo CSV" } $tmp1
+Write-Host "UPLOAD : arquivo CSV com 3 linhas (recurso $($fres.id))"
+Upload "resource_update" @{ id = $fres.id; name = "Arquivo CSV" } $tmp2 | Out-Null
+Write-Host "TROCA  : arquivo substituido (id=2 valor 20->25 ; id=3 removida ; id=4 nova)"
+
+# 4d) metadados do dataset (autor / e-mail) ----------------------------------
+Api "package_patch" @{ id = $ds; author = "Fulano de Tal"; author_email = "fulano@exemplo.gov.br" } | Out-Null
+Write-Host "META   : author e author_email alterados"
+
 # 5) le a auditoria -----------------------------------------------------------
 Write-Host ""
 Write-Host "==== O que a auditoria gravou ====" -ForegroundColor Cyan
@@ -107,7 +141,25 @@ foreach ($a in $events) {
     $d = $a.data
     Write-Host ""
     Write-Host ("[{0} UTC] {1} {2}" -f $a.timestamp, $a.activity_type, $d.method) -ForegroundColor Yellow
-    if ($d.changes) {
+    if ($a.activity_type -eq "changed metadata") {
+        foreach ($c in $d.changes) {
+            $onde = if ($c.scope -eq "dataset") { "dataset" } else { "recurso '$($c.resource_name)'" }
+            Write-Host ("   {0} {1}: {2} -> {3}" -f $onde, $c.field, (Show $c.old), (Show $c.new))
+        }
+        continue
+    }
+    if ($a.activity_type -eq "changed resource file") {
+        $pv = if ($d.previous_version) { "v$($d.previous_version.version)" } else { "-" }
+        Write-Host ("   arquivo {0}: {1} -> v{2}" -f $d.version.filename, $pv, $d.version.version)
+        if ($d.diff_error) { Write-Host "   aviso: $($d.diff_error)" }
+    }
+    if ($d.changes -and $d.changes.Count -gt 20) {
+        $comAntes = @($d.changes | Where-Object { $_.status -eq "updated" -and $_.fields.Count -gt 0 -and $null -ne $_.fields[0].old }).Count
+        $cor = if ($comAntes -eq $d.changes.Count) { "Green" } else { "Red" }
+        Write-Host ("   {0} linhas enviadas; {1} com valor anterior -> novo registrado" -f $d.changes.Count, $comAntes) -ForegroundColor $cor
+        $f = $d.changes[-1].fields[0]
+        Write-Host ("   ex.: ultima linha {0}: {1} -> {2}" -f $f.field, $f.old, $f.new)
+    } elseif ($d.changes) {
         foreach ($c in $d.changes) {
             $key = ($c.key.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ", "
             if (-not $c.fields -or $c.fields.Count -eq 0) {
@@ -117,6 +169,8 @@ foreach ($a in $events) {
                 Write-Host ("   linha [{0}] {1,-9} {2}: {3} -> {4}" -f $key, $c.status, $f.field, (Show $f.old), (Show $f.new))
             }
         }
+    } elseif ($d.records -and $d.records.Count -gt 20) {
+        Write-Host ("   {0} linhas registradas" -f $d.records.Count)
     } elseif ($d.records) {
         foreach ($r in $d.records) {
             $row = ($r.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ", "
