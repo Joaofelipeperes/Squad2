@@ -1,0 +1,39 @@
+/* Ajustes da versão React sobre o CSS do protótipo (manter este arquivo pequeno). */
+
+/* No protótipo as telas eram <section> alternadas por JS; aqui cada rota renderiza uma só. */
+.screen { display: block; }
+
+/* Itens do menu agora são links (NavLink) em vez de <button>. */
+a.nav-item { text-decoration: none; }
+
+/* Formulários das telas de administração */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.form-grid .full { grid-column: 1 / -1; }
+.form-field { display: flex; flex-direction: column; gap: 5px; }
+.form-field label { font-size: 11px; font-weight: 600; color: var(--gray-700);
+  text-transform: uppercase; letter-spacing: .03em; }
+.form-field .help { font-size: 12px; color: var(--gray-500); }
+.form-field .text-input, .form-field select { width: 100%; }
+.check-line { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.check-line input { margin-top: 3px; }
+.inline-msg { font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-sm); }
+.inline-msg.ok { background: var(--green-100); color: var(--green-600); }
+.inline-msg.err { background: var(--red-100); color: var(--red-600); }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+textarea.text-input { resize: vertical; min-height: 72px; }
+
+/* Login */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, var(--navy-900) 0%, var(--navy-700) 100%); padding: 20px; }
+.login-card { background: var(--surface); border-radius: 8px; box-shadow: var(--shadow-2);
+  width: 100%; max-width: 380px; padding: 28px; }
+.login-card .brand { padding: 0 0 20px; border-bottom: 1px solid var(--gray-200); margin-bottom: 20px; }
+.login-card .brand-text h1 { color: var(--ink); }
+.login-card .brand-text span { color: var(--gray-500); }
+.login-card form { display: flex; flex-direction: column; gap: 14px; }
+
+.topbar-meta { font-size: 12px; color: var(--gray-500); margin-right: 6px; }
+/* Caixas de seleção dentro de .form-field não herdam o estilo de rótulo do protótipo */
+.form-field label.check-line { text-transform: none; letter-spacing: 0; font-size: 13px;
+  font-weight: 400; color: var(--ink); }
+.form-field label.check-line strong { font-weight: 600; }

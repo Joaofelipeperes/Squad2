@@ -1,0 +1,37 @@
+[project]
+name = "monitor-dados-abertos-go"
+version = "0.1.0"
+description = "Camada de monitoramento e governança do Portal de Dados Abertos de Goiás (CKAN 2.9.5) — Squad 2 / CGE-GO"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "email-validator>=2.1",
+  "httpx>=0.27",
+  "apscheduler>=3.10,<4",
+  "bcrypt>=4.1",
+  "pyjwt>=2.8",
+  "cryptography>=42",
+  "psycopg[binary]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+# Dependências que entram quando os módulos forem implementados:
+# lgpd = ["pandas>=2.2", "charset-normalizer>=3"]   # leitura de recursos tabulares (PBI-32)
+# reports = ["openpyxl>=3.1"]                        # exportação XLSX (PBI-60)
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["alembic*"]

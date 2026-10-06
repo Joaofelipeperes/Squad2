@@ -1,0 +1,2202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dados Abertos Goiás — Monitoramento e Governança</title>
+
+<!-- Font Awesome (icons) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --navy-900:#0c2338;
+  --navy-800:#0f2c46;
+  --navy-700:#163f61;
+  --navy-600:#1c4f79;
+  --blue-500:#1d6fa5;
+  --blue-100:#e3eef6;
+  --green-600:#2f7a4f;
+  --green-100:#e4f2e9;
+  --amber-600:#a8710f;
+  --amber-100:#faf0dc;
+  --red-600:#af3527;
+  --red-100:#f8e6e3;
+  --gray-50:#f3f5f8;
+  --gray-100:#eef1f5;
+  --gray-200:#dfe4ea;
+  --gray-300:#c7cfd8;
+  --gray-500:#7c8a99;
+  --gray-700:#425160;
+  --ink:#1c2733;
+  --surface:#ffffff;
+  --radius-sm:4px;
+  --radius-md:6px;
+  --shadow-1:0 1px 2px rgba(15,44,70,.06), 0 1px 1px rgba(15,44,70,.04);
+  --shadow-2:0 8px 24px rgba(12,35,56,.14);
+  --sidebar-w:258px;
+  --header-h:64px;
+  font-size:15px;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color:var(--ink);
+  background:var(--gray-100);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em;}
+p{margin:0;}
+ul{list-style:none;margin:0;padding:0;}
+button{font-family:inherit;}
+code,.mono{font-family:'IBM Plex Mono',monospace;}
+a{color:inherit;}
+:focus-visible{outline:2px solid var(--blue-500);outline-offset:2px;}
+
+/* scrollbars */
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:10px;}
+
+/* ============================================================
+   LAYOUT SHELL
+   ============================================================ */
+.app{display:flex;min-height:100vh;}
+
+/* ---------- Sidebar ---------- */
+.sidebar{
+  width:var(--sidebar-w);
+  flex-shrink:0;
+  background:linear-gradient(180deg,var(--navy-900) 0%, var(--navy-800) 60%, var(--navy-700) 100%);
+  color:#dce7f1;
+  display:flex;
+  flex-direction:column;
+  position:fixed;
+  top:0;left:0;bottom:0;
+  z-index:40;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:22px 20px 18px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.brand-mark{
+  width:38px;height:38px;border-radius:9px;
+  background:linear-gradient(135deg,var(--blue-500),var(--green-600));
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;color:#fff;flex-shrink:0;
+}
+.brand-text h1{font-size:15.5px;color:#fff;line-height:1.2;}
+.brand-text span{display:block;font-size:11.5px;color:#9db4c8;margin-top:2px;}
+
+.nav{flex:1;padding:14px 12px;overflow-y:auto;}
+.nav-group-label{
+  font-size:11px;color:#7f9ab1;padding:14px 10px 6px;
+  text-transform:uppercase;letter-spacing:.06em;
+}
+.nav-item{
+  display:flex;align-items:center;gap:11px;
+  padding:10px 12px;margin-bottom:2px;
+  border-radius:var(--radius-md);
+  cursor:pointer;color:#c4d5e3;font-size:14px;font-weight:500;
+  transition:background .12s ease, color .12s ease;
+  border:none;background:none;width:100%;text-align:left;
+}
+.nav-item i{width:18px;text-align:center;font-size:14.5px;color:#8fa9bf;flex-shrink:0;}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff;}
+.nav-item.active{background:var(--blue-500);color:#fff;}
+.nav-item.active i{color:#fff;}
+.nav-item .badge-count{
+  margin-left:auto;background:rgba(255,255,255,.14);
+  color:#fff;font-size:11px;font-weight:600;
+  padding:1px 7px;border-radius:20px;
+}
+.nav-item.alert .badge-count{background:var(--red-600);}
+
+.sidebar-footer{
+  padding:16px 18px 18px;
+  border-top:1px solid rgba(255,255,255,.08);
+  font-size:12.5px;color:#8fa5b8;
+}
+.sidebar-footer .org-line{display:flex;gap:6px;margin-bottom:3px;color:#c4d5e3;font-weight:600;}
+.sidebar-footer .user-line{display:flex;align-items:center;gap:8px;margin-top:10px;}
+.user-avatar{
+  width:28px;height:28px;border-radius:50%;
+  background:var(--blue-500);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;flex-shrink:0;
+}
+
+/* ---------- Main column ---------- */
+.main{margin-left:var(--sidebar-w);flex:1;min-width:0;display:flex;flex-direction:column;}
+
+.topbar{
+  height:var(--header-h);
+  background:var(--surface);
+  border-bottom:1px solid var(--gray-200);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  position:sticky;top:0;z-index:30;
+}
+.topbar-title{display:flex;flex-direction:column;justify-content:center;}
+.topbar-title .crumb{font-size:11.5px;color:var(--gray-500);font-weight:600;letter-spacing:.03em;text-transform:uppercase;}
+.topbar-title h2{font-size:16.5px;color:var(--ink);margin-top:1px;}
+.topbar-actions{display:flex;align-items:center;gap:10px;}
+
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 15px;border-radius:var(--radius-md);
+  font-size:13.5px;font-weight:600;cursor:pointer;
+  border:1px solid transparent;transition:filter .12s ease, background .12s ease;
+  white-space:nowrap;
+}
+.btn:active{filter:brightness(.94);}
+.btn-primary{background:var(--blue-500);color:#fff;}
+.btn-primary:hover{background:#195f8e;}
+.btn-outline{background:#fff;border-color:var(--gray-300);color:var(--gray-700);}
+.btn-outline:hover{background:var(--gray-50);}
+.btn-ghost{background:transparent;color:var(--gray-700);}
+.btn-ghost:hover{background:var(--gray-100);}
+.btn-sm{padding:6px 11px;font-size:12.5px;}
+.btn-danger-line{background:#fff;border-color:var(--red-600);color:var(--red-600);}
+.btn-danger-line:hover{background:var(--red-100);}
+.btn-success-line{background:#fff;border-color:var(--green-600);color:var(--green-600);}
+.btn-success-line:hover{background:var(--green-100);}
+
+.content{padding:26px 28px 60px;flex:1;}
+
+/* ---------- Screens ---------- */
+.screen{display:none;animation:fadein .18s ease;}
+.screen.active{display:block;}
+@keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+.page-lede{margin-bottom:22px;max-width:760px;}
+.page-lede p{color:var(--gray-700);font-size:14px;margin-top:4px;line-height:1.5;}
+
+/* ---------- Layer banner ---------- */
+.layer-banner{
+  display:flex;align-items:center;gap:10px;
+  background:var(--blue-100);border:1px solid #c3dcec;
+  color:var(--navy-800);
+  padding:10px 14px;border-radius:var(--radius-md);
+  font-size:12.5px;margin-bottom:20px;
+}
+.layer-banner i{color:var(--blue-500);}
+
+/* ---------- Cards / KPIs ---------- */
+.kpi-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;
+}
+.kpi-card{
+  background:var(--surface);border:1px solid var(--gray-200);
+  border-radius:var(--radius-md);padding:16px 16px 14px;
+  box-shadow:var(--shadow-1);
+  display:flex;flex-direction:column;gap:8px;
+}
+.kpi-top{display:flex;align-items:center;justify-content:space-between;}
+.kpi-icon{
+  width:34px;height:34px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:14.5px;
+}
+.kpi-icon.blue{background:var(--blue-100);color:var(--blue-500);}
+.kpi-icon.green{background:var(--green-100);color:var(--green-600);}
+.kpi-icon.amber{background:var(--amber-100);color:var(--amber-600);}
+.kpi-icon.red{background:var(--red-100);color:var(--red-600);}
+.kpi-value{font-size:26px;font-weight:800;color:var(--navy-900);line-height:1;}
+.kpi-label{font-size:12.5px;color:var(--gray-700);font-weight:500;}
+.kpi-foot{font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:5px;}
+.kpi-foot.ok{color:var(--green-600);}
+.kpi-foot.warn{color:var(--amber-600);}
+.kpi-foot.bad{color:var(--red-600);}
+
+/* ---------- Panels / sections ---------- */
+.panel{
+  background:var(--surface);border:1px solid var(--gray-200);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-1);
+  margin-bottom:22px;
+}
+.panel-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px;border-bottom:1px solid var(--gray-200);
+  gap:12px;flex-wrap:wrap;
+}
+.panel-head h3{font-size:14.5px;}
+.panel-head .sub{font-size:12px;color:var(--gray-500);margin-top:2px;font-weight:500;}
+.panel-body{padding:18px;}
+
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px;}
+.chart-wrap{position:relative;height:250px;}
+
+/* ---------- Filters bar ---------- */
+.filters-bar{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;
+  padding:16px 18px;border-bottom:1px solid var(--gray-200);background:var(--gray-50);
+  border-radius:var(--radius-md) var(--radius-md) 0 0;
+}
+.filter-field{display:flex;flex-direction:column;gap:5px;min-width:150px;}
+.filter-field label{font-size:11px;font-weight:600;color:var(--gray-700);text-transform:uppercase;letter-spacing:.03em;}
+select, .text-input{
+  padding:8px 10px;border:1px solid var(--gray-300);border-radius:var(--radius-sm);
+  font-size:13px;background:#fff;color:var(--ink);font-family:inherit;
+}
+select:focus,.text-input:focus{border-color:var(--blue-500);}
+.filter-actions{margin-left:auto;display:flex;gap:8px;align-self:flex-end;}
+.search-field{flex:1;min-width:220px;position:relative;}
+.search-field i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--gray-500);font-size:12.5px;}
+.search-field input{width:100%;padding-left:32px;}
+
+/* ---------- Tables ---------- */
+.table-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{
+  text-align:left;padding:10px 14px;font-size:11.5px;color:var(--gray-700);
+  text-transform:uppercase;letter-spacing:.03em;font-weight:700;
+  border-bottom:1px solid var(--gray-200);background:var(--gray-50);
+  white-space:nowrap;
+}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--gray-100);color:var(--ink);vertical-align:middle;}
+tbody tr{cursor:pointer;transition:background .1s ease;}
+tbody tr:hover{background:var(--blue-100);}
+tbody tr:last-child td{border-bottom:none;}
+.cell-muted{color:var(--gray-500);font-size:12.5px;}
+.cell-strong{font-weight:600;color:var(--navy-900);}
+.row-link{color:var(--blue-500);font-weight:600;font-size:12.5px;cursor:pointer;}
+.row-link:hover{text-decoration:underline;}
+.table-empty{padding:34px;text-align:center;color:var(--gray-500);font-size:13px;}
+
+/* ---------- Badges ---------- */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:700;
+  white-space:nowrap;
+}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;}
+.badge-green{background:var(--green-100);color:var(--green-600);}
+.badge-amber{background:var(--amber-100);color:var(--amber-600);}
+.badge-red{background:var(--red-100);color:var(--red-600);}
+.badge-gray{background:var(--gray-100);color:var(--gray-700);}
+.badge-blue{background:var(--blue-100);color:var(--blue-500);}
+
+.priority-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;}
+.priority-Alta{background:var(--red-100);color:var(--red-600);}
+.priority-Média{background:var(--amber-100);color:var(--amber-600);}
+.priority-Baixa{background:var(--gray-100);color:var(--gray-700);}
+
+/* ---------- Modal ---------- */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(12,25,38,.5);
+  display:none;align-items:flex-start;justify-content:center;
+  padding:5vh 20px;z-index:100;overflow-y:auto;
+}
+.modal-overlay.open{display:flex;}
+.modal{
+  background:#fff;border-radius:8px;max-width:620px;width:100%;
+  box-shadow:var(--shadow-2);animation:modalIn .16s ease;
+  margin-bottom:5vh;
+}
+@keyframes modalIn{from{opacity:0;transform:translateY(-8px) scale(.99);}to{opacity:1;transform:translateY(0) scale(1);}}
+.modal-head{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:18px 20px;border-bottom:1px solid var(--gray-200);
+}
+.modal-head h3{font-size:15.5px;}
+.modal-head .sub{font-size:12.5px;color:var(--gray-500);margin-top:3px;}
+.modal-close{
+  background:var(--gray-100);border:none;width:28px;height:28px;border-radius:6px;
+  cursor:pointer;color:var(--gray-700);flex-shrink:0;
+}
+.modal-close:hover{background:var(--gray-200);}
+.modal-body{padding:20px;}
+.modal-foot{padding:16px 20px;border-top:1px solid var(--gray-200);display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;}
+
+.def-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;}
+.def-grid.full{grid-template-columns:1fr;}
+.def-item label{display:block;font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.03em;font-weight:700;margin-bottom:4px;}
+.def-item .val{font-size:13.5px;color:var(--ink);font-weight:600;}
+.def-item .val.mono{font-family:'IBM Plex Mono',monospace;font-weight:500;}
+
+.mini-history{margin-top:16px;border-top:1px dashed var(--gray-200);padding-top:14px;}
+.mini-history h4{font-size:12.5px;margin-bottom:10px;color:var(--gray-700);}
+.hist-row{display:flex;gap:10px;font-size:12.5px;padding:7px 0;border-bottom:1px solid var(--gray-100);}
+.hist-row .date{color:var(--gray-500);min-width:110px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;}
+
+.alert-callout{
+  display:flex;gap:10px;background:var(--amber-100);border:1px solid #ecd9ac;
+  color:#7a5309;padding:12px 14px;border-radius:6px;font-size:12.5px;margin-bottom:18px;line-height:1.5;
+}
+.alert-callout i{margin-top:1px;}
+
+.confidence-bar{width:100%;height:6px;background:var(--gray-200);border-radius:4px;overflow:hidden;margin-top:6px;}
+.confidence-fill{height:100%;background:var(--red-600);}
+
+/* ---------- Timeline (Rastreabilidade) ---------- */
+.timeline{position:relative;padding-left:26px;}
+.timeline::before{content:'';position:absolute;left:8px;top:6px;bottom:6px;width:2px;background:var(--gray-200);}
+.tl-item{position:relative;padding-bottom:22px;}
+.tl-item:last-child{padding-bottom:0;}
+.tl-dot{
+  position:absolute;left:-26px;top:2px;width:17px;height:17px;border-radius:50%;
+  background:#fff;border:3px solid var(--blue-500);
+}
+.tl-dot.create{border-color:var(--green-600);}
+.tl-dot.delete{border-color:var(--red-600);}
+.tl-dot.private{border-color:var(--amber-600);}
+.tl-card{background:var(--gray-50);border:1px solid var(--gray-200);border-radius:6px;padding:12px 14px;}
+.tl-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:6px;}
+.tl-date{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--gray-500);}
+.tl-type{font-weight:700;font-size:13px;color:var(--navy-900);}
+.tl-meta{font-size:12.5px;color:var(--gray-700);}
+.tl-meta b{color:var(--ink);}
+
+/* ---------- Reports grid ---------- */
+.reports-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.report-card{
+  background:var(--surface);border:1px solid var(--gray-200);border-radius:8px;
+  padding:18px;box-shadow:var(--shadow-1);display:flex;flex-direction:column;gap:10px;
+}
+.report-icon{width:36px;height:36px;border-radius:8px;background:var(--blue-100);color:var(--blue-500);display:flex;align-items:center;justify-content:center;font-size:15px;}
+.report-card h4{font-size:14px;}
+.report-card p{font-size:12.5px;color:var(--gray-500);line-height:1.5;}
+.report-card .btn{margin-top:auto;}
+
+/* ---------- Org detail cards inside modal ---------- */
+.stat-mini-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:6px;}
+.stat-mini{background:var(--gray-50);border:1px solid var(--gray-200);border-radius:6px;padding:10px 12px;}
+.stat-mini .n{font-size:18px;font-weight:800;color:var(--navy-900);}
+.stat-mini .l{font-size:11.5px;color:var(--gray-500);margin-top:2px;}
+
+/* ---------- Toast ---------- */
+.toast-wrap{position:fixed;bottom:22px;left:22px;z-index:200;display:flex;flex-direction:column;gap:10px;}
+.toast{
+  background:var(--navy-900);color:#fff;padding:12px 16px;border-radius:7px;
+  font-size:13px;font-weight:500;box-shadow:var(--shadow-2);
+  display:flex;align-items:center;gap:10px;min-width:260px;
+  animation:toastIn .18s ease;
+}
+.toast i{color:var(--green-600);}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+.empty-state{padding:46px 20px;text-align:center;color:var(--gray-500);}
+.empty-state i{font-size:26px;margin-bottom:10px;color:var(--gray-300);}
+.empty-state p{font-size:13px;}
+
+/* Flow footer on dashboard */
+.flow-strip{
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  background:var(--navy-900);color:#cfe0ee;border-radius:8px;
+  padding:16px 18px;font-size:12px;margin-top:4px;
+}
+.flow-step{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.08);padding:6px 11px;border-radius:20px;white-space:nowrap;}
+.flow-step i.step-ico{color:#7fb8e0;}
+.flow-arrow{color:#5c7d99;}
+
+/* ============================================================
+   ASSISTENTE (chatbot local sobre os dados mockados)
+   ============================================================ */
+.chat-fab{
+  position:fixed;right:24px;bottom:24px;z-index:150;
+  width:56px;height:56px;border-radius:50%;
+  background:linear-gradient(135deg,var(--blue-500),var(--green-600));
+  color:#fff;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;box-shadow:var(--shadow-2);
+  transition:transform .15s ease;
+}
+.chat-fab:hover{transform:translateY(-2px);}
+.chat-fab .fab-badge{
+  position:absolute;top:-3px;right:-3px;
+  background:var(--red-600);color:#fff;font-size:10px;font-weight:700;
+  width:18px;height:18px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid var(--gray-100);
+}
+.chat-fab i.fa-xmark{display:none;}
+.chat-fab.open i.fa-comment-dots{display:none;}
+.chat-fab.open i.fa-xmark{display:inline-block;}
+
+.chat-panel{
+  position:fixed;right:24px;bottom:92px;z-index:150;
+  width:380px;max-width:calc(100vw - 48px);
+  height:min(600px, calc(100vh - 140px));
+  background:var(--surface);border-radius:12px;
+  box-shadow:var(--shadow-2);border:1px solid var(--gray-200);
+  display:flex;flex-direction:column;overflow:hidden;
+  opacity:0;transform:translateY(12px) scale(.98);pointer-events:none;
+  transition:opacity .16s ease, transform .16s ease;
+}
+.chat-panel.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+
+.chat-head{
+  background:linear-gradient(120deg,var(--navy-900),var(--navy-700));
+  color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.chat-head-icon{
+  width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;
+}
+.chat-head-text h4{font-size:13.5px;color:#fff;}
+.chat-head-text span{font-size:11px;color:#a9c2d6;display:block;margin-top:1px;}
+.chat-head-close{margin-left:auto;background:rgba(255,255,255,.12);border:none;color:#fff;width:26px;height:26px;border-radius:6px;cursor:pointer;flex-shrink:0;}
+.chat-head-close:hover{background:rgba(255,255,255,.22);}
+
+.chat-scope-banner{
+  background:var(--blue-100);color:var(--navy-800);font-size:11.5px;
+  padding:8px 14px;border-bottom:1px solid var(--gray-200);line-height:1.45;flex-shrink:0;
+}
+
+.chat-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--gray-50);}
+.msg{max-width:86%;font-size:13px;line-height:1.5;padding:9px 12px;border-radius:12px;white-space:pre-wrap;}
+.msg-bot{background:#fff;border:1px solid var(--gray-200);color:var(--ink);align-self:flex-start;border-bottom-left-radius:3px;}
+.msg-bot b{color:var(--navy-900);}
+.msg-user{background:var(--blue-500);color:#fff;align-self:flex-end;border-bottom-right-radius:3px;}
+.msg-bot table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px;}
+.msg-bot table th, .msg-bot table td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--gray-100);}
+.msg-bot table th{color:var(--gray-500);font-weight:700;font-size:10.5px;text-transform:uppercase;}
+
+.msg-typing{align-self:flex-start;background:#fff;border:1px solid var(--gray-200);border-radius:12px;border-bottom-left-radius:3px;padding:11px 14px;display:flex;gap:4px;}
+.msg-typing span{width:6px;height:6px;border-radius:50%;background:var(--gray-300);animation:typingBlink 1.1s infinite ease-in-out;}
+.msg-typing span:nth-child(2){animation-delay:.15s;}
+.msg-typing span:nth-child(3){animation-delay:.3s;}
+@keyframes typingBlink{0%,60%,100%{opacity:.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-2px);}}
+
+.chat-suggestions{
+  display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-top:1px solid var(--gray-200);
+  background:#fff;flex-shrink:0;
+}
+.chip{
+  background:var(--gray-100);border:1px solid var(--gray-200);color:var(--gray-700);
+  font-size:11.5px;font-weight:600;padding:6px 11px;border-radius:20px;cursor:pointer;
+  transition:background .12s ease;
+}
+.chip:hover{background:var(--blue-100);color:var(--blue-500);border-color:#c3dcec;}
+
+.chat-input-row{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--gray-200);background:#fff;flex-shrink:0;}
+.chat-input-row input{
+  flex:1;border:1px solid var(--gray-300);border-radius:20px;padding:9px 14px;font-size:13px;font-family:inherit;
+}
+.chat-input-row input:focus{border-color:var(--blue-500);}
+.chat-send-btn{
+  width:36px;height:36px;border-radius:50%;background:var(--blue-500);color:#fff;border:none;
+  cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;
+}
+.chat-send-btn:hover{background:#195f8e;}
+.chat-send-btn:disabled{background:var(--gray-300);cursor:not-allowed;}
+
+@media (max-width:480px){
+  .chat-panel{right:12px;left:12px;width:auto;bottom:88px;}
+  .chat-fab{right:16px;bottom:16px;}
+}
+
+@media (max-width:1200px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .charts-row{grid-template-columns:1fr;}
+  .reports-grid{grid-template-columns:repeat(2,1fr);}
+}
+@media (max-width:900px){
+  .sidebar{width:220px;}
+  .main{margin-left:220px;}
+  :root{--sidebar-w:220px;}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============================================================
+       SIDEBAR
+       ============================================================ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><i class="fa-solid fa-layer-group"></i></div>
+      <div class="brand-text">
+        <h1>Dados Abertos Goiás</h1>
+        <span>Monitoramento e Governança</span>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav-list">
+      <div class="nav-group-label">Visão geral</div>
+      <button class="nav-item active" data-screen="dashboard"><i class="fa-solid fa-chart-simple"></i>Dashboard</button>
+
+      <div class="nav-group-label">Governança do PDA</div>
+      <button class="nav-item" data-screen="pda"><i class="fa-solid fa-clipboard-check"></i>Monitoramento PDA</button>
+      <button class="nav-item" data-screen="updates"><i class="fa-solid fa-rotate"></i>Atualizações</button>
+      <button class="nav-item alert" data-screen="lgpd"><i class="fa-solid fa-shield-halved"></i>Dados Pessoais (LGPD)<span class="badge-count" id="nav-lgpd-count">23</span></button>
+
+      <div class="nav-group-label">Inventário</div>
+      <button class="nav-item" data-screen="organizations"><i class="fa-solid fa-building-columns"></i>Organizações</button>
+      <button class="nav-item" data-screen="datasets"><i class="fa-solid fa-database"></i>Datasets</button>
+      <button class="nav-item" data-screen="traceability"><i class="fa-solid fa-timeline"></i>Rastreabilidade</button>
+
+      <div class="nav-group-label">Saídas</div>
+      <button class="nav-item" data-screen="reports"><i class="fa-solid fa-file-lines"></i>Relatórios</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="org-line"><i class="fa-solid fa-landmark"></i> CGE-GO</div>
+      <div class="org-line" style="font-weight:500;color:#8fa5b8;"><i class="fa-solid fa-diagram-project"></i> GEDA</div>
+      <div class="user-line">
+        <div class="user-avatar">GD</div>
+        <div>
+          <div style="font-weight:600;color:#e6eef5;">Gerente de Dados Abertos</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================================================
+       MAIN
+       ============================================================ -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-title">
+        <span class="crumb" id="topbar-crumb">GEDA · CGE-GO</span>
+        <h2 id="topbar-title">Visão Geral</h2>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-outline btn-sm" id="btn-export-report"><i class="fa-solid fa-file-export"></i>Exportar relatório</button>
+        <button class="btn btn-primary btn-sm" id="btn-refresh"><i class="fa-solid fa-arrows-rotate"></i>Atualizar dados</button>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ============================================================
+           TELA 1 — DASHBOARD
+           ============================================================ -->
+      <section class="screen active" id="screen-dashboard">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Visão Geral</h2>
+          <p>Monitoramento do Portal de Dados Abertos de Goiás — camada de governança externa ao CKAN, sem alteração dos dados publicados.</p>
+        </div>
+
+        <div class="layer-banner">
+          <i class="fa-solid fa-circle-info"></i>
+          Este painel consolida o cumprimento do PDA, a atualização real dos recursos e sinalizações de possíveis dados pessoais para conferência humana.
+        </div>
+
+        <div class="kpi-grid" id="dashboard-kpis"></div>
+
+        <div class="charts-row">
+          <div class="panel" style="margin-bottom:0;">
+            <div class="panel-head">
+              <div>
+                <h3>Cumprimento do PDA por situação</h3>
+                <div class="sub">446 bases previstas no Plano de Dados Abertos</div>
+              </div>
+            </div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chart-pda"></canvas></div></div>
+          </div>
+          <div class="panel" style="margin-bottom:0;">
+            <div class="panel-head">
+              <div>
+                <h3>Status das atualizações</h3>
+                <div class="sub">2.939 recursos monitorados (base: last_modified)</div>
+              </div>
+            </div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="chart-updates"></canvas></div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h3>Alertas prioritários</h3>
+              <div class="sub">Itens que exigem conferência imediata da equipe GEDA</div>
+            </div>
+            <button class="btn btn-outline btn-sm" data-goto="pda">Ver monitoramento completo</button>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Órgão</th><th>Tipo</th><th>Base / Dataset</th><th>Situação</th><th>Prazo</th><th>Ação</th></tr></thead>
+              <tbody id="dashboard-alerts-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-body">
+            <h3 style="font-size:13.5px;margin-bottom:12px;color:var(--gray-700);">Fluxo de governança monitorado</h3>
+            <div class="flow-strip" id="flow-strip"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           TELA 2 — MONITORAMENTO PDA
+           ============================================================ -->
+      <section class="screen" id="screen-pda">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Monitoramento do PDA</h2>
+          <p>Acompanhamento das bases previstas no Plano de Dados Abertos em relação à publicação efetiva no CKAN.</p>
+        </div>
+
+        <div class="panel">
+          <div class="filters-bar">
+            <div class="filter-field">
+              <label>Órgão</label>
+              <select id="pda-filter-org"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-field">
+              <label>Situação</label>
+              <select id="pda-filter-status">
+                <option value="">Todas</option>
+                <option>Publicado</option>
+                <option>Em dia</option>
+                <option>Em atraso</option>
+                <option>Próximo do prazo</option>
+                <option>Não publicado</option>
+                <option>Sem recurso</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label>Periodicidade</label>
+              <select id="pda-filter-period">
+                <option value="">Todas</option>
+                <option>Diária</option><option>Semanal</option><option>Mensal</option>
+                <option>Trimestral</option><option>Semestral</option><option>Anual</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label>Ano</label>
+              <select id="pda-filter-year"><option value="">Todos</option><option>2026</option><option>2025</option></select>
+            </div>
+            <div class="filter-field">
+              <label>Prazo</label>
+              <select id="pda-filter-prazo">
+                <option value="">Todos</option>
+                <option value="vencido">Vencido</option>
+                <option value="30d">Próximos 30 dias</option>
+              </select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-ghost btn-sm" id="pda-filter-clear">Limpar filtros</button>
+            </div>
+          </div>
+          <div class="panel-head" style="border-bottom:none;padding-bottom:0;">
+            <div class="sub" id="pda-result-count" style="font-size:12.5px;"></div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>Órgão</th><th>Base prevista (PDA)</th><th>Dataset CKAN</th><th>ID CKAN</th>
+                <th>Prazo</th><th>Periodicidade</th><th>Última atualização</th><th>Situação</th>
+              </tr></thead>
+              <tbody id="pda-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           TELA 3 — ATUALIZAÇÕES
+           ============================================================ -->
+      <section class="screen" id="screen-updates">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Monitoramento de Atualizações</h2>
+          <p>Avaliação da atualização real do conteúdo dos recursos publicados.</p>
+        </div>
+
+        <div class="layer-banner">
+          <i class="fa-solid fa-circle-info"></i>
+          O sistema utiliza a data de atualização do recurso <code>last_modified</code> para avaliar a atualização real do conteúdo. O campo <code>metadata_modified</code> não é utilizado como indicador, pois reflete apenas alterações de metadados no CKAN.
+        </div>
+
+        <div class="kpi-grid" id="updates-kpis" style="grid-template-columns:repeat(4,1fr);"></div>
+
+        <div class="panel">
+          <div class="filters-bar">
+            <div class="filter-field">
+              <label>Periodicidade</label>
+              <select id="updates-filter-period">
+                <option value="">Todas</option>
+                <option>Diária</option><option>Semanal</option><option>Mensal</option>
+                <option>Trimestral</option><option>Semestral</option><option>Anual</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label>Situação</label>
+              <select id="updates-filter-status">
+                <option value="">Todas</option>
+                <option>Atualizado</option><option>Próximo do vencimento</option>
+                <option>Atrasado</option><option>Sem informação</option>
+              </select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-ghost btn-sm" id="updates-filter-clear">Limpar filtros</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>Dataset</th><th>Órgão</th><th>Periodicidade</th><th>Último recurso atualizado</th>
+                <th>Dias desde atualização</th><th>Prazo esperado</th><th>Situação</th>
+              </tr></thead>
+              <tbody id="updates-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           TELA 4 — DADOS PESSOAIS / LGPD
+           ============================================================ -->
+      <section class="screen" id="screen-lgpd">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Riscos de Dados Pessoais</h2>
+          <p>Detecção e priorização para análise humana.</p>
+        </div>
+
+        <div class="alert-callout">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <div>Os resultados desta tela são <b>indicativos</b> e devem passar por revisão humana antes de qualquer ação. O sistema apenas identifica e sinaliza possíveis ocorrências — não bloqueia, altera ou anonimiza dados publicados.</div>
+        </div>
+
+        <div class="kpi-grid" id="lgpd-kpis" style="grid-template-columns:repeat(4,1fr);"></div>
+
+        <div class="panel">
+          <div class="filters-bar">
+            <div class="filter-field">
+              <label>Prioridade</label>
+              <select id="lgpd-filter-priority"><option value="">Todas</option><option>Alta</option><option>Média</option><option>Baixa</option></select>
+            </div>
+            <div class="filter-field">
+              <label>Tipo de dado</label>
+              <select id="lgpd-filter-type"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-field">
+              <label>Órgão</label>
+              <select id="lgpd-filter-org"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-field">
+              <label>Status</label>
+              <select id="lgpd-filter-status"><option value="">Todos</option><option>Revisar</option><option>Confirmado</option><option>Falso positivo</option></select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-ghost btn-sm" id="lgpd-filter-clear">Limpar filtros</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>Prioridade</th><th>Órgão</th><th>Dataset</th><th>Recurso</th><th>Tipo identificado</th>
+                <th>Coluna</th><th>Linha</th><th>Confiança</th><th>Status</th>
+              </tr></thead>
+              <tbody id="lgpd-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           TELA 5 — ORGANIZAÇÕES
+           ============================================================ -->
+      <section class="screen" id="screen-organizations">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Organizações</h2>
+          <p>Situação consolidada de cumprimento do PDA por órgão publicador.</p>
+        </div>
+        <div class="panel">
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>Órgão</th><th>Bases previstas</th><th>Bases publicadas</th><th>Em atraso</th>
+                <th>Atualização</th><th>Riscos LGPD</th><th>Índice de atenção</th>
+              </tr></thead>
+              <tbody id="orgs-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           TELA 6 — DATASETS
+           ============================================================ -->
+      <section class="screen" id="screen-datasets">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Datasets</h2>
+          <p>Inventário de datasets publicados no Portal de Dados Abertos (CKAN).</p>
+        </div>
+        <div class="panel">
+          <div class="filters-bar">
+            <div class="search-field">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" class="text-input" id="datasets-search" placeholder="Buscar por nome do dataset...">
+            </div>
+            <div class="filter-field">
+              <label>Órgão</label>
+              <select id="datasets-filter-org"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-field">
+              <label>Formato</label>
+              <select id="datasets-filter-format"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-field">
+              <label>Status</label>
+              <select id="datasets-filter-status"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-ghost btn-sm" id="datasets-filter-clear">Limpar filtros</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>Dataset</th><th>Órgão</th><th>ID CKAN</th><th>Qtd. recursos</th>
+                <th>Última atualização</th><th>Formato</th><th>Status</th>
+              </tr></thead>
+              <tbody id="datasets-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           TELA 7 — RASTREABILIDADE
+           ============================================================ -->
+      <section class="screen" id="screen-traceability">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Rastreabilidade</h2>
+          <p>Linha do tempo de alterações observadas no Portal de Dados Abertos.</p>
+        </div>
+
+        <div class="panel">
+          <div class="filters-bar" style="border-radius:6px 6px 0 0;">
+            <div class="filter-field">
+              <label>Tipo de alteração</label>
+              <select id="trace-filter-type">
+                <option value="">Todas</option>
+                <option>Inclusão</option><option>Alteração</option><option>Exclusão</option>
+                <option>Privação</option><option>Recurso atualizado</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label>Órgão</label>
+              <select id="trace-filter-org"><option value="">Todos</option></select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-ghost btn-sm" id="trace-filter-clear">Limpar filtros</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="timeline" id="trace-timeline"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================
+           TELA 8 — RELATÓRIOS
+           ============================================================ -->
+      <section class="screen" id="screen-reports">
+        <div class="page-lede">
+          <h2 style="font-size:20px;">Relatórios</h2>
+          <p>Geração de relatórios consolidados para prestação de contas e acompanhamento gerencial.</p>
+        </div>
+        <div class="reports-grid" id="reports-grid"></div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODALS
+     ============================================================ -->
+
+<!-- Generic modal used for: PDA base details, dataset details, org details, report preview -->
+<div class="modal-overlay" id="modal-generic">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="modal-generic-title">Detalhes</h3>
+        <div class="sub" id="modal-generic-sub"></div>
+      </div>
+      <button class="modal-close" data-close-modal="modal-generic"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="modal-generic-body"></div>
+    <div class="modal-foot" id="modal-generic-foot">
+      <button class="btn btn-outline btn-sm" data-close-modal="modal-generic">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- LGPD alert modal -->
+<div class="modal-overlay" id="modal-lgpd">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3>Possível dado pessoal identificado</h3>
+        <div class="sub">Sinalização automática — requer revisão humana</div>
+      </div>
+      <button class="modal-close" data-close-modal="modal-lgpd"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="modal-lgpd-body"></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger-line btn-sm" id="lgpd-mark-false"><i class="fa-solid fa-ban"></i>Marcar como falso positivo</button>
+      <button class="btn btn-success-line btn-sm" id="lgpd-mark-confirmed"><i class="fa-solid fa-check"></i>Marcar como confirmado</button>
+      <button class="btn btn-outline btn-sm" data-close-modal="modal-lgpd">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- ============================================================
+     ASSISTENTE — botão flutuante + painel de chat
+     ============================================================ -->
+<button class="chat-fab" id="chat-fab" aria-label="Abrir assistente de dados">
+  <i class="fa-solid fa-comment-dots"></i>
+  <i class="fa-solid fa-xmark"></i>
+</button>
+
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-head">
+    <div class="chat-head-icon"><i class="fa-solid fa-robot"></i></div>
+    <div class="chat-head-text">
+      <h4>Assistente GEDA</h4>
+      <span>Consulta ao inventário monitorado</span>
+    </div>
+    <button class="chat-head-close" id="chat-head-close"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+  <div class="chat-scope-banner">
+    <i class="fa-solid fa-circle-info"></i> Responde com base nos dados carregados neste protótipo (bases, datasets, recursos, prazos e alertas). Não substitui consulta oficial ao CKAN.
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-suggestions" id="chat-suggestions"></div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Pergunte sobre uma base, órgão ou prazo...">
+    <button class="chat-send-btn" id="chat-send"><i class="fa-solid fa-paper-plane"></i></button>
+  </div>
+</div>
+
+
+<script>
+/* ================================================================
+   MONITORAMENTO E GOVERNANÇA — PORTAL DE DADOS ABERTOS DE GOIÁS
+   Protótipo estático (sem backend). Todos os dados são fictícios.
+   Estrutura pensada para, futuramente, substituir mockData por
+   chamadas reais à API do CKAN + serviços internos da GEDA/CGE-GO.
+   ================================================================ */
+
+/* ----------------------------------------------------------------
+   1. MOCK DATA
+   ---------------------------------------------------------------- */
+const mockData = {};
+
+mockData.organizations = [
+  {id:"org-saude",   name:"Secretaria da Saúde",                 acronym:"SES-GO",   basesPrevistas:52, basesPublicadas:44, emAtraso:4, atualizacaoPct:78, riscosLGPD:6, indiceAtencao:"Alto"},
+  {id:"org-educ",    name:"Secretaria da Educação",               acronym:"SEDUC-GO", basesPrevistas:61, basesPublicadas:57, emAtraso:2, atualizacaoPct:88, riscosLGPD:4, indiceAtencao:"Médio"},
+  {id:"org-adm",     name:"Secretaria da Administração",          acronym:"SEAD-GO",  basesPrevistas:34, basesPublicadas:28, emAtraso:3, atualizacaoPct:70, riscosLGPD:5, indiceAtencao:"Alto"},
+  {id:"org-eco",     name:"Secretaria de Estado da Economia",     acronym:"SEFAZ-GO", basesPrevistas:58, basesPublicadas:55, emAtraso:1, atualizacaoPct:94, riscosLGPD:1, indiceAtencao:"Baixo"},
+  {id:"org-ssp",     name:"Secretaria de Segurança Pública",      acronym:"SSP-GO",   basesPrevistas:29, basesPublicadas:22, emAtraso:2, atualizacaoPct:65, riscosLGPD:2, indiceAtencao:"Médio"},
+  {id:"org-infra",   name:"Secretaria de Infraestrutura",         acronym:"SEINFRA",  basesPrevistas:24, basesPublicadas:21, emAtraso:0, atualizacaoPct:91, riscosLGPD:0, indiceAtencao:"Baixo"},
+  {id:"org-meioamb", name:"Secretaria do Meio Ambiente",          acronym:"SEMAD",    basesPrevistas:37, basesPublicadas:33, emAtraso:0, atualizacaoPct:85, riscosLGPD:1, indiceAtencao:"Baixo"},
+  {id:"org-social",  name:"Secretaria de Desenvolvimento Social", acronym:"SEDS",     basesPrevistas:31, basesPublicadas:24, emAtraso:0, atualizacaoPct:60, riscosLGPD:3, indiceAtencao:"Médio"},
+  {id:"org-cultura", name:"Secretaria de Cultura",                acronym:"SECULT",   basesPrevistas:18, basesPublicadas:16, emAtraso:0, atualizacaoPct:92, riscosLGPD:0, indiceAtencao:"Baixo"},
+  {id:"org-agro",    name:"Secretaria de Agricultura",            acronym:"SEAPA",    basesPrevistas:26, basesPublicadas:21, emAtraso:0, atualizacaoPct:82, riscosLGPD:0, indiceAtencao:"Baixo"},
+  {id:"org-cge",     name:"Controladoria-Geral do Estado",        acronym:"CGE-GO",   basesPrevistas:22, basesPublicadas:20, emAtraso:0, atualizacaoPct:96, riscosLGPD:1, indiceAtencao:"Baixo"},
+];
+
+const FORMATS = ["CSV","JSON","XLSX","PDF","API"];
+const PERIODS = ["Diária","Semanal","Mensal","Trimestral","Semestral","Anual"];
+
+// helper to build a date string N days ago from "today" (fixed anchor for reproducibility)
+const TODAY = new Date("2026-09-17");
+function daysAgo(n){ const d = new Date(TODAY); d.setDate(d.getDate()-n); return d; }
+function fmtDate(d){ return d.toLocaleDateString('pt-BR'); }
+function daysBetween(d){ return Math.round((TODAY - d)/(1000*60*60*24)); }
+
+const datasetSeeds = [
+  {name:"Indicadores de Saúde",              org:"org-saude",   period:"Mensal",     ckan:"indicadores-saude",       days:42,  status:"Em atraso"},
+  {name:"Estabelecimentos de Saúde",         org:"org-saude",   period:"Trimestral", ckan:"estabelecimentos-saude",  days:18,  status:"Em dia"},
+  {name:"Servidores da Saúde",               org:"org-saude",   period:"Mensal",     ckan:"servidores-saude",       days:9,   status:"Em dia"},
+  {name:"Leitos Hospitalares",               org:"org-saude",   period:"Semanal",    ckan:"leitos-hospitalares",     days:4,   status:"Em dia"},
+  {name:"Matrículas",                        org:"org-educ",    period:"Mensal",     ckan:"matriculas",              days:47,  status:"Em atraso"},
+  {name:"Professores da Rede Estadual",      org:"org-educ",    period:"Semestral",  ckan:"professores-rede",        days:70,  status:"Próximo do prazo"},
+  {name:"Unidades Escolares",                org:"org-educ",    period:"Anual",      ckan:"unidades-escolares",      days:120, status:"Em dia"},
+  {name:"Merenda Escolar - Distribuição",    org:"org-educ",    period:"Mensal",     ckan:"merenda-escolar",         days:25,  status:"Em dia"},
+  {name:"Servidores Públicos",               org:"org-adm",     period:"Mensal",     ckan:"servidores-publicos",     days:12,  status:"Em dia"},
+  {name:"Folha de Pagamento",                org:"org-adm",     period:"Mensal",     ckan:"folha-pagamento",         days:33,  status:"Em atraso"},
+  {name:"Cadastro de Servidores",            org:"org-adm",     period:"Trimestral", ckan:"cadastro-servidores",     days:8,   status:"Em dia"},
+  {name:"Execução Orçamentária",             org:"org-eco",     period:"Mensal",     ckan:"execucao-orcamentaria",   days:6,   status:"Em dia"},
+  {name:"Receitas e Despesas",               org:"org-eco",     period:"Diária",     ckan:"receitas-despesas",       days:1,   status:"Em dia"},
+  {name:"Contratos e Convênios",             org:"org-eco",     period:"Mensal",     ckan:"contratos-convenios",     days:29,  status:"Próximo do prazo"},
+  {name:"Ocorrências Policiais",             org:"org-ssp",     period:"Semanal",    ckan:"ocorrencias-policiais",   days:15,  status:"Em atraso"},
+  {name:"Frota de Viaturas",                 org:"org-ssp",     period:"Trimestral", ckan:"frota-viaturas",          days:22,  status:"Em dia"},
+  {name:"Malha Rodoviária Estadual",         org:"org-infra",   period:"Semestral",  ckan:"malha-rodoviaria",        days:54,  status:"Em dia"},
+  {name:"Obras Públicas em Andamento",       org:"org-infra",   period:"Mensal",     ckan:"obras-publicas",          days:11,  status:"Em dia"},
+  {name:"Licenciamento Ambiental",           org:"org-meioamb", period:"Mensal",     ckan:"licenciamento-ambiental", days:19,  status:"Em dia"},
+  {name:"Áreas de Conservação",              org:"org-meioamb", period:"Anual",      ckan:"areas-conservacao",       days:200, status:"Em dia"},
+  {name:"Beneficiários de Programas Sociais",org:"org-social",  period:"Mensal",     ckan:"beneficiarios-sociais",   days:38,  status:"Em atraso"},
+  {name:"Unidades de Assistência Social",    org:"org-social",  period:"Trimestral", ckan:"unidades-assistencia",    days:16,  status:"Em dia"},
+  {name:"Acervo Cultural do Estado",         org:"org-cultura", period:"Semestral",  ckan:"acervo-cultural",         days:60,  status:"Em dia"},
+  {name:"Produção Agropecuária",             org:"org-agro",    period:"Trimestral", ckan:"producao-agropecuaria",   days:14,  status:"Em dia"},
+  {name:"Convênios de Fomento Rural",        org:"org-agro",    period:"Semestral",  ckan:"convenios-fomento-rural", days:40,  status:"Em dia"},
+];
+
+mockData.datasets = datasetSeeds.map((s,i)=>{
+  const id = "ds-"+String(i+1).padStart(3,"0");
+  const lastUpdateDate = daysAgo(s.days);
+  const resourceCount = 1 + (i % 4);
+  const format = FORMATS[i % FORMATS.length];
+  let situacaoPDA;
+  if(s.status==="Em atraso") situacaoPDA = "Em atraso";
+  else if(s.status==="Próximo do prazo") situacaoPDA = "Próximo do prazo";
+  else situacaoPDA = "Publicado";
+  return {
+    id, name:s.name, org:s.org, ckanId:s.ckan, resourceCount,
+    lastUpdate:lastUpdateDate, format, periodicity:s.period,
+    status: situacaoPDA,
+    description:`Conjunto de dados referente a "${s.name.toLowerCase()}", disponibilizado pelo órgão responsável no Portal de Dados Abertos de Goiás.`,
+    prazo: daysAgo(s.days - 30 < 0 ? s.days - 30 : -10), // synthetic deadline reference
+  };
+});
+
+// A couple of datasets flagged as "sem recurso" / "não publicado" to satisfy PDA screen variety
+mockData.datasets.push(
+  {id:"ds-026", name:"Indicadores de Turismo", org:"org-cultura", ckanId:"indicadores-turismo", resourceCount:0, lastUpdate:null, format:"—", periodicity:"Anual", status:"Sem recurso", description:"Base prevista no PDA, dataset criado no CKAN, porém sem recurso publicado.", prazo:daysAgo(-5)},
+  {id:"ds-027", name:"Mapa de Riscos Geológicos", org:"org-infra", ckanId:null, resourceCount:0, lastUpdate:null, format:"—", periodicity:"Semestral", status:"Não publicado", description:"Base prevista no PDA ainda não publicada no CKAN.", prazo:daysAgo(-40)},
+  {id:"ds-028", name:"Vagas em Creches Públicas", org:"org-educ", ckanId:"vagas-creches", resourceCount:1, lastUpdate:daysAgo(3), format:"CSV", periodicity:"Mensal", status:"Publicado", description:"Disponibilização de vagas ofertadas em creches da rede pública estadual.", prazo:daysAgo(-15)}
+);
+
+// ---- Resources (30+) derived from datasets ----
+mockData.resources = [];
+mockData.datasets.forEach(ds=>{
+  const count = ds.resourceCount || 0;
+  for(let i=0;i<count;i++){
+    mockData.resources.push({
+      id: ds.id+"-r"+(i+1),
+      datasetId: ds.id,
+      name: ds.ckanId ? `${ds.ckanId}_${i+1}.${(ds.format||'csv').toLowerCase()}` : `recurso_${i+1}`,
+      format: ds.format,
+      lastModified: ds.lastUpdate,
+    });
+  }
+});
+// pad up to ensure 30+
+while(mockData.resources.length < 32){
+  const ds = mockData.datasets[mockData.resources.length % mockData.datasets.length];
+  mockData.resources.push({
+    id: "extra-r"+mockData.resources.length,
+    datasetId: ds.id,
+    name: `${ds.ckanId||'recurso'}_extra_${mockData.resources.length}.csv`,
+    format:"CSV",
+    lastModified: daysAgo(5+mockData.resources.length),
+  });
+}
+
+// ---- LGPD Alerts (15+) ----
+const lgpdSeeds = [
+  {priority:"Alta",  org:"org-saude",  dataset:"Servidores da Saúde",       resource:"servidores_saude_1.csv",   type:"CPF",      col:"cpf",       row:125, conf:98},
+  {priority:"Alta",  org:"org-educ",   dataset:"Professores da Rede Estadual",resource:"professores_rede_1.csv", type:"E-mail",   col:"email",     row:342, conf:96},
+  {priority:"Média", org:"org-adm",    dataset:"Cadastro de Servidores",    resource:"cadastro_servidores_1.csv",type:"Telefone", col:"telefone",  row:87,  conf:88},
+  {priority:"Alta",  org:"org-adm",    dataset:"Servidores Públicos",       resource:"servidores_publicos_1.csv",type:"CPF",      col:"cpf_servidor",row:14, conf:99},
+  {priority:"Média", org:"org-social", dataset:"Beneficiários de Programas Sociais", resource:"beneficiarios_sociais_1.csv", type:"Nome completo", col:"nome_beneficiario", row:501, conf:79},
+  {priority:"Baixa", org:"org-saude",  dataset:"Estabelecimentos de Saúde", resource:"estabelecimentos_saude_1.csv", type:"E-mail", col:"contato_email", row:63, conf:61},
+  {priority:"Alta",  org:"org-ssp",    dataset:"Ocorrências Policiais",     resource:"ocorrencias_policiais_1.csv", type:"CPF",   col:"cpf_envolvido", row:212, conf:95},
+  {priority:"Média", org:"org-educ",   dataset:"Matrículas",                resource:"matriculas_1.csv",         type:"Data de nascimento", col:"nascimento", row:1032, conf:84},
+  {priority:"Alta",  org:"org-adm",    dataset:"Folha de Pagamento",        resource:"folha_pagamento_1.csv",    type:"CPF",      col:"cpf",       row:77,  conf:97},
+  {priority:"Baixa", org:"org-agro",   dataset:"Produção Agropecuária",     resource:"producao_agropecuaria_1.csv", type:"Telefone", col:"contato", row:19, conf:57},
+  {priority:"Média", org:"org-cultura",dataset:"Acervo Cultural do Estado", resource:"acervo_cultural_1.csv",    type:"E-mail",   col:"email_responsavel", row:44, conf:73},
+  {priority:"Alta",  org:"org-social", dataset:"Unidades de Assistência Social", resource:"unidades_assistencia_1.csv", type:"Endereço residencial", col:"endereco", row:158, conf:91},
+  {priority:"Média", org:"org-saude",  dataset:"Servidores da Saúde",       resource:"servidores_saude_1.csv",   type:"RG",       col:"documento", row:290, conf:82},
+  {priority:"Baixa", org:"org-infra",  dataset:"Obras Públicas em Andamento", resource:"obras_publicas_1.csv",   type:"Telefone", col:"contato_responsavel", row:37, conf:55},
+  {priority:"Alta",  org:"org-ssp",    dataset:"Frota de Viaturas",         resource:"frota_viaturas_1.csv",     type:"CPF",      col:"cpf_condutor", row:9,  conf:93},
+  {priority:"Média", org:"org-eco",    dataset:"Contratos e Convênios",     resource:"contratos_convenios_1.csv",type:"CNPJ/CPF", col:"documento_contratado", row:66, conf:80},
+  {priority:"Baixa", org:"org-educ",   dataset:"Unidades Escolares",        resource:"unidades_escolares_1.csv", type:"Telefone", col:"telefone_contato", row:28, conf:52},
+  {priority:"Média", org:"org-saude",  dataset:"Leitos Hospitalares",       resource:"leitos_hospitalares_1.csv",type:"E-mail",   col:"email_gestor",    row:71,  conf:76},
+  {priority:"Alta",  org:"org-social", dataset:"Beneficiários de Programas Sociais", resource:"beneficiarios_sociais_1.csv", type:"CPF", col:"cpf_beneficiario", row:220, conf:94},
+  {priority:"Baixa", org:"org-eco",    dataset:"Receitas e Despesas",       resource:"receitas_despesas_1.csv",  type:"E-mail",   col:"email_responsavel", row:12, conf:58},
+  {priority:"Média", org:"org-infra",  dataset:"Malha Rodoviária Estadual", resource:"malha_rodoviaria_1.csv",   type:"Telefone", col:"contato_local",   row:5,   conf:69},
+  {priority:"Alta",  org:"org-adm",    dataset:"Cadastro de Servidores",    resource:"cadastro_servidores_1.csv",type:"RG",       col:"rg_servidor",     row:143, conf:90},
+];
+
+mockData.alerts = lgpdSeeds.map((a,i)=>({
+  id:"alert-"+String(i+1).padStart(3,"0"),
+  priority:a.priority, org:a.org, dataset:a.dataset, resource:a.resource,
+  type:a.type, column:a.col, row:a.row, confidence:a.conf,
+  status:"Revisar",
+}));
+
+// ---- Traceability activities (10+) ----
+mockData.activities = [
+  {date:new Date("2026-09-16T09:42:00"), user:"integracao.ckan", org:"org-saude",  dataset:"Indicadores de Saúde",         resource:"—", type:"Alteração"},
+  {date:new Date("2026-09-15T16:20:00"), user:"joao.silva",      org:"org-educ",   dataset:"Matrículas",                    resource:"matriculas_1.csv", type:"Recurso atualizado"},
+  {date:new Date("2026-09-14T11:12:00"), user:"admin.sead",      org:"org-adm",    dataset:"Cadastro de Servidores",        resource:"—", type:"Privação"},
+  {date:new Date("2026-09-13T10:05:00"), user:"admin.sefaz",     org:"org-eco",    dataset:"Execução Orçamentária (hist.)", resource:"—", type:"Exclusão"},
+  {date:new Date("2026-09-12T14:33:00"), user:"integracao.ckan", org:"org-ssp",    dataset:"Ocorrências Policiais",         resource:"ocorrencias_policiais_1.csv", type:"Recurso atualizado"},
+  {date:new Date("2026-09-11T08:50:00"), user:"maria.souza",     org:"org-infra",  dataset:"Obras Públicas em Andamento",   resource:"—", type:"Inclusão"},
+  {date:new Date("2026-09-10T17:02:00"), user:"admin.seduc",     org:"org-educ",   dataset:"Professores da Rede Estadual",  resource:"—", type:"Alteração"},
+  {date:new Date("2026-09-09T13:15:00"), user:"integracao.ckan", org:"org-social", dataset:"Beneficiários de Programas Sociais", resource:"beneficiarios_sociais_1.csv", type:"Recurso atualizado"},
+  {date:new Date("2026-09-08T09:00:00"), user:"admin.semad",     org:"org-meioamb",dataset:"Licenciamento Ambiental",       resource:"—", type:"Inclusão"},
+  {date:new Date("2026-09-06T15:40:00"), user:"admin.secult",    org:"org-cultura",dataset:"Acervo Cultural do Estado",     resource:"—", type:"Alteração"},
+  {date:new Date("2026-09-04T10:22:00"), user:"admin.seapa",     org:"org-agro",   dataset:"Convênios de Fomento Rural",    resource:"—", type:"Exclusão"},
+  {date:new Date("2026-09-02T12:05:00"), user:"integracao.ckan", org:"org-saude",  dataset:"Leitos Hospitalares",           resource:"leitos_hospitalares_1.csv", type:"Recurso atualizado"},
+];
+
+/* ----------------------------------------------------------------
+   2. STATE
+   ---------------------------------------------------------------- */
+const state = {
+  currentScreen: "dashboard",
+  pdaFilters: {},
+  updatesFilters: {},
+  lgpdFilters: {},
+  datasetsFilters: {},
+  traceFilters: {},
+};
+
+let chartPDA, chartUpdates;
+
+/* ----------------------------------------------------------------
+   3. HELPERS
+   ---------------------------------------------------------------- */
+function orgName(id){ const o = mockData.organizations.find(o=>o.id===id); return o ? o.name : id; }
+function orgAcronym(id){ const o = mockData.organizations.find(o=>o.id===id); return o ? o.acronym : ""; }
+
+function statusBadge(status){
+  const map = {
+    "Publicado":"badge-green","Em dia":"badge-green","Atualizado":"badge-green",
+    "Em atraso":"badge-red","Atrasado":"badge-red",
+    "Próximo do prazo":"badge-amber","Próximo do vencimento":"badge-amber",
+    "Não publicado":"badge-gray","Sem informação":"badge-gray",
+    "Sem recurso":"badge-amber",
+    "Revisar":"badge-amber","Confirmado":"badge-red","Falso positivo":"badge-gray",
+  };
+  const cls = map[status] || "badge-gray";
+  return `<span class="badge ${cls}">${status}</span>`;
+}
+
+function priorityTag(p){
+  return `<span class="priority-tag priority-${p}">${p}</span>`;
+}
+
+function toast(message, icon="fa-circle-check"){
+  const wrap = document.getElementById("toast-wrap");
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `<i class="fa-solid ${icon}"></i><span>${message}</span>`;
+  wrap.appendChild(el);
+  setTimeout(()=>{ el.style.opacity="0"; el.style.transition="opacity .25s ease"; setTimeout(()=>el.remove(),250); }, 3400);
+}
+
+function openModal(id){ document.getElementById(id).classList.add("open"); }
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+document.querySelectorAll("[data-close-modal]").forEach(btn=>{
+  btn.addEventListener("click", ()=>closeModal(btn.dataset.closeModal));
+});
+document.querySelectorAll(".modal-overlay").forEach(ov=>{
+  ov.addEventListener("click", (e)=>{ if(e.target===ov) ov.classList.remove("open"); });
+});
+
+function populateSelect(select, values, {keepFirst=true}={}){
+  const first = keepFirst ? select.firstElementChild : null;
+  select.innerHTML = "";
+  if(first) select.appendChild(first);
+  values.forEach(v=>{
+    const opt = document.createElement("option");
+    opt.value = v.value !== undefined ? v.value : v;
+    opt.textContent = v.label !== undefined ? v.label : v;
+    select.appendChild(opt);
+  });
+}
+
+/* ----------------------------------------------------------------
+   4. NAVIGATION
+   ---------------------------------------------------------------- */
+const screenTitles = {
+  dashboard:{crumb:"GEDA · CGE-GO", title:"Visão Geral"},
+  pda:{crumb:"Governança do PDA", title:"Monitoramento do PDA"},
+  updates:{crumb:"Governança do PDA", title:"Monitoramento de Atualizações"},
+  lgpd:{crumb:"Governança do PDA", title:"Riscos de Dados Pessoais"},
+  organizations:{crumb:"Inventário", title:"Organizações"},
+  datasets:{crumb:"Inventário", title:"Datasets"},
+  traceability:{crumb:"Inventário", title:"Rastreabilidade"},
+  reports:{crumb:"Saídas", title:"Relatórios"},
+};
+
+function goToScreen(name){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById("screen-"+name).classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active", b.dataset.screen===name));
+  const meta = screenTitles[name];
+  document.getElementById("topbar-crumb").textContent = meta.crumb;
+  document.getElementById("topbar-title").textContent = meta.title;
+  state.currentScreen = name;
+  window.scrollTo({top:0,behavior:"instant"});
+}
+
+document.querySelectorAll(".nav-item[data-screen]").forEach(btn=>{
+  btn.addEventListener("click", ()=>goToScreen(btn.dataset.screen));
+});
+document.querySelectorAll("[data-goto]").forEach(btn=>{
+  btn.addEventListener("click", ()=>goToScreen(btn.dataset.goto));
+});
+
+/* ----------------------------------------------------------------
+   5. RENDER: DASHBOARD
+   ---------------------------------------------------------------- */
+function renderDashboard(){
+  const kpis = [
+    {icon:"fa-building-columns", color:"blue",  value:"48",    label:"Órgãos monitorados", foot:"Cobertura total do Executivo", footClass:"ok"},
+    {icon:"fa-clipboard-list",   color:"blue",  value:"446",   label:"Bases previstas no PDA", foot:"Ciclo 2026", footClass:"ok"},
+    {icon:"fa-database",         color:"green", value:"444",   label:"Datasets publicados", foot:"99,6% do previsto", footClass:"ok"},
+    {icon:"fa-file-lines",       color:"blue",  value:"2.939", label:"Recursos monitorados", foot:"Base: last_modified", footClass:"ok"},
+    {icon:"fa-triangle-exclamation", color:"red", value:"12",  label:"Bases atrasadas", foot:"Requer ação do órgão", footClass:"bad"},
+    {icon:"fa-hourglass-half",   color:"amber",value:"17",    label:"Atualizações em atraso", foot:"Acima da periodicidade", footClass:"warn"},
+    {icon:"fa-shield-halved",    color:"red",  value:"23",    label:"Possíveis dados pessoais", foot:"Aguardando revisão humana", footClass:"bad"},
+    {icon:"fa-circle-question",  color:"amber",value:"5",     label:"Datasets sem recurso", foot:"Dataset criado, sem arquivo", footClass:"warn"},
+  ];
+  const grid = document.getElementById("dashboard-kpis");
+  grid.innerHTML = kpis.map(k=>`
+    <div class="kpi-card">
+      <div class="kpi-top">
+        <div class="kpi-icon ${k.color}"><i class="fa-solid ${k.icon}"></i></div>
+      </div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-foot ${k.footClass}"><i class="fa-solid fa-circle" style="font-size:5px;"></i>${k.foot}</div>
+    </div>`).join("");
+
+  // Charts (guarded: if the Chart.js CDN fails to load for any reason,
+  // the rest of the prototype must keep working — so this never throws upward)
+  if(typeof Chart === "undefined"){
+    ["chart-pda","chart-updates"].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.insertAdjacentHTML("afterend", '<div class="empty-state" style="padding:20px;"><p>Gráfico indisponível (biblioteca Chart.js não carregou).</p></div>');
+    });
+  } else {
+    try{
+      const pdaCtx = document.getElementById("chart-pda");
+      if(chartPDA) chartPDA.destroy();
+      chartPDA = new Chart(pdaCtx, {
+        type:"bar",
+        data:{
+          labels:["Em dia","Em atraso","Não publicado","Sem recurso","Necessita atenção"],
+          datasets:[{
+            data:[372,12,44,9,9],
+            backgroundColor:["#2f7a4f","#af3527","#7c8a99","#a8710f","#1d6fa5"],
+            borderRadius:4, maxBarThickness:46,
+          }]
+        },
+        options:{
+          plugins:{legend:{display:false}, tooltip:{callbacks:{label:(c)=>` ${c.parsed.y} bases`}}},
+          scales:{ y:{beginAtZero:true, grid:{color:"#eef1f5"}}, x:{grid:{display:false}} },
+          responsive:true, maintainAspectRatio:false,
+        }
+      });
+
+      const upCtx = document.getElementById("chart-updates");
+      if(chartUpdates) chartUpdates.destroy();
+      chartUpdates = new Chart(upCtx, {
+        type:"doughnut",
+        data:{
+          labels:["Atualizado","Próximo do vencimento","Atrasado","Sem informação"],
+          datasets:[{
+            data:[2650,180,17,92],
+            backgroundColor:["#2f7a4f","#a8710f","#af3527","#7c8a99"],
+            borderWidth:0,
+          }]
+        },
+        options:{
+          cutout:"62%",
+          plugins:{ legend:{position:"bottom", labels:{boxWidth:10, font:{size:11}, padding:14}} },
+          responsive:true, maintainAspectRatio:false,
+        }
+      });
+    }catch(err){
+      console.error("Falha ao renderizar gráficos:", err);
+    }
+  }
+
+  // Alerts table
+  const alertsRows = [
+    {org:"Secretaria da Saúde", type:"PDA", item:"Indicadores de Saúde", status:"Em atraso", prazo:"10/09/2026"},
+    {org:"Secretaria da Educação", type:"Atualização", item:"Matrículas", status:"Atrasado", prazo:"05/09/2026"},
+    {org:"Secretaria da Administração", type:"LGPD", item:"Servidores", status:"Revisar", prazo:"—"},
+    {org:"Secretaria de Segurança Pública", type:"Atualização", item:"Ocorrências Policiais", status:"Atrasado", prazo:"08/09/2026"},
+    {org:"Secretaria de Desenvolvimento Social", type:"PDA", item:"Beneficiários de Programas Sociais", status:"Em atraso", prazo:"12/09/2026"},
+  ];
+  document.getElementById("dashboard-alerts-body").innerHTML = alertsRows.map(r=>`
+    <tr>
+      <td>${r.org}</td>
+      <td><span class="badge badge-blue">${r.type}</span></td>
+      <td class="cell-strong">${r.item}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td class="cell-muted">${r.prazo}</td>
+      <td><span class="row-link" data-go-pda="${r.item}">Ver</span></td>
+    </tr>`).join("");
+  document.querySelectorAll("#dashboard-alerts-body [data-go-pda]").forEach(el=>{
+    el.addEventListener("click", ()=>{ goToScreen("pda"); });
+  });
+
+  // Flow strip
+  const steps = [
+    ["fa-chart-simple","Dashboard"],["fa-building-columns","Órgão"],["fa-clipboard-check","Base do PDA"],
+    ["fa-database","Dataset CKAN"],["fa-file-lines","Recurso"],["fa-circle-check","Status"],
+    ["fa-triangle-exclamation","Problema identificado"],["fa-user-check","Conferência humana"],
+  ];
+  document.getElementById("flow-strip").innerHTML = steps.map((s,i)=>
+    `<div class="flow-step"><i class="fa-solid ${s[0]} step-ico"></i>${s[1]}</div>${i<steps.length-1?'<i class="fa-solid fa-chevron-right flow-arrow"></i>':''}`
+  ).join("");
+}
+
+/* ----------------------------------------------------------------
+   6. RENDER: MONITORAMENTO PDA
+   ---------------------------------------------------------------- */
+function pdaSituacaoDeadlineFlag(ds){
+  if(!ds.prazo) return "";
+  const diff = Math.round((ds.prazo - TODAY)/(1000*60*60*24));
+  if(diff < 0) return "vencido";
+  if(diff <= 30) return "30d";
+  return "";
+}
+
+function getFilteredPDA(){
+  return mockData.datasets.filter(ds=>{
+    const f = state.pdaFilters;
+    if(f.org && ds.org !== f.org) return false;
+    if(f.status && ds.status !== f.status) return false;
+    if(f.period && ds.periodicity !== f.period) return false;
+    if(f.prazo && pdaSituacaoDeadlineFlag(ds) !== f.prazo) return false;
+    return true;
+  });
+}
+
+function renderPDA(){
+  // populate org filter once
+  const orgSelect = document.getElementById("pda-filter-org");
+  if(orgSelect.options.length <= 1){
+    populateSelect(orgSelect, mockData.organizations.map(o=>({value:o.id,label:o.name})));
+  }
+  const rows = getFilteredPDA();
+  document.getElementById("pda-result-count").textContent = `${rows.length} base(s) encontrada(s) de ${mockData.datasets.length} previstas`;
+
+  const tbody = document.getElementById("pda-table-body");
+  if(rows.length === 0){
+    tbody.innerHTML = `<tr><td colspan="8" class="table-empty"><i class="fa-solid fa-inbox" style="margin-right:8px;"></i>Nenhuma base encontrada para os filtros selecionados.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(ds=>`
+    <tr data-dataset-id="${ds.id}">
+      <td>${orgAcronym(ds.org)}</td>
+      <td class="cell-strong">${ds.name}</td>
+      <td>${ds.ckanId ? ds.ckanId : '<span class="cell-muted">—</span>'}</td>
+      <td class="mono cell-muted">${ds.ckanId ? "gedago/"+ds.ckanId : "—"}</td>
+      <td class="cell-muted">${ds.prazo ? fmtDate(ds.prazo) : "—"}</td>
+      <td>${ds.periodicity}</td>
+      <td class="cell-muted">${ds.lastUpdate ? fmtDate(ds.lastUpdate) : "—"}</td>
+      <td>${statusBadge(ds.status)}</td>
+    </tr>`).join("");
+  tbody.querySelectorAll("tr[data-dataset-id]").forEach(tr=>{
+    tr.addEventListener("click", ()=>showDatasetDetails(tr.dataset.datasetId, {fromPDA:true}));
+  });
+}
+
+["pda-filter-org","pda-filter-status","pda-filter-period","pda-filter-year","pda-filter-prazo"].forEach(id=>{
+  document.getElementById(id).addEventListener("change", (e)=>{
+    const map = {"pda-filter-org":"org","pda-filter-status":"status","pda-filter-period":"period","pda-filter-year":"year","pda-filter-prazo":"prazo"};
+    state.pdaFilters[map[id]] = e.target.value;
+    renderPDA();
+  });
+});
+document.getElementById("pda-filter-clear").addEventListener("click", ()=>{
+  state.pdaFilters = {};
+  document.querySelectorAll("#screen-pda select").forEach(s=>s.value="");
+  renderPDA();
+});
+
+/* ----------------------------------------------------------------
+   7. RENDER: ATUALIZAÇÕES
+   ---------------------------------------------------------------- */
+function updateSituacao(ds){
+  if(!ds.lastUpdate) return "Sem informação";
+  const days = daysBetween(ds.lastUpdate);
+  const thresholds = {"Diária":2,"Semanal":10,"Mensal":35,"Trimestral":100,"Semestral":190,"Anual":380};
+  const limit = thresholds[ds.periodicity] || 35;
+  if(days > limit) return "Atrasado";
+  if(days > limit*0.75) return "Próximo do vencimento";
+  return "Atualizado";
+}
+
+function getFilteredUpdates(){
+  return mockData.datasets.filter(ds=>ds.lastUpdate !== null || true).map(ds=>({ds, sit:updateSituacao(ds)})).filter(row=>{
+    const f = state.updatesFilters;
+    if(f.period && row.ds.periodicity !== f.period) return false;
+    if(f.status && row.sit !== f.status) return false;
+    return true;
+  });
+}
+
+function renderUpdates(){
+  const all = mockData.datasets.map(ds=>({ds, sit:updateSituacao(ds)}));
+  const counts = {"Atualizado":0,"Próximo do vencimento":0,"Atrasado":0,"Sem informação":0};
+  all.forEach(r=>counts[r.sit]++);
+
+  const kpis = [
+    {icon:"fa-check", color:"green", value:counts["Atualizado"], label:"Atualizados no período"},
+    {icon:"fa-triangle-exclamation", color:"red", value:counts["Atrasado"], label:"Em atraso"},
+    {icon:"fa-hourglass-half", color:"amber", value:counts["Próximo do vencimento"], label:"Próximos do vencimento"},
+    {icon:"fa-circle-question", color:"blue", value:counts["Sem informação"], label:"Sem periodicidade definida"},
+  ];
+  document.getElementById("updates-kpis").innerHTML = kpis.map(k=>`
+    <div class="kpi-card">
+      <div class="kpi-top"><div class="kpi-icon ${k.color}"><i class="fa-solid ${k.icon}"></i></div></div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join("");
+
+  const rows = getFilteredUpdates();
+  const tbody = document.getElementById("updates-table-body");
+  if(rows.length===0){
+    tbody.innerHTML = `<tr><td colspan="7" class="table-empty">Nenhum registro para os filtros selecionados.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(({ds,sit})=>`
+    <tr data-dataset-id="${ds.id}">
+      <td class="cell-strong">${ds.name}</td>
+      <td>${orgAcronym(ds.org)}</td>
+      <td>${ds.periodicity}</td>
+      <td class="cell-muted">${ds.lastUpdate ? fmtDate(ds.lastUpdate) : "—"}</td>
+      <td class="cell-muted">${ds.lastUpdate ? daysBetween(ds.lastUpdate)+" dias" : "—"}</td>
+      <td class="cell-muted">${ds.prazo ? fmtDate(ds.prazo) : "—"}</td>
+      <td>${statusBadge(sit)}</td>
+    </tr>`).join("");
+  tbody.querySelectorAll("tr[data-dataset-id]").forEach(tr=>{
+    tr.addEventListener("click", ()=>showDatasetDetails(tr.dataset.datasetId));
+  });
+}
+
+["updates-filter-period","updates-filter-status"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",(e)=>{
+    const map = {"updates-filter-period":"period","updates-filter-status":"status"};
+    state.updatesFilters[map[id]] = e.target.value;
+    renderUpdates();
+  });
+});
+document.getElementById("updates-filter-clear").addEventListener("click", ()=>{
+  state.updatesFilters = {};
+  document.querySelectorAll("#screen-updates select").forEach(s=>s.value="");
+  renderUpdates();
+});
+
+/* ----------------------------------------------------------------
+   8. RENDER: LGPD
+   ---------------------------------------------------------------- */
+function getFilteredLGPD(){
+  return mockData.alerts.filter(a=>{
+    const f = state.lgpdFilters;
+    if(f.priority && a.priority !== f.priority) return false;
+    if(f.type && a.type !== f.type) return false;
+    if(f.org && a.org !== f.org) return false;
+    if(f.status && a.status !== f.status) return false;
+    return true;
+  });
+}
+
+function renderLGPD(){
+  const typeSelect = document.getElementById("lgpd-filter-type");
+  if(typeSelect.options.length <= 1){
+    const types = [...new Set(mockData.alerts.map(a=>a.type))];
+    populateSelect(typeSelect, types);
+  }
+  const orgSelect = document.getElementById("lgpd-filter-org");
+  if(orgSelect.options.length <= 1){
+    const orgIds = [...new Set(mockData.alerts.map(a=>a.org))];
+    populateSelect(orgSelect, orgIds.map(id=>({value:id,label:orgName(id)})));
+  }
+
+  const total = mockData.alerts.length;
+  const critical = mockData.alerts.filter(a=>a.priority==="Alta").length;
+  const toReview = mockData.alerts.filter(a=>a.status==="Revisar").length;
+  const kpis = [
+    {icon:"fa-magnifying-glass", color:"blue", value:"2.939", label:"Recursos analisados"},
+    {icon:"fa-shield-halved", color:"red", value:total, label:"Recursos com possíveis dados pessoais"},
+    {icon:"fa-triangle-exclamation", color:"red", value:critical, label:"Alertas críticos (prioridade alta)"},
+    {icon:"fa-user-check", color:"amber", value:toReview, label:"Alertas para revisão"},
+  ];
+  document.getElementById("lgpd-kpis").innerHTML = kpis.map(k=>`
+    <div class="kpi-card">
+      <div class="kpi-top"><div class="kpi-icon ${k.color}"><i class="fa-solid ${k.icon}"></i></div></div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join("");
+
+  const rows = getFilteredLGPD();
+  const tbody = document.getElementById("lgpd-table-body");
+  if(rows.length===0){
+    tbody.innerHTML = `<tr><td colspan="9" class="table-empty">Nenhum alerta para os filtros selecionados.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(a=>`
+    <tr data-alert-id="${a.id}">
+      <td>${priorityTag(a.priority)}</td>
+      <td>${orgAcronym(a.org)}</td>
+      <td class="cell-strong">${a.dataset}</td>
+      <td class="mono cell-muted">${a.resource}</td>
+      <td>${a.type}</td>
+      <td class="mono">${a.column}</td>
+      <td class="cell-muted">${a.row}</td>
+      <td class="cell-muted">${a.confidence}%</td>
+      <td>${statusBadge(a.status)}</td>
+    </tr>`).join("");
+  tbody.querySelectorAll("tr[data-alert-id]").forEach(tr=>{
+    tr.addEventListener("click", ()=>showLGPDAlert(tr.dataset.alertId));
+  });
+}
+
+["lgpd-filter-priority","lgpd-filter-type","lgpd-filter-org","lgpd-filter-status"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",(e)=>{
+    const map = {"lgpd-filter-priority":"priority","lgpd-filter-type":"type","lgpd-filter-org":"org","lgpd-filter-status":"status"};
+    state.lgpdFilters[map[id]] = e.target.value;
+    renderLGPD();
+  });
+});
+document.getElementById("lgpd-filter-clear").addEventListener("click", ()=>{
+  state.lgpdFilters = {};
+  document.querySelectorAll("#screen-lgpd select").forEach(s=>s.value="");
+  renderLGPD();
+});
+
+function showLGPDAlert(alertId){
+  const a = mockData.alerts.find(x=>x.id===alertId);
+  if(!a) return;
+  const body = document.getElementById("modal-lgpd-body");
+  body.innerHTML = `
+    <div class="def-grid">
+      <div class="def-item"><label>Dataset</label><div class="val">${a.dataset}</div></div>
+      <div class="def-item"><label>Órgão</label><div class="val">${orgName(a.org)}</div></div>
+      <div class="def-item"><label>Recurso</label><div class="val mono">${a.resource}</div></div>
+      <div class="def-item"><label>Coluna</label><div class="val mono">${a.column}</div></div>
+      <div class="def-item"><label>Linha</label><div class="val">${a.row}</div></div>
+      <div class="def-item"><label>Tipo identificado</label><div class="val">${a.type}</div></div>
+      <div class="def-item"><label>Valor (mascarado)</label><div class="val mono">***.***.***-**</div></div>
+      <div class="def-item"><label>Status</label><div class="val">${a.status === "Revisar" ? "Aguardando revisão humana" : a.status}</div></div>
+    </div>
+    <div class="def-item" style="margin-top:16px;">
+      <label>Confiança da detecção</label>
+      <div class="val">${a.confidence}%</div>
+      <div class="confidence-bar"><div class="confidence-fill" style="width:${a.confidence}%;"></div></div>
+    </div>
+    <div class="alert-callout" style="margin-top:16px;margin-bottom:0;">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>Esta é uma sinalização automática indicativa. Nenhuma ação de bloqueio, ocultação ou anonimização é realizada pelo sistema — a decisão cabe à equipe responsável, mediante análise humana.</div>
+    </div>
+  `;
+  document.getElementById("lgpd-mark-confirmed").onclick = ()=>{
+    a.status = "Confirmado"; closeModal("modal-lgpd"); renderLGPD();
+    toast("Alerta marcado como confirmado. Encaminhado para tratativa.");
+  };
+  document.getElementById("lgpd-mark-false").onclick = ()=>{
+    a.status = "Falso positivo"; closeModal("modal-lgpd"); renderLGPD();
+    toast("Alerta marcado como falso positivo.", "fa-circle-xmark");
+  };
+  openModal("modal-lgpd");
+}
+
+/* ----------------------------------------------------------------
+   9. RENDER: ORGANIZAÇÕES
+   ---------------------------------------------------------------- */
+function attentionBadgeClass(level){
+  return {"Alto":"badge-red","Médio":"badge-amber","Baixo":"badge-green"}[level] || "badge-gray";
+}
+
+function renderOrganizations(){
+  const tbody = document.getElementById("orgs-table-body");
+  tbody.innerHTML = mockData.organizations.map(o=>`
+    <tr data-org-id="${o.id}">
+      <td class="cell-strong">${o.name} <span class="cell-muted mono" style="margin-left:4px;">(${o.acronym})</span></td>
+      <td>${o.basesPrevistas}</td>
+      <td>${o.basesPublicadas}</td>
+      <td>${o.emAtraso>0 ? `<span class="badge badge-red">${o.emAtraso}</span>` : `<span class="badge badge-green">0</span>`}</td>
+      <td>${o.atualizacaoPct}%</td>
+      <td>${o.riscosLGPD>0 ? `<span class="badge badge-amber">${o.riscosLGPD}</span>` : `<span class="badge badge-green">0</span>`}</td>
+      <td><span class="badge ${attentionBadgeClass(o.indiceAtencao)}">${o.indiceAtencao}</span></td>
+    </tr>`).join("");
+  tbody.querySelectorAll("tr[data-org-id]").forEach(tr=>{
+    tr.addEventListener("click", ()=>showOrganizationDetails(tr.dataset.orgId));
+  });
+}
+
+function showOrganizationDetails(orgId){
+  const o = mockData.organizations.find(x=>x.id===orgId);
+  if(!o) return;
+  const naoPublicadas = o.basesPrevistas - o.basesPublicadas;
+  const dsOrg = mockData.datasets.filter(d=>d.org===orgId);
+  const semFormatoAberto = dsOrg.filter(d=>d.format==="PDF").length;
+  const lgpdOrg = mockData.alerts.filter(a=>a.org===orgId).length;
+  const recentActivity = mockData.activities.filter(a=>a.org===orgId).slice(0,3);
+
+  document.getElementById("modal-generic-title").textContent = o.name;
+  document.getElementById("modal-generic-sub").textContent = `${o.acronym} · Resumo de governança de dados abertos`;
+  document.getElementById("modal-generic-body").innerHTML = `
+    <div class="stat-mini-grid">
+      <div class="stat-mini"><div class="n">${o.basesPrevistas}</div><div class="l">Bases previstas</div></div>
+      <div class="stat-mini"><div class="n">${o.basesPublicadas}</div><div class="l">Bases publicadas</div></div>
+      <div class="stat-mini"><div class="n">${naoPublicadas}</div><div class="l">Bases não publicadas</div></div>
+      <div class="stat-mini"><div class="n">${o.emAtraso}</div><div class="l">Atualizações atrasadas</div></div>
+      <div class="stat-mini"><div class="n">${semFormatoAberto}</div><div class="l">Recursos sem formato aberto</div></div>
+      <div class="stat-mini"><div class="n">${lgpdOrg}</div><div class="l">Possíveis dados pessoais</div></div>
+    </div>
+    <div class="mini-history">
+      <h4>Últimas alterações</h4>
+      ${recentActivity.length ? recentActivity.map(a=>`
+        <div class="hist-row"><span class="date">${a.date.toLocaleDateString('pt-BR')}</span><span>${a.type} · ${a.dataset}</span></div>
+      `).join("") : `<div class="hist-row"><span>Nenhum evento recente registrado.</span></div>`}
+    </div>
+  `;
+  document.getElementById("modal-generic-foot").innerHTML = `
+    <button class="btn btn-outline btn-sm" data-close-modal="modal-generic">Fechar</button>
+    <button class="btn btn-primary btn-sm" id="org-goto-pda">Ver bases no PDA</button>
+  `;
+  document.getElementById("org-goto-pda").onclick = ()=>{
+    closeModal("modal-generic");
+    state.pdaFilters = {org: orgId};
+    document.getElementById("pda-filter-org").value = orgId;
+    goToScreen("pda"); renderPDA();
+  };
+  openModal("modal-generic");
+}
+
+/* ----------------------------------------------------------------
+   10. RENDER: DATASETS
+   ---------------------------------------------------------------- */
+function getFilteredDatasets(){
+  return mockData.datasets.filter(ds=>{
+    const f = state.datasetsFilters;
+    if(f.search && !ds.name.toLowerCase().includes(f.search.toLowerCase())) return false;
+    if(f.org && ds.org !== f.org) return false;
+    if(f.format && ds.format !== f.format) return false;
+    if(f.status && ds.status !== f.status) return false;
+    return true;
+  });
+}
+
+function renderDatasets(){
+  const orgSelect = document.getElementById("datasets-filter-org");
+  if(orgSelect.options.length <= 1) populateSelect(orgSelect, mockData.organizations.map(o=>({value:o.id,label:o.name})));
+  const formatSelect = document.getElementById("datasets-filter-format");
+  if(formatSelect.options.length <= 1) populateSelect(formatSelect, FORMATS);
+  const statusSelect = document.getElementById("datasets-filter-status");
+  if(statusSelect.options.length <= 1){
+    const statuses = [...new Set(mockData.datasets.map(d=>d.status))];
+    populateSelect(statusSelect, statuses);
+  }
+
+  const rows = getFilteredDatasets();
+  const tbody = document.getElementById("datasets-table-body");
+  if(rows.length===0){
+    tbody.innerHTML = `<tr><td colspan="7" class="table-empty">Nenhum dataset encontrado.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(ds=>`
+    <tr data-dataset-id="${ds.id}">
+      <td class="cell-strong">${ds.name}</td>
+      <td>${orgAcronym(ds.org)}</td>
+      <td class="mono cell-muted">${ds.ckanId || "—"}</td>
+      <td>${ds.resourceCount}</td>
+      <td class="cell-muted">${ds.lastUpdate ? fmtDate(ds.lastUpdate) : "—"}</td>
+      <td><span class="badge badge-blue">${ds.format}</span></td>
+      <td>${statusBadge(ds.status)}</td>
+    </tr>`).join("");
+  tbody.querySelectorAll("tr[data-dataset-id]").forEach(tr=>{
+    tr.addEventListener("click", ()=>showDatasetDetails(tr.dataset.datasetId));
+  });
+}
+
+document.getElementById("datasets-search").addEventListener("input", (e)=>{
+  state.datasetsFilters.search = e.target.value; renderDatasets();
+});
+["datasets-filter-org","datasets-filter-format","datasets-filter-status"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",(e)=>{
+    const map = {"datasets-filter-org":"org","datasets-filter-format":"format","datasets-filter-status":"status"};
+    state.datasetsFilters[map[id]] = e.target.value;
+    renderDatasets();
+  });
+});
+document.getElementById("datasets-filter-clear").addEventListener("click", ()=>{
+  state.datasetsFilters = {};
+  document.getElementById("datasets-search").value = "";
+  document.querySelectorAll("#screen-datasets select").forEach(s=>s.value="");
+  renderDatasets();
+});
+
+function showDatasetDetails(datasetId, opts={}){
+  const ds = mockData.datasets.find(d=>d.id===datasetId);
+  if(!ds) return;
+  const sit = updateSituacao(ds);
+  const hist = mockData.activities.filter(a=>a.dataset===ds.name).slice(0,4);
+
+  document.getElementById("modal-generic-title").textContent = ds.name;
+  document.getElementById("modal-generic-sub").textContent = `${orgName(ds.org)} · Camada de monitoramento (dados refletem o CKAN, sem alterá-lo)`;
+  document.getElementById("modal-generic-body").innerHTML = `
+    <div class="def-grid">
+      <div class="def-item"><label>Nome da base</label><div class="val">${ds.name}</div></div>
+      <div class="def-item"><label>Órgão responsável</label><div class="val">${orgName(ds.org)}</div></div>
+      <div class="def-item"><label>ID do dataset (CKAN)</label><div class="val mono">${ds.ckanId || "—"}</div></div>
+      <div class="def-item"><label>Prazo previsto (PDA)</label><div class="val">${ds.prazo ? fmtDate(ds.prazo) : "—"}</div></div>
+      <div class="def-item"><label>Data de publicação</label><div class="val">${ds.ckanId ? fmtDate(daysAgo((ds.resourceCount||1)*40)) : "Não publicado"}</div></div>
+      <div class="def-item"><label>Periodicidade</label><div class="val">${ds.periodicity}</div></div>
+      <div class="def-item"><label>Última atualização real</label><div class="val">${ds.lastUpdate ? fmtDate(ds.lastUpdate) : "—"}</div></div>
+      <div class="def-item"><label>Formato</label><div class="val">${ds.format}</div></div>
+      <div class="def-item"><label>Recursos</label><div class="val">${ds.resourceCount}</div></div>
+      <div class="def-item"><label>Situação PDA</label><div class="val">${statusBadge(ds.status)}</div></div>
+      <div class="def-item"><label>Situação de atualização</label><div class="val">${statusBadge(sit)}</div></div>
+    </div>
+    <div class="def-item full" style="margin-top:14px;">
+      <label>Descrição</label>
+      <div class="val" style="font-weight:400;">${ds.description}</div>
+    </div>
+    <div class="mini-history">
+      <h4>Histórico recente</h4>
+      ${hist.length ? hist.map(a=>`<div class="hist-row"><span class="date">${a.date.toLocaleDateString('pt-BR')}</span><span>${a.type}</span></div>`).join("")
+        : `<div class="hist-row"><span>Sem eventos de rastreabilidade recentes para este dataset.</span></div>`}
+    </div>
+  `;
+  document.getElementById("modal-generic-foot").innerHTML = `
+    <button class="btn btn-outline btn-sm" data-close-modal="modal-generic">Fechar</button>
+  `;
+  document.querySelectorAll("#modal-generic [data-close-modal]").forEach(b=>b.addEventListener("click",()=>closeModal("modal-generic")));
+  openModal("modal-generic");
+}
+
+/* ----------------------------------------------------------------
+   11. RENDER: RASTREABILIDADE
+   ---------------------------------------------------------------- */
+const typeIconMap = {
+  "Inclusão":{cls:"create", icon:"fa-plus"},
+  "Alteração":{cls:"", icon:"fa-pen"},
+  "Exclusão":{cls:"delete", icon:"fa-trash"},
+  "Privação":{cls:"private", icon:"fa-lock"},
+  "Recurso atualizado":{cls:"", icon:"fa-rotate"},
+};
+
+function getFilteredActivities(){
+  return mockData.activities.filter(a=>{
+    const f = state.traceFilters;
+    if(f.type && a.type !== f.type) return false;
+    if(f.org && a.org !== f.org) return false;
+    return true;
+  }).sort((a,b)=>b.date-a.date);
+}
+
+function renderTraceability(){
+  const orgSelect = document.getElementById("trace-filter-org");
+  if(orgSelect.options.length <= 1) populateSelect(orgSelect, mockData.organizations.map(o=>({value:o.id,label:o.name})));
+
+  const rows = getFilteredActivities();
+  const wrap = document.getElementById("trace-timeline");
+  if(rows.length===0){
+    wrap.innerHTML = `<div class="empty-state"><i class="fa-solid fa-clock-rotate-left"></i><p>Nenhum evento para os filtros selecionados.</p></div>`;
+    return;
+  }
+  wrap.innerHTML = rows.map(a=>{
+    const meta = typeIconMap[a.type] || {cls:"",icon:"fa-circle"};
+    const dateStr = a.date.toLocaleDateString('pt-BR') + " " + a.date.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    return `
+      <div class="tl-item">
+        <div class="tl-dot ${meta.cls}"></div>
+        <div class="tl-card">
+          <div class="tl-top">
+            <span class="tl-type"><i class="fa-solid ${meta.icon}" style="margin-right:6px;color:var(--gray-500);"></i>${a.type}</span>
+            <span class="tl-date">${dateStr}</span>
+          </div>
+          <div class="tl-meta"><b>${orgName(a.org)}</b> · ${a.dataset}${a.resource!=="—" ? " · <span class='mono'>"+a.resource+"</span>" : ""}</div>
+          <div class="tl-meta" style="margin-top:2px;color:var(--gray-500);">Usuário: ${a.user}</div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+["trace-filter-type","trace-filter-org"].forEach(id=>{
+  document.getElementById(id).addEventListener("change",(e)=>{
+    const map = {"trace-filter-type":"type","trace-filter-org":"org"};
+    state.traceFilters[map[id]] = e.target.value;
+    renderTraceability();
+  });
+});
+document.getElementById("trace-filter-clear").addEventListener("click", ()=>{
+  state.traceFilters = {};
+  document.querySelectorAll("#screen-traceability select").forEach(s=>s.value="");
+  renderTraceability();
+});
+
+/* ----------------------------------------------------------------
+   12. RENDER: RELATÓRIOS
+   ---------------------------------------------------------------- */
+const reportDefs = [
+  {id:"pda", icon:"fa-clipboard-check", title:"Relatório de Cumprimento do PDA", desc:"Consolida a situação das 446 bases previstas no Plano de Dados Abertos por órgão e prazo."},
+  {id:"updates", icon:"fa-rotate", title:"Relatório de Atualizações", desc:"Lista datasets com atualização em atraso ou próxima do vencimento, com base no last_modified."},
+  {id:"lgpd", icon:"fa-shield-halved", title:"Relatório de Dados Pessoais", desc:"Sinalizações de possíveis dados pessoais pendentes de revisão humana, por prioridade."},
+  {id:"org", icon:"fa-building-columns", title:"Relatório por Órgão", desc:"Resumo de cumprimento, atualização e riscos LGPD segmentado por secretaria."},
+  {id:"semrecurso", icon:"fa-circle-question", title:"Relatório de Datasets sem Recurso", desc:"Datasets criados no CKAN sem nenhum recurso associado publicado."},
+  {id:"formato", icon:"fa-file-circle-exclamation", title:"Relatório de Formatos não Abertos", desc:"Recursos publicados em formatos não abertos (ex: PDF) passíveis de revisão técnica."},
+];
+
+function renderReports(){
+  document.getElementById("reports-grid").innerHTML = reportDefs.map(r=>`
+    <div class="report-card">
+      <div class="report-icon"><i class="fa-solid ${r.icon}"></i></div>
+      <h4>${r.title}</h4>
+      <p>${r.desc}</p>
+      <button class="btn btn-outline btn-sm" data-report="${r.id}">Gerar relatório</button>
+    </div>`).join("");
+  document.querySelectorAll("#reports-grid [data-report]").forEach(btn=>{
+    btn.addEventListener("click", ()=>generateReportPreview(btn.dataset.report));
+  });
+}
+
+function generateReportPreview(reportId){
+  const def = reportDefs.find(r=>r.id===reportId);
+  let rowsHtml = "";
+  let headers = "";
+
+  if(reportId === "pda"){
+    headers = "<tr><th>Órgão</th><th>Base</th><th>Situação</th><th>Prazo</th></tr>";
+    rowsHtml = mockData.datasets.slice(0,8).map(ds=>`<tr><td>${orgAcronym(ds.org)}</td><td>${ds.name}</td><td>${statusBadge(ds.status)}</td><td class="cell-muted">${ds.prazo?fmtDate(ds.prazo):"—"}</td></tr>`).join("");
+  } else if(reportId === "updates"){
+    headers = "<tr><th>Dataset</th><th>Órgão</th><th>Situação</th></tr>";
+    rowsHtml = mockData.datasets.slice(0,8).map(ds=>`<tr><td>${ds.name}</td><td>${orgAcronym(ds.org)}</td><td>${statusBadge(updateSituacao(ds))}</td></tr>`).join("");
+  } else if(reportId === "lgpd"){
+    headers = "<tr><th>Prioridade</th><th>Órgão</th><th>Dataset</th><th>Tipo</th></tr>";
+    rowsHtml = mockData.alerts.slice(0,8).map(a=>`<tr><td>${priorityTag(a.priority)}</td><td>${orgAcronym(a.org)}</td><td>${a.dataset}</td><td>${a.type}</td></tr>`).join("");
+  } else if(reportId === "org"){
+    headers = "<tr><th>Órgão</th><th>Publicadas</th><th>Em atraso</th><th>Atenção</th></tr>";
+    rowsHtml = mockData.organizations.map(o=>`<tr><td>${o.name}</td><td>${o.basesPublicadas}/${o.basesPrevistas}</td><td>${o.emAtraso}</td><td><span class="badge ${attentionBadgeClass(o.indiceAtencao)}">${o.indiceAtencao}</span></td></tr>`).join("");
+  } else if(reportId === "semrecurso"){
+    headers = "<tr><th>Dataset</th><th>Órgão</th><th>Status</th></tr>";
+    rowsHtml = mockData.datasets.filter(d=>d.resourceCount===0).map(ds=>`<tr><td>${ds.name}</td><td>${orgAcronym(ds.org)}</td><td>${statusBadge(ds.status)}</td></tr>`).join("")
+      || `<tr><td colspan="3" class="table-empty">Nenhum registro.</td></tr>`;
+  } else if(reportId === "formato"){
+    headers = "<tr><th>Dataset</th><th>Órgão</th><th>Formato</th></tr>";
+    rowsHtml = mockData.datasets.filter(d=>d.format==="PDF").map(ds=>`<tr><td>${ds.name}</td><td>${orgAcronym(ds.org)}</td><td><span class="badge badge-gray">${ds.format}</span></td></tr>`).join("")
+      || `<tr><td colspan="3" class="table-empty">Nenhum registro.</td></tr>`;
+  }
+
+  document.getElementById("modal-generic-title").textContent = def.title;
+  document.getElementById("modal-generic-sub").textContent = "Pré-visualização — protótipo (dados simulados)";
+  document.getElementById("modal-generic-body").innerHTML = `
+    <div class="table-scroll">
+      <table><thead>${headers}</thead><tbody>${rowsHtml}</tbody></table>
+    </div>
+  `;
+  document.getElementById("modal-generic-foot").innerHTML = `
+    <button class="btn btn-outline btn-sm" data-close-modal="modal-generic">Fechar</button>
+    <button class="btn btn-primary btn-sm" id="report-export-btn"><i class="fa-solid fa-file-export"></i>Exportar Excel</button>
+  `;
+  document.querySelectorAll("#modal-generic [data-close-modal]").forEach(b=>b.addEventListener("click",()=>closeModal("modal-generic")));
+  document.getElementById("report-export-btn").onclick = ()=>{
+    toast("Relatório preparado para exportação.");
+  };
+  openModal("modal-generic");
+}
+
+/* ----------------------------------------------------------------
+   13. GLOBAL ACTIONS
+   ---------------------------------------------------------------- */
+document.getElementById("btn-refresh").addEventListener("click", ()=>{
+  toast("Inventário atualizado com sucesso.");
+});
+document.getElementById("btn-export-report").addEventListener("click", ()=>{
+  toast("Relatório preparado para exportação.");
+});
+
+/* ----------------------------------------------------------------
+   14. FILTER DATA (generic re-render dispatcher)
+   ---------------------------------------------------------------- */
+function filterData(screen){
+  const renderers = {
+    pda: renderPDA, updates: renderUpdates, lgpd: renderLGPD,
+    datasets: renderDatasets, traceability: renderTraceability,
+  };
+  if(renderers[screen]) renderers[screen]();
+}
+
+function updateDashboard(){ renderDashboard(); }
+
+/* ----------------------------------------------------------------
+   15. ASSISTENTE (chatbot local baseado em regras sobre mockData)
+   Não há IA/backend real: o "assistente" interpreta palavras-chave
+   da pergunta e consulta diretamente mockData, para simular a
+   experiência de um copiloto de dados dentro do protótipo.
+   ---------------------------------------------------------------- */
+function normalizeText(s){
+  return (s||"").toString().normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+}
+
+function findOrgMention(norm){
+  let best = null;
+  mockData.organizations.forEach(o=>{
+    const candidates = [o.name, o.acronym, o.acronym.replace("-GO","")];
+    candidates.forEach(c=>{
+      const nc = normalizeText(c);
+      if(nc.length>=3 && norm.includes(nc)){
+        if(!best || nc.length > normalizeText(best.name).length) best = o;
+      }
+    });
+  });
+  return best;
+}
+
+function findDatasetMention(norm){
+  let exact = null;
+  mockData.datasets.forEach(ds=>{
+    const nd = normalizeText(ds.name);
+    if(nd.length>=4 && norm.includes(nd)){
+      if(!exact || nd.length > normalizeText(exact.name).length) exact = ds;
+    }
+  });
+  if(exact) return {ds:exact, strong:true};
+
+  // sobreposição parcial de palavras relevantes (correspondência fraca)
+  const stop = new Set(["de","da","do","das","dos","e","em","no","na","a","o","por"]);
+  const words = norm.split(/\s+/).filter(w=>w.length>3 && !stop.has(w));
+  let best = null, bestScore = 0;
+  mockData.datasets.forEach(ds=>{
+    const dwords = normalizeText(ds.name).split(/\s+/).filter(w=>w.length>3 && !stop.has(w));
+    const score = dwords.filter(w=>words.includes(w)).length;
+    if(score > bestScore){ bestScore = score; best = ds; }
+  });
+  return best ? {ds:best, strong:false} : null;
+}
+
+function fmtDS(ds){
+  return ds.lastUpdate ? fmtDate(ds.lastUpdate) : "sem data registrada";
+}
+
+function answerAboutDataset(ds){
+  const sit = updateSituacao(ds);
+  return `<b>${ds.name}</b> (${orgName(ds.org)})
+ID CKAN: ${ds.ckanId ? "<code>"+ds.ckanId+"</code>" : "não publicado"}
+Situação PDA: ${ds.status} · Situação de atualização: ${sit}
+Periodicidade: ${ds.periodicity} · Formato: ${ds.format}
+Última atualização (last_modified): ${fmtDS(ds)}
+Prazo previsto: ${ds.prazo ? fmtDate(ds.prazo) : "—"}
+Recursos: ${ds.resourceCount}`;
+}
+
+function answerAboutOrg(o){
+  const dsOrg = mockData.datasets.filter(d=>d.org===o.id);
+  const atrasados = dsOrg.filter(d=>d.status==="Em atraso");
+  const alertsOrg = mockData.alerts.filter(a=>a.org===o.id && a.status==="Revisar");
+  let txt = `<b>${o.name}</b> (${o.acronym})
+Bases previstas: ${o.basesPrevistas} · Publicadas: ${o.basesPublicadas} · Em atraso: ${o.emAtraso}
+Atualização geral: ${o.atualizacaoPct}% · Índice de atenção: ${o.indiceAtencao}
+Alertas LGPD em aberto: ${alertsOrg.length}`;
+  if(atrasados.length){
+    txt += `\n\nBases em atraso deste órgão:\n` + atrasados.map(d=>`• ${d.name} (prazo ${d.prazo?fmtDate(d.prazo):"—"})`).join("\n");
+  }
+  return txt;
+}
+
+function listByStatus(status, org){
+  let rows = mockData.datasets.filter(d=>d.status===status);
+  if(org) rows = rows.filter(d=>d.org===org.id);
+  return rows;
+}
+
+function chatbotAnswer(question){
+  const norm = normalizeText(question);
+  const org = findOrgMention(norm);
+  const match = findDatasetMention(norm);
+  const ds = match ? match.ds : null;
+  const dsStrong = match ? match.strong : false;
+
+  const isAtraso = /\batras/.test(norm) || /\bvencid/.test(norm);
+  const isPrazo = /\bprazo/.test(norm);
+  const isLGPD = /\blgpd\b/.test(norm) || /dado(s)? pessoa/.test(norm) || /\bcpf\b/.test(norm);
+  const isAtualizacao = /atualiz/.test(norm);
+  const isQuantos = /\bquant/.test(norm);
+  const isSemRecurso = /sem recurso/.test(norm);
+  const isNaoPublicado = /nao public/.test(norm);
+
+  // 1) Nome de dataset citado explicitamente (match forte) -> resposta focada no dataset
+  if(ds && dsStrong && !isLGPD){
+    return answerAboutDataset(ds);
+  }
+
+  // 2) Pergunta sobre LGPD
+  if(isLGPD){
+    let alerts = mockData.alerts;
+    if(org) alerts = alerts.filter(a=>a.org===org.id);
+    if(ds && dsStrong) alerts = alerts.filter(a=>a.dataset===ds.name);
+    const abertos = alerts.filter(a=>a.status==="Revisar");
+    if(alerts.length===0){
+      return org ? `Não há alertas de LGPD registrados para <b>${org.name}</b> neste protótipo.` : `Não encontrei alertas de LGPD para essa consulta.`;
+    }
+    let txt = `${org?("Em <b>"+org.name+"</b>, e"):"E"}ncontrei ${alerts.length} alerta(s) de possíveis dados pessoais${org?"":" no total"}, sendo ${abertos.length} aguardando revisão humana.\n\n`;
+    txt += alerts.slice(0,6).map(a=>`• [${a.priority}] ${a.dataset} → ${a.type} (coluna "${a.column}", ${a.confidence}% de confiança) — ${a.status}`).join("\n");
+    if(alerts.length>6) txt += `\n… e mais ${alerts.length-6} alerta(s). Veja a tela "Dados Pessoais (LGPD)" para a lista completa.`;
+    txt += `\n\nLembrete: são sinalizações indicativas — a confirmação depende de revisão humana.`;
+    return txt;
+  }
+
+  // 3) Atraso (PDA) — checado antes do match fraco de dataset, para não ser ofuscado por ele
+  if(isAtraso){
+    const atrasadosPDA = listByStatus("Em atraso", org);
+    if(atrasadosPDA.length===0){
+      return org ? `Não encontrei bases em atraso no PDA para <b>${org.name}</b>.` : `Não encontrei bases em atraso no PDA para essa consulta.`;
+    }
+    let txt = `${org?("<b>"+org.name+"</b> possui"):"Encontrei"} ${atrasadosPDA.length} base(s) em atraso no PDA:\n\n`;
+    txt += atrasadosPDA.slice(0,8).map(d=>`• ${d.name} (${orgAcronym(d.org)}) — prazo ${d.prazo?fmtDate(d.prazo):"—"}`).join("\n");
+    if(atrasadosPDA.length>8) txt += `\n… e mais ${atrasadosPDA.length-8}. Veja a tela "Monitoramento PDA" para o detalhamento.`;
+    return txt;
+  }
+
+  // 4) Sem recurso
+  if(isSemRecurso){
+    const rows = mockData.datasets.filter(d=>d.status==="Sem recurso" && (!org || d.org===org.id));
+    if(rows.length===0) return `Não encontrei datasets sem recurso publicado${org?" para "+org.name:""}.`;
+    return `Datasets sem recurso publicado:\n\n` + rows.map(d=>`• ${d.name} (${orgAcronym(d.org)})`).join("\n");
+  }
+
+  // 5) Não publicado
+  if(isNaoPublicado){
+    const rows = mockData.datasets.filter(d=>d.status==="Não publicado" && (!org || d.org===org.id));
+    if(rows.length===0) return `Não encontrei bases previstas e ainda não publicadas${org?" para "+org.name:""}.`;
+    return `Bases previstas no PDA e ainda não publicadas no CKAN:\n\n` + rows.map(d=>`• ${d.name} (${orgAcronym(d.org)})`).join("\n");
+  }
+
+  // 6) Prazo (sem dataset forte identificado, mas com órgão)
+  if(isPrazo && org){
+    const rows = mockData.datasets.filter(d=>d.org===org.id && d.prazo).sort((a,b)=>a.prazo-b.prazo).slice(0,6);
+    if(rows.length===0) return `Não encontrei prazos registrados para ${org.name}.`;
+    return `Próximos prazos do PDA para <b>${org.name}</b>:\n\n` + rows.map(d=>`• ${d.name} — ${fmtDate(d.prazo)} (${d.status})`).join("\n");
+  }
+
+  // 7) Atualização (sem dataset forte identificado, mas com órgão)
+  if(isAtualizacao && org){
+    return answerAboutOrg(org);
+  }
+
+  // 8) "Quantos" (contagens gerais)
+  if(isQuantos){
+    if(/orgao/.test(norm)) return `Há <b>${mockData.organizations.length} órgãos</b> monitorados neste protótipo (48 no universo completo do PDA).`;
+    if(/dataset/.test(norm)) return `Há <b>${mockData.datasets.length} datasets</b> cadastrados neste protótipo (444 publicados no universo completo).`;
+    if(/recurso/.test(norm)) return `Há <b>${mockData.resources.length} recursos</b> de exemplo neste protótipo (2.939 recursos monitorados no universo completo).`;
+    return `Posso contar órgãos, datasets, recursos ou alertas de LGPD — pode especificar o que deseja contar?`;
+  }
+
+  // 9) Órgão mencionado sem intenção clara -> resumo geral do órgão (prioridade sobre match fraco de dataset)
+  if(org){
+    return answerAboutOrg(org);
+  }
+
+  // 10) Nenhum órgão nem intenção clara, mas houve correspondência fraca de dataset
+  if(ds){
+    return answerAboutDataset(ds);
+  }
+
+  // 11) Fallback
+  return `Não encontrei uma resposta direta para isso nos dados carregados. Você pode perguntar, por exemplo:
+• "Quais bases da Secretaria da Saúde estão atrasadas?"
+• "Qual o prazo do dataset Matrículas?"
+• "Quantos alertas de LGPD tem a SEAD?"
+• "Quando foi atualizado o dataset Execução Orçamentária?"`;
+}
+
+const chatSuggestions = [
+  "Quais bases estão atrasadas?",
+  "Quantos alertas de LGPD existem?",
+  "Prazo do dataset Matrículas",
+  "Situação da Secretaria da Saúde",
+  "Datasets sem recurso publicado",
+];
+
+function renderChatSuggestions(){
+  document.getElementById("chat-suggestions").innerHTML = chatSuggestions.map(s=>
+    `<button class="chip" type="button">${s}</button>`
+  ).join("");
+  document.querySelectorAll("#chat-suggestions .chip").forEach(chip=>{
+    chip.addEventListener("click", ()=>{
+      document.getElementById("chat-input").value = chip.textContent;
+      sendChatMessage();
+    });
+  });
+}
+
+function appendMessage(text, sender){
+  const wrap = document.getElementById("chat-messages");
+  const el = document.createElement("div");
+  el.className = "msg " + (sender==="user" ? "msg-user" : "msg-bot");
+  el.innerHTML = text;
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function showTyping(){
+  const wrap = document.getElementById("chat-messages");
+  const el = document.createElement("div");
+  el.className = "msg-typing";
+  el.id = "chat-typing-indicator";
+  el.innerHTML = "<span></span><span></span><span></span>";
+  wrap.appendChild(el);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+function hideTyping(){
+  const el = document.getElementById("chat-typing-indicator");
+  if(el) el.remove();
+}
+
+function sendChatMessage(){
+  const input = document.getElementById("chat-input");
+  const question = input.value.trim();
+  if(!question) return;
+  appendMessage(question.replace(/</g,"&lt;"), "user");
+  input.value = "";
+  showTyping();
+  const delay = 450 + Math.min(700, question.length*12);
+  setTimeout(()=>{
+    hideTyping();
+    const answer = chatbotAnswer(question);
+    appendMessage(answer.replace(/\n/g,"<br>"), "bot");
+  }, delay);
+}
+
+function initChatbot(){
+  renderChatSuggestions();
+  appendMessage(`Olá! Sou o assistente de consulta da GEDA. Posso responder perguntas sobre bases do PDA, datasets, recursos, prazos e alertas de LGPD com base nos dados carregados neste protótipo.`, "bot");
+
+  const fab = document.getElementById("chat-fab");
+  const panel = document.getElementById("chat-panel");
+  const toggle = ()=>{
+    const open = panel.classList.toggle("open");
+    fab.classList.toggle("open", open);
+    if(open) setTimeout(()=>document.getElementById("chat-input").focus(), 180);
+  };
+  fab.addEventListener("click", toggle);
+  document.getElementById("chat-head-close").addEventListener("click", toggle);
+
+  document.getElementById("chat-send").addEventListener("click", sendChatMessage);
+  document.getElementById("chat-input").addEventListener("keydown", (e)=>{
+    if(e.key==="Enter") sendChatMessage();
+  });
+}
+
+/* ----------------------------------------------------------------
+   16. INIT
+   ---------------------------------------------------------------- */
+function init(){
+  const steps = [renderDashboard, renderPDA, renderUpdates, renderLGPD, renderOrganizations, renderDatasets, renderTraceability, renderReports, initChatbot];
+  steps.forEach(fn=>{
+    try{ fn(); } catch(err){ console.error("Erro ao inicializar tela:", fn.name, err); }
+  });
+}
+init();
+</script>
+</body>
+</html>

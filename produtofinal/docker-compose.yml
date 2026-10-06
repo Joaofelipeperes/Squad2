@@ -1,0 +1,37 @@
+# Ambiente completo de desenvolvimento/homologação.
+#   docker compose up -d                     → db + api + worker + web (http://localhost:8080)
+#   docker compose --profile ia-local up -d  → inclui o Ollama (modelo local)
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: gda, POSTGRES_PASSWORD: gda, POSTGRES_DB: gda }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U gda"], interval: 5s, retries: 10 }
+
+  api:
+    build: ./backend
+    env_file: .env
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["8000:8000"]
+
+  worker:
+    build: ./backend
+    env_file: .env
+    command: ["python", "-m", "app.worker"]
+    depends_on: [api]
+
+  web:
+    build: ./frontend
+    depends_on: [api]
+    ports: ["8080:80"]
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ia-local"]
+    ports: ["11434:11434"]
+    volumes: [ollama:/root/.ollama]
+    # depois de subir: docker compose exec ollama ollama pull qwen2.5:7b
+
+volumes:
+  pgdata:
+  ollama:
