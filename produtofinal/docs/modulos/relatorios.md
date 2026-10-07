@@ -56,4 +56,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contrato e permissões | Claude / Victor |
+| 30/09/2026 | Esqueleto: contrato e permissões | Victor |

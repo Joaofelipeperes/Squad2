@@ -1,4 +1,4 @@
-"""Verificações das regras do CLAUDE.md que podem ser automatizadas."""
+"""Verificações das regras do AGENTS.md que podem ser automatizadas."""
 import re
 import subprocess
 import sys

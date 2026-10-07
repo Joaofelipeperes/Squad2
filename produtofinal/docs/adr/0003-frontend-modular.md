@@ -8,7 +8,6 @@
 | **Data do registro** | 30/09/2026 |
 | **Decisores** | Victor Hugo Benatti |
 | **Consultados** | CGE-GO validou o visual do protótipo em 17/09 (ver ADR-0007) |
-| **Apoio de IA** | Claude: extraiu o CSS do protótipo e montou o registro de telas |
 | **Origem** | Sessão de 30/09 |
 | **Afeta** | `frontend/`; PBI-66, PBI-100 |
 
@@ -54,5 +53,5 @@ Visual validado pela CGE-GO em 17/09; implementação a validar pelo time.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 30/09/2026 | Manifesto de tela passa a exigir `permissao` e `modulo` (ADR-0005) | Victor / Claude |
-| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor / Claude |
+| 30/09/2026 | Manifesto de tela passa a exigir `permissao` e `modulo` (ADR-0005) | Victor |
+| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor |

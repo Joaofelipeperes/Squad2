@@ -142,5 +142,5 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Módulo `auth` com três perfis fixos substituído por RBAC: catálogo central, papéis, escopo de órgão, guarda de subida e tela Usuários e papéis | Claude / Victor |
-| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor / Claude |
+| 30/09/2026 | Módulo `auth` com três perfis fixos substituído por RBAC: catálogo central, papéis, escopo de órgão, guarda de subida e tela Usuários e papéis | Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |

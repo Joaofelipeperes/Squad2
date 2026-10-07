@@ -8,7 +8,6 @@
 | **Data do registro** | 07/10/2026 (registro retroativo) |
 | **Decisores** | Paloma Peixoto (regra de negócio) e Squad 2 |
 | **Consultados** | Júnior Costa |
-| **Apoio de IA** | Claude: implementou as regras em `inventario/regras.py` (30/09) |
 | **Origem** | Reunião 1 (20/08), Reunião 2 (27/08), Reunião 3 (17/09) |
 | **Afeta** | Módulos `inventario`, `pda`, `atualizacoes`; US6, US9 |
 
@@ -67,4 +66,4 @@ Regras vindas da própria GEDA nas reuniões citadas; incorporadas ao Backlog v2
 | Data | Revisão | Autor |
 |---|---|---|
 | 22/09/2026 | Correções por anonimização excluídas do cálculo de atualização (PBI-79) | Squad 2 |
-| 30/09/2026 | Regras implementadas em `inventario/regras.py`; ID do CKAN como PK das tabelas espelhadas | Victor / Claude |
+| 30/09/2026 | Regras implementadas em `inventario/regras.py`; ID do CKAN como PK das tabelas espelhadas | Victor |

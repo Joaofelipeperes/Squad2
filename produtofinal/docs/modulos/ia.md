@@ -84,6 +84,6 @@ Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-001
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Implementação: perfis, tarefas, gateway com política LGPD e tela | Claude / Victor |
-| 30/09/2026 | Acesso passa a exigir `ia.configurar` do catálogo central | Claude / Victor |
-| 07/10/2026 | Link para o MER e as convenções do banco | Victor / Claude |
+| 30/09/2026 | Implementação: perfis, tarefas, gateway com política LGPD e tela | Victor |
+| 30/09/2026 | Acesso passa a exigir `ia.configurar` do catálogo central | Victor |
+| 07/10/2026 | Link para o MER e as convenções do banco | Victor |

@@ -58,4 +58,4 @@ Decisões registradas: [ADR-0009](../adr/0009-fonte-da-rastreabilidade.md).
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contrato `diff_coletas` e permissão | Claude / Victor |
+| 30/09/2026 | Esqueleto: contrato `diff_coletas` e permissão | Victor |

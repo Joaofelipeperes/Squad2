@@ -8,7 +8,6 @@
 | **Data do registro** | 07/10/2026 (registro retroativo; também consta no Backlog v2, aba Alterações v1→v2) |
 | **Decisores** | Squad 2 (daily de 22/09) |
 | **Consultados** | Paloma Peixoto e Júnior Costa (Reunião 3, 17/09) |
-| **Apoio de IA** | O protótipo foi gerado com IA a partir de um prompt do time (Luiza/Humberto) |
 | **Origem** | Reunião 3 (17/09); daily de 22/09 |
 | **Afeta** | Todas as telas; ADR-0003; PBI-66, PBI-100 |
 
@@ -48,4 +47,4 @@ CGE-GO em 17/09.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 30/09/2026 | Protótipo versionado em `prototipos/prototipoV1.html` e reaproveitado no frontend | Victor / Claude |
+| 30/09/2026 | Protótipo versionado em `prototipos/prototipoV1.html` e reaproveitado no frontend | Victor |

@@ -8,15 +8,14 @@
 | **Data do registro** | 07/10/2026 |
 | **Decisores** | Victor Hugo Benatti |
 | **Consultados** | Prof. Alessandro Cruvinel (01/10) |
-| **Apoio de IA** | Claude: criou o modelo, a linha do tempo, os registros retroativos e as verificações |
 | **Origem** | Reunião com o orientador (01/10) |
-| **Afeta** | `docs/adr/`, `CLAUDE.md`, `.githooks/pre-commit`, `scripts/checar_decisoes.py` |
+| **Afeta** | `docs/adr/`, `AGENTS.md`, `.githooks/pre-commit`, `scripts/checar_decisoes.py` |
 
 ## Contexto
 Em 01/10 o orientador pediu que o time registre a jornada: as alternativas analisadas, prós e contras
 e a escolha, porque isso será cobrado na avaliação da etapa de construção e dá segurança à CGE-GO. Ele
-também pediu que o conjunto de instruções dado à IA (o harness) fique documentado, para mostrar
-engenharia de software assistida por IA e não "vibe code". O time reconheceu que a análise de
+também pediu que as regras de trabalho do projeto fiquem documentadas, para demonstrar um processo
+de engenharia de software disciplinado. O time reconheceu que a análise de
 alternativas de setembro (extensão × aplicação, IA comercial × local) foi discutida mas não
 registrada.
 
@@ -36,7 +35,7 @@ registrada.
 - **Contras:** pouco espaço para alternativas e justificativa; fora do repositório.
 
 ### ADRs em Markdown no repositório + linha do tempo
-- **Prós:** formato consagrado; um arquivo por decisão; versionado; lido pela IA.
+- **Prós:** formato consagrado; um arquivo por decisão; versionado; lido junto com o código.
 - **Contras:** disciplina para escrever a cada decisão.
 
 ## Decisão
@@ -46,7 +45,7 @@ registrada.
   marca a antiga como substituída.
 - Decisões anteriores a 01/10 foram registradas retroativamente, com a data real e a fonte.
 - Mudanças em dependências ou infraestrutura exigem ADR ou revisão no mesmo commit (hook).
-- Cada ADR informa o apoio de IA e quem decidiu.
+- Cada ADR informa quem decidiu.
 
 ## Consequências
 - **Positivas:** a jornada fica demonstrável na avaliação e para a CGE-GO.

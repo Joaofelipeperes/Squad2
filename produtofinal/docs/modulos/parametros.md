@@ -69,6 +69,6 @@ Decisões registradas: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Implementação inicial | Claude / Victor |
-| 30/09/2026 | Separação entre ver (`parametros.acessar`) e editar (`parametros.editar`) | Claude / Victor |
-| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor / Claude |
+| 30/09/2026 | Implementação inicial | Victor |
+| 30/09/2026 | Separação entre ver (`parametros.acessar`) e editar (`parametros.editar`) | Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |

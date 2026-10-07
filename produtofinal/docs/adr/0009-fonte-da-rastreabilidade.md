@@ -8,7 +8,6 @@
 | **Data do registro** | 07/10/2026 |
 | **Decisores** | João Felipe Peres Lima (responsável pela US29) |
 | **Consultados** | SECTI (31/08) |
-| **Apoio de IA** | Claude: a coleta de 30/09 já grava fotografias por dataset, viabilizando a Opção C |
 | **Origem** | Respostas da SECTI (31/08); daily de 22/09; reunião com o orientador (01/10) |
 | **Afeta** | Módulos `rastreabilidade`, `inventario`; US14, US15, US29 |
 
@@ -52,4 +51,4 @@ Decisão do João com o time; confirmação de acesso com Wagner (SECTI).
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 01/10/2026 | Na reunião com o orientador, o time relatou que a SECTI poderia liberar a extensão. Confirmar formalmente qual extensão e em que prazo antes de decidir | Victor / Claude |
+| 01/10/2026 | Na reunião com o orientador, o time relatou que a SECTI poderia liberar a extensão. Confirmar formalmente qual extensão e em que prazo antes de decidir | Victor |

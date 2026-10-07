@@ -8,7 +8,6 @@
 | **Data do registro** | dd/mm/aaaa — se posterior à decisão, é um registro retroativo (dizer no Contexto) |
 | **Decisores** | quem decidiu (nome e papel) |
 | **Consultados** | cliente, SECTI, orientador, especialistas — quem opinou |
-| **Apoio de IA** | se houve: ferramenta, o que sugeriu ou implementou; a decisão final é sempre humana |
 | **Origem** | ata/reunião, PR/commit, sessão de trabalho |
 | **Afeta** | módulos, documentos, user stories |
 

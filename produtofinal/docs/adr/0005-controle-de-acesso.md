@@ -8,7 +8,6 @@
 | **Data do registro** | 30/09/2026 |
 | **Decisores** | Victor Hugo Benatti |
 | **Consultados** | — (distribuição dos papéis padrão a validar com a Paloma) |
-| **Apoio de IA** | Claude: implementou catálogo, portão, guarda de subida, tela e testes; identificou e corrigiu falha de escopo no Assistente |
 | **Origem** | Sessão de 30/09; commit `26878bb` |
 | **Afeta** | Módulo `acesso` e todos os demais; US24 |
 
@@ -63,6 +62,6 @@ Validar com a Paloma a distribuição dos papéis padrão (matriz em `docs/modul
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 30/09/2026 | Módulo `auth` renomeado para `acesso`; CLI passa a usar `--papel` | Victor / Claude |
-| 30/09/2026 | Assistente passa a respeitar o escopo de órgão ao montar o contexto (falha encontrada na revisão) | Victor / Claude |
-| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor / Claude |
+| 30/09/2026 | Módulo `auth` renomeado para `acesso`; CLI passa a usar `--papel` | Victor |
+| 30/09/2026 | Assistente passa a respeitar o escopo de órgão ao montar o contexto (falha encontrada na revisão) | Victor |
+| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor |

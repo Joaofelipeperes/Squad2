@@ -94,6 +94,6 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Tabelas, pipeline e etapa de classificação por IA (`classificar_colunas_ambiguas`) | Claude / Victor |
-| 30/09/2026 | Permissões granulares `lgpd.acessar`, `lgpd.triar`, `lgpd.aprovar_correcao` | Claude / Victor |
-| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor / Claude |
+| 30/09/2026 | Tabelas, pipeline e etapa de classificação por IA (`classificar_colunas_ambiguas`) | Victor |
+| 30/09/2026 | Permissões granulares `lgpd.acessar`, `lgpd.triar`, `lgpd.aprovar_correcao` | Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |

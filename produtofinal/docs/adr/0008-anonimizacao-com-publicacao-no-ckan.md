@@ -8,7 +8,6 @@
 | **Data do registro** | 07/10/2026 (registro retroativo; também consta no Backlog v2) |
 | **Decisores** | Squad 2 |
 | **Consultados** | Paloma Peixoto e Júnior Costa (20/08 e 17/09) |
-| **Apoio de IA** | — |
 | **Origem** | Reunião 1 (20/08), Reunião 3 (17/09), daily de 22/09 |
 | **Afeta** | Módulo `lgpd`; `integrations/ckan/writer.py`; US26 |
 
@@ -53,4 +52,4 @@ Autorização formal CGE-GO/SECTI antes de ligar em produção (PBI-95).
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 30/09/2026 | Salvaguardas implementadas em `CkanWriter` e permissão `lgpd.aprovar_correcao` criada | Victor / Claude |
+| 30/09/2026 | Salvaguardas implementadas em `CkanWriter` e permissão `lgpd.aprovar_correcao` criada | Victor |

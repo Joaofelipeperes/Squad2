@@ -8,7 +8,6 @@
 | **Data do registro** | 30/09/2026 |
 | **Decisores** | Victor Hugo Benatti |
 | **Consultados** | SECTI (31/08, sobre o Gemini); LIGO/TI Central e orientador (01/10, ver Revisões) |
-| **Apoio de IA** | Claude: propôs o padrão gateway + adaptadores e implementou a página de configuração |
 | **Origem** | Sessão de 30/09; pedido do coordenador de alternar entre modelos locais e comerciais |
 | **Afeta** | Módulos `ia`, `lgpd`, `assistente`; US11, US28 |
 
@@ -55,5 +54,5 @@ Coordenação (30/09). Reforçada pelo orientador e pelo LIGO em 01/10.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 01/10/2026 | LIGO/TI Central ofereceu um Qwen ajustado internamente enquanto avalia o custo do Gemini; o orientador recomendou modelo offline para classificar conteúdo (custo, latência e LGPD) e Gemini para o Assistente. Ambos cabem no desenho atual (o Qwen entra como perfil `openai_compat` ou `ollama`), sem mudança de código. Estratégia de detecção registrada na ADR-0010 | Victor / Claude |
-| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor / Claude |
+| 01/10/2026 | LIGO/TI Central ofereceu um Qwen ajustado internamente enquanto avalia o custo do Gemini; o orientador recomendou modelo offline para classificar conteúdo (custo, latência e LGPD) e Gemini para o Assistente. Ambos cabem no desenho atual (o Qwen entra como perfil `openai_compat` ou `ollama`), sem mudança de código. Estratégia de detecção registrada na ADR-0010 | Victor |
+| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor |

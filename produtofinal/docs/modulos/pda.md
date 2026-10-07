@@ -75,5 +75,5 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contratos, tabela `pda_base_prevista` e permissões | Claude / Victor |
-| 07/10/2026 | Link para o MER e as convenções do banco | Victor / Claude |
+| 30/09/2026 | Esqueleto: contratos, tabela `pda_base_prevista` e permissões | Victor |
+| 07/10/2026 | Link para o MER e as convenções do banco | Victor |

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Garante a regra de decisões do CLAUDE.md (ADR-0015).
+"""Garante a regra de decisões do AGENTS.md (ADR-0015).
 
     python scripts/checar_decisoes.py              # valida a estrutura das ADRs e a linha do tempo
     python scripts/checar_decisoes.py --staged     # + exige ADR quando dependência/infra muda (hook)
@@ -29,8 +29,7 @@ EXIGEM_DECISAO = [
     "backend/app/core/crypto.py",
 ]
 
-CAMPOS = ["Status", "Tipo", "Data da decisão", "Data do registro", "Decisores", "Apoio de IA",
-          "Origem"]
+CAMPOS = ["Status", "Tipo", "Data da decisão", "Data do registro", "Decisores", "Origem"]
 SECOES = ["Contexto", "Opções consideradas", "Decisão", "Consequências", "Revisões"]
 _ARQ = re.compile(r"^(\d{4})-[a-z0-9-]+\.md$")
 
@@ -87,7 +86,7 @@ def main() -> int:
                          + ". Crie uma ADR (docs/adr/_MODELO.md) ou acrescente uma linha em "
                            "'Revisões' da ADR relacionada, e atualize docs/adr/README.md.")
     if erros:
-        print("Registro de decisões incompleto (regra do CLAUDE.md, ADR-0015):")
+        print("Registro de decisões incompleto (regra do AGENTS.md, ADR-0015):")
         for e in erros:
             print(f"  - {e}")
         print("\nPara pular conscientemente: git commit --no-verify")

@@ -8,7 +8,6 @@
 | **Data do registro** | 30/09/2026 |
 | **Decisores** | Victor Hugo Benatti, com o time |
 | **Consultados** | SECTI (31/08); Paloma e Júnior (17/09) |
-| **Apoio de IA** | Claude: propôs isolar as regras em funções puras para manter a opção de extensão aberta |
 | **Origem** | Reunião 3 (17/09); sessão de 30/09 |
 | **Afeta** | Arquitetura geral; US22; PBI-102 |
 
@@ -59,5 +58,5 @@ Wagner (SECTI) a viabilidade técnica de cada forma de entrega.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 01/10/2026 | Na reunião com o orientador, o time relatou que a SECTI poderia liberar uma extensão do CKAN (ligada aos logs de alteração — ver ADR-0009). Pendente de confirmação formal | Victor / Claude |
-| 07/10/2026 | Reescrita no modelo de ADR; contexto completado com as respostas da SECTI (31/08) e da Reunião 3 (17/09) | Victor / Claude |
+| 01/10/2026 | Na reunião com o orientador, o time relatou que a SECTI poderia liberar uma extensão do CKAN (ligada aos logs de alteração — ver ADR-0009). Pendente de confirmação formal | Victor |
+| 07/10/2026 | Reescrita no modelo de ADR; contexto completado com as respostas da SECTI (31/08) e da Reunião 3 (17/09) | Victor |

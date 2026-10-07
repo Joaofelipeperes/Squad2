@@ -53,7 +53,6 @@ a fonte.
 | Modelo local para classificar dados pessoais | Qwen ajustado do LIGO × modelos testados pela Luiza × classificador especializado | Luiza | ADR-0010 |
 | Chave de modelo comercial para o Assistente | Gemini via SECTI/LIGO × modelo local | SECTI/LIGO via Paloma (limite 19/10) | ADR-0002 |
 | Hospedagem do protótipo navegável | Oracle Cloud (camada gratuita, conta do coordenador) × OpenShift da TI Central | Victor, com a Paloma | Sugestão do orientador (01/10) |
-| Portabilidade do harness para outras ferramentas de IA | Regras num `AGENTS.md` neutro, importado pelo `CLAUDE.md` × manter só o `CLAUDE.md` | Victor | Pedido do orientador (01/10) |
 | Distribuição dos papéis padrão | Matriz atual × ajustes da GEDA | Paloma | ADR-0005 |
 | Envio de recursos pelos órgãos | Incluir no escopo × manter fora | Paloma / Júnior, com a SECTI | docs/modulos/envio.md |
 

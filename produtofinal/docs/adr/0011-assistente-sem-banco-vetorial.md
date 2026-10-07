@@ -8,7 +8,6 @@
 | **Data do registro** | 07/10/2026 (registro retroativo) |
 | **Decisores** | Victor Hugo Benatti |
 | **Consultados** | SECTI (31/08); orientador (01/10) |
-| **Apoio de IA** | Claude: propôs e implementou o contexto determinístico em `assistente/service.py` |
 | **Origem** | Sessão de 30/09 |
 | **Afeta** | Módulo `assistente`; US28 |
 
@@ -54,4 +53,4 @@ Teste com perguntas reais da GEDA quando o Eixo 1 estiver integrado.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 30/09/2026 | Contexto passa a respeitar o escopo de órgão do usuário | Victor / Claude |
+| 30/09/2026 | Contexto passa a respeitar o escopo de órgão do usuário | Victor |

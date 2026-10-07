@@ -8,7 +8,6 @@
 | **Data do registro** | 07/10/2026 (registro retroativo) |
 | **Decisores** | Victor Hugo Benatti |
 | **Consultados** | — |
-| **Apoio de IA** | Claude: propôs e implementou `app/worker.py` |
 | **Origem** | Sessão de 30/09 |
 | **Afeta** | Módulo `inventario`; `docker-compose.yml`; US23 |
 

@@ -8,7 +8,6 @@
 | **Data do registro** | 30/09/2026 |
 | **Decisores** | Victor Hugo Benatti (coordenação e arquitetura) |
 | **Consultados** | — (validação com o time pendente) |
-| **Apoio de IA** | Claude (Anthropic): levantou alternativas, recomendou a stack e gerou a estrutura inicial |
 | **Origem** | Sessão de arquitetura de 30/09; commit `c6b4020` |
 | **Afeta** | Todo o repositório; PBI-05 (US4) |
 
@@ -66,4 +65,4 @@ conforme orientação de 01/10.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção; decisão inalterada | Victor / Claude |
+| 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção; decisão inalterada | Victor |

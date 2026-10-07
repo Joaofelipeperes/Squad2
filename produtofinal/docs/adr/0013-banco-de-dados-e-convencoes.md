@@ -7,8 +7,7 @@
 | **Data da decisão** | 30/09/2026 (banco e nomes de constraints); 07/10/2026 (convenções e MER) |
 | **Data do registro** | 07/10/2026 |
 | **Decisores** | Victor Hugo Benatti |
-| **Consultados** | Orientador (01/10): as instruções de modelagem e nomenclatura devem fazer parte do harness |
-| **Apoio de IA** | Claude: escolheu e implementou a convenção de nomes, gerou o MER e redigiu as convenções a partir do código existente |
+| **Consultados** | Orientador (01/10): as instruções de modelagem e nomenclatura devem fazer parte das regras do projeto (AGENTS.md) |
 | **Origem** | Sessões de 30/09 e 07/10; reunião com o orientador (01/10) |
 | **Afeta** | `backend/app/core/db.py`, todos os `models.py`, `docs/banco/` |
 
@@ -84,4 +83,4 @@ Revisão do time ao criar a primeira tabela do Eixo 1 ou 2 seguindo as convenç�
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 07/10/2026 | Docstrings acrescentadas aos modelos sem descrição (acesso, inventario, lgpd, parametros) para o dicionário de dados | Victor / Claude |
+| 07/10/2026 | Docstrings acrescentadas aos modelos sem descrição (acesso, inventario, lgpd, parametros) para o dicionário de dados | Victor |

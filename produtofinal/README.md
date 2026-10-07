@@ -50,7 +50,7 @@ Depois de clonar, ative o hook que exige a documentação dos módulos:
 ## Estrutura
 
 ```
-CLAUDE.md          contexto do projeto e regras obrigatórias (leia primeiro)
+AGENTS.md          contexto do projeto e regras obrigatórias (leia primeiro)
 backend/app/
   core/            configuração, banco, cifragem, contrato de módulo
     permissoes.py  CATÁLOGO CENTRAL de permissões e papéis
@@ -77,7 +77,7 @@ prototipos/        Protótipo V1 (referência visual — PBI-66)
 
 ## Documentação
 
-- [CLAUDE.md — contexto e regras](CLAUDE.md)
+- [AGENTS.md — contexto e regras](AGENTS.md)
 - [Arquitetura](docs/arquitetura.md)
 - [Módulos](docs/modulos/README.md)
 - [Decisões — linha do tempo (ADRs)](docs/adr/README.md)

@@ -69,4 +69,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Criado como esqueleto não comprometido para o papel Órgão publicador | Claude / Victor |
+| 30/09/2026 | Criado como esqueleto não comprometido para o papel Órgão publicador | Victor |

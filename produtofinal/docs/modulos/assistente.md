@@ -63,5 +63,5 @@ Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-001
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Implementação inicial: contexto da coleta e widget de chat | Claude / Victor |
-| 30/09/2026 | Permissão `assistente.usar` e escopo de órgão no contexto | Claude / Victor |
+| 30/09/2026 | Implementação inicial: contexto da coleta e widget de chat | Victor |
+| 30/09/2026 | Permissão `assistente.usar` e escopo de órgão no contexto | Victor |

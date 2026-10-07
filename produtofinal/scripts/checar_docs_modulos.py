@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Garante a regra do CLAUDE.md: alterou um módulo → atualize docs/modulos/<modulo>.md.
+"""Garante a regra do AGENTS.md: alterou um módulo → atualize docs/modulos/<modulo>.md.
 
     python scripts/checar_docs_modulos.py --staged        # usado pelo hook de pre-commit
     python scripts/checar_docs_modulos.py --base main     # usado em PR / CI
@@ -57,7 +57,7 @@ def main() -> int:
         print("Módulos alterados sem atualização da documentação:")
         for m in faltando:
             print(f"  - {m}: atualize docs/modulos/{m}.md (inclua uma linha no Histórico)")
-        print("\nRegra definida no CLAUDE.md. Para pular conscientemente: git commit --no-verify")
+        print("\nRegra definida no AGENTS.md. Para pular conscientemente: git commit --no-verify")
         return 1
     return 0
 

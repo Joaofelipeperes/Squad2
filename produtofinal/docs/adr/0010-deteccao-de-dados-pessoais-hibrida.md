@@ -8,7 +8,6 @@
 | **Data do registro** | 07/10/2026 |
 | **Decisores** | Luiza Martins de Freitas Cintra (Eixo 2) e Victor Hugo Benatti |
 | **Consultados** | LIGO/TI Central — Adriano e Gabriel (01/10); Prof. Alessandro Cruvinel (01/10) |
-| **Apoio de IA** | Claude: desenhou o pipeline em `lgpd/service.py` e a política de modelo local |
 | **Origem** | Sessão de 30/09; reunião com o LIGO e reunião com o orientador (01/10) |
 | **Afeta** | Módulos `lgpd`, `ia`; US11, US12 |
 
@@ -70,4 +69,4 @@ Resultado da avaliação dos modelos (Luiza) e confirmação com a CGE-GO dos ti
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
-| 01/10/2026 | Estratégia confirmada pela sugestão do LIGO e pela recomendação do orientador; candidatos da Opção E incluídos | Victor / Claude |
+| 01/10/2026 | Estratégia confirmada pela sugestão do LIGO e pela recomendação do orientador; candidatos da Opção E incluídos | Victor |

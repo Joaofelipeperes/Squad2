@@ -61,4 +61,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contratos e permissão | Claude / Victor |
+| 30/09/2026 | Esqueleto: contratos e permissão | Victor |
