@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -44,6 +44,8 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 `.dataset(id)`, `.resource(id)` — com retentativa exponencial em 5xx/429.
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `coleta` | iniciada_em, finalizada_em, status (executando/ok/erro), origem (agendada/manual), solicitada_por, totais, erro |
@@ -75,6 +77,8 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 | `inventario.coleta_diaria` | `GDA_COLETA_CRON` (padrão `0 3 * * *`, America/Sao_Paulo) | `job_coleta_diaria` — roda no processo `app.worker` |
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md) · [ADR-0012](../adr/0012-agendamento-em-worker-proprio.md) · [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
+
 - Chave de tudo é o **ID do CKAN**; o `name` é editável pelos órgãos.
 - Atualização real = `last_modified` do **recurso**; `metadata_modified` não é indicador.
 - Dicionário de dados é marcado (`eh_dicionario_dados`) para ser excluído das contagens.
@@ -91,3 +95,4 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 |---|---|---|
 | 30/09/2026 | Estrutura inicial: coleta, snapshots, API e job diário | Claude / Victor |
 | 30/09/2026 | Rotas com permissões do catálogo central (`inventario.acessar`, `inventario.coletar`) | Claude / Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor / Claude |

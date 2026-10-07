@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -74,6 +74,8 @@ Frontend:
 - `permissoes.gen.ts` — tipos gerados do catálogo; manifesto de tela sem `permissao` válida não compila.
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `usuario` | email (único), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao`, ultimo_acesso |
@@ -122,6 +124,8 @@ Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
 Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.py`).
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
+
 - Toda rota declara controle de acesso; a API não sobe sem isso.
 - O sistema nunca fica sem administrador ativo (bloqueio ao remover/desativar o último).
 - Só quem tem `acesso.gerenciar_papeis` concede o papel Administrador.
@@ -139,3 +143,4 @@ Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.
 | Data | Alteração | Autor |
 |---|---|---|
 | 30/09/2026 | Módulo `auth` com três perfis fixos substituído por RBAC: catálogo central, papéis, escopo de órgão, guarda de subida e tela Usuários e papéis | Claude / Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor / Claude |

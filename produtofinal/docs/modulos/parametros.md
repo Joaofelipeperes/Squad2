@@ -7,7 +7,7 @@
 | **User stories** | US8 (PBI-22), US11 (PBI-31, PBI-86), US16 (PBI-48), US17 (PBI-52) |
 | **Backend** | `backend/app/modules/parametros/` |
 | **Frontend** | `frontend/src/modules/parametros/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Concentra os valores de negócio que a GEDA precisa ajustar sem depender do time (janelas, listas,
@@ -37,6 +37,8 @@ limites), com valor padrão no código.
 | `confianca_minima_lgpd` | 60 | lgpd |
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `parametro` | chave (PK), valor (JSON), alterado_por |
@@ -56,6 +58,8 @@ limites), com valor padrão no código.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
+
 - Parâmetro novo = entrada em `catalogo.py`; aparece sozinho na tela.
 
 ## Pendências
@@ -67,3 +71,4 @@ Nenhum.
 |---|---|---|
 | 30/09/2026 | Implementação inicial | Claude / Victor |
 | 30/09/2026 | Separação entre ver (`parametros.acessar`) e editar (`parametros.editar`) | Claude / Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor / Claude |

@@ -52,6 +52,8 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
+
 - `metadata_modified` **nunca** é indicador de atualização.
 - Ressalva do recurso parcial (17/09): dataset anual atualizado no meio do ano (PBI-78).
 

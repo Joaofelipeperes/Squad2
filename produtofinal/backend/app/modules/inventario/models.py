@@ -13,6 +13,8 @@ from app.core.db import Base, utcnow
 
 
 class Coleta(Base):
+    """Execução da coleta do CKAN (agendada ou manual), com totais e eventual erro."""
+
     __tablename__ = "coleta"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -28,6 +30,8 @@ class Coleta(Base):
 
 
 class Organizacao(Base):
+    """Órgão publicador espelhado do CKAN (organization)."""
+
     __tablename__ = "organizacao"
 
     ckan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -38,6 +42,8 @@ class Organizacao(Base):
 
 
 class Dataset(Base):
+    """Conjunto de dados espelhado do CKAN (package), no estado da última coleta."""
+
     __tablename__ = "dataset"
 
     ckan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -61,6 +67,8 @@ class Dataset(Base):
 
 
 class Recurso(Base):
+    """Arquivo ou link de um dataset (resource); last_modified é o indicador de atualização."""
+
     __tablename__ = "recurso"
 
     ckan_id: Mapped[str] = mapped_column(String(64), primary_key=True)

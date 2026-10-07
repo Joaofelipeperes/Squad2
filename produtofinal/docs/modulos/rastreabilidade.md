@@ -47,6 +47,8 @@ Lê `coleta` e `dataset_snapshot`. Tabela de eventos a definir na implementaçã
 Previsto: gerar eventos ao fim de cada coleta.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0009](../adr/0009-fonte-da-rastreabilidade.md).
+
 - Fonte técnica decidida na US29 (PBI-70): extensão × diff entre coletas × activity stream. O
   diff já é viável com o que a coleta grava; o activity stream exige acesso interno à rede do Estado.
 

@@ -36,15 +36,27 @@ flowchart LR
   GW -->|Assistente GEDA| COM
 ```
 
-## 2. Decisões principais
+## 2. Decisões
 
-| # | Decisão | Por quê | ADR |
-|---|---|---|---|
-| 1 | Monólito modular, Python/FastAPI + React/TS | Um deploy, módulos isolados, Python já usado pela GEDA e pelo CKAN | [0001](adr/0001-monolito-modular.md) |
-| 2 | IA atrás de um gateway, com perfis configuráveis por tela | Trocar Gemini ↔ local sem código; proteger dado pessoal | [0002](adr/0002-camada-ia-plugavel.md) |
-| 3 | Frontend reaproveita o CSS do Protótipo V1 sem alteração | Fidelidade ao que a CGE-GO validou em 17/09 | [0003](adr/0003-frontend-modular.md) |
-| 4 | Aplicação independente do CKAN, regras de domínio puras | Mantém aberta a decisão extensão × acesso pelo portal | [0004](adr/0004-implantacao-independente.md) |
-| 5 | Controle de acesso por papéis e permissões, com catálogo central | Telas e ações por usuário; órgãos só veem os próprios dados | [0005](adr/0005-controle-de-acesso.md) |
+Todas as decisões, com alternativas, prós e contras, estão em [docs/adr/](adr/README.md), em ordem
+cronológica. As que definem esta arquitetura:
+
+| Decisão | ADR |
+|---|---|
+| Monólito modular, Python/FastAPI + React/TS | [0001](adr/0001-monolito-modular.md) |
+| IA atrás de um gateway, com perfis configuráveis e política LGPD | [0002](adr/0002-camada-ia-plugavel.md) |
+| Frontend reaproveitando o CSS do Protótipo V1 | [0003](adr/0003-frontend-modular.md) |
+| Aplicação independente do CKAN, regras portáveis | [0004](adr/0004-implantacao-independente.md) |
+| Controle de acesso por papéis e permissões | [0005](adr/0005-controle-de-acesso.md) |
+| Detecção de dados pessoais híbrida (regras + modelo local) | [0010](adr/0010-deteccao-de-dados-pessoais-hibrida.md) |
+| Assistente sem banco vetorial | [0011](adr/0011-assistente-sem-banco-vetorial.md) |
+| Agendador em processo próprio | [0012](adr/0012-agendamento-em-worker-proprio.md) |
+| PostgreSQL, convenções de modelagem e MER gerado | [0013](adr/0013-banco-de-dados-e-convencoes.md) |
+
+## 2.1 Dados
+
+O modelo de dados está no [MER](banco/mer.md), gerado a partir do código (17 tabelas, com dicionário
+de dados). As regras de modelagem estão em [convencoes.md](banco/convencoes.md).
 
 ## 3. Backend
 

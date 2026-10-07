@@ -35,3 +35,24 @@ def test_permissoes_ts_sincronizado():
     r = subprocess.run([sys.executable, str(RAIZ / "scripts/gerar_permissoes_ts.py"), "--check"],
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stdout
+
+
+def _rodar(script: str, *args: str):
+    return subprocess.run([sys.executable, str(RAIZ / "scripts" / script), *args],
+                          capture_output=True, text=True)
+
+
+def test_mer_sincronizado_com_os_modelos():
+    r = _rodar("gerar_mer.py", "--check")
+    assert r.returncode == 0 and "Aviso" not in r.stdout, r.stdout
+
+
+def test_todo_modelo_tem_docstring():
+    from app.core.db import Base
+    sem = [m.local_table.name for m in Base.registry.mappers if not (m.class_.__doc__ or "").strip()]
+    assert not sem, f"Docstring obrigatória (vira a descrição no MER): {sem}"
+
+
+def test_adrs_estruturadas_e_na_linha_do_tempo():
+    r = _rodar("checar_decisoes.py")
+    assert r.returncode == 0, r.stdout

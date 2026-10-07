@@ -59,6 +59,8 @@ O papel Órgão publicador **exige órgão** vinculado ao usuário.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
+
 - Usuário de órgão nunca vê dados de outro órgão (`filtrar_por_orgao`, `exigir_mesmo_orgao`).
 
 ## Pendências

@@ -50,6 +50,8 @@ Sem tabelas próprias. Uso registrado em `ia_uso` pelo gateway, sem conteúdo.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-0011](../adr/0011-assistente-sem-banco-vetorial.md).
+
 - Sem banco vetorial: o backend monta os fatos e o modelo só redige (risco de infraestrutura do PGP).
 - O prompt proíbe inventar números; sem dado no contexto, indica a tela onde conferir.
 - Nunca recebe conteúdo de achados LGPD — por isso pode usar modelo comercial.

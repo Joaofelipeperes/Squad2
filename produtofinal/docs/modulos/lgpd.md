@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -44,6 +44,8 @@ Pipeline da varredura (US11), em `service.py`:
 Tipos de apoio: `AmostraColuna(nome, valores)`, `ClassificacaoColuna(coluna, tipo, confianca)`.
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `lgpd_achado` | recurso_id, coluna, linha, ocorrencias, tipo, metodo (regra/ia), confianca, prioridade, status, impressao_digital |
@@ -73,6 +75,8 @@ Tipos de apoio: `AmostraColuna(nome, valores)`, `ClassificacaoColuna(coluna, tip
 Previsto: varredura em lote após a coleta diária (PBI-34).
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-ckan.md) · [ADR-0010](../adr/0010-deteccao-de-dados-pessoais-hibrida.md).
+
 - **Não retenção** (PBI-35): o achado guarda localização e tipo, nunca o valor encontrado.
 - Sinaliza, não bloqueia a publicação (PBI-39).
 - Achado já avaliado não volta como novo (`impressao_digital`, PBI-41).
@@ -92,3 +96,4 @@ Previsto: varredura em lote após a coleta diária (PBI-34).
 |---|---|---|
 | 30/09/2026 | Tabelas, pipeline e etapa de classificação por IA (`classificar_colunas_ambiguas`) | Claude / Victor |
 | 30/09/2026 | Permissões granulares `lgpd.acessar`, `lgpd.triar`, `lgpd.aprovar_correcao` | Claude / Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor / Claude |

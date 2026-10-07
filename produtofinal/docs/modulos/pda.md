@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` |
 | **Frontend** | `frontend/src/modules/pda/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Cruza as bases previstas no PDA 2025/2027 com os datasets publicados no CKAN e mostra prazos de
@@ -37,6 +37,8 @@ Contratos em `service.py` (lançam `NotImplementedError`):
 - `listar_bases(db, *, orgao, situacao, periodicidade, ano, prazo)` — PBI-20/21.
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `pda_base_prevista` | orgao_sigla, nome_previsto, prazo_abertura, periodicidade, `dataset_id` → `dataset.ckan_id`, classificacao (pda/espontanea) |
@@ -60,6 +62,8 @@ Contratos em `service.py` (lançam `NotImplementedError`):
 Nenhum — a situação é calculada sobre o inventário da última coleta.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
+
 - Vínculo **sempre pelo ID do dataset** (PBI-13); nunca por similaridade de nome.
 - Base vinculada cujo dataset some do portal gera alerta (PBI-15).
 - Bases espontâneas também são monitoradas (Paloma e Júnior, 17/09).
@@ -72,3 +76,4 @@ Nenhum — a situação é calculada sobre o inventário da última coleta.
 | Data | Alteração | Autor |
 |---|---|---|
 | 30/09/2026 | Esqueleto: contratos, tabela `pda_base_prevista` e permissões | Claude / Victor |
+| 07/10/2026 | Link para o MER e as convenções do banco | Victor / Claude |

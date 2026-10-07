@@ -52,6 +52,8 @@ npm run build                          # tsc estrito + build
 
 # raiz
 python scripts/gerar_permissoes_ts.py  # após alterar o catálogo de permissões
+python scripts/gerar_mer.py            # após alterar modelos (use o Python de backend/.venv)
+python scripts/checar_decisoes.py      # valida ADRs e linha do tempo
 git config core.hooksPath .githooks    # uma vez por clone: ativa o pre-commit
 docker compose up -d --build           # ambiente completo
 ```
@@ -69,7 +71,10 @@ frontend/src/modules/<pasta>/     uma tela; index.ts declara modulo, permissao, 
 frontend/src/modules/registry.ts  registro das telas
 frontend/src/shared/acesso/       <Pode>, permissoes.gen.ts (GERADO — não editar)
 docs/modulos/<id>.md              documentação de cada módulo (formato em _MODELO.md)
-docs/arquitetura.md, docs/adr/    arquitetura e decisões
+docs/adr/                         DECISÕES: uma ADR por decisão + linha do tempo (README.md)
+docs/banco/convencoes.md          regras de modelagem do banco (obrigatórias)
+docs/banco/mer.md                 MER + dicionário de dados (GERADO — não editar)
+docs/arquitetura.md               visão geral da arquitetura
 ```
 
 ## Regras obrigatórias
@@ -124,13 +129,30 @@ docs/arquitetura.md, docs/adr/    arquitetura e decisões
 ### 6. Código
 - Regra de negócio em `service.py`/`regras.py`; `router.py` só valida e delega.
   Funções puras em `regras.py` (reaproveitáveis numa extensão CKAN — ADR 0004).
-- Mudou tabela → migração Alembic revisada no mesmo commit.
+- Banco: siga `docs/banco/convencoes.md` (nomes, chaves, tipos, privacidade). Mudou tabela →
+  docstring no modelo, migração Alembic revisada e `python scripts/gerar_mer.py`, no mesmo commit.
 - Nomes de domínio em português; termos do CKAN em inglês (`last_modified`, `package_search`).
 - Commits: `feat(<modulo>): descrição (PBI-NN)` — ver `docs/padroes.md`.
 - Nunca versionar `.env`, bancos locais, chaves ou cópias de recursos com dados pessoais.
+
+### 7. Decisões técnicas são registradas (ADR-0015)
+- **Toda decisão técnica vira uma ADR** em `docs/adr/` (modelo `_MODELO.md`) e uma linha na linha do
+  tempo `docs/adr/README.md`, **no mesmo commit** da mudança. Exemplos: adotar ou trocar biblioteca,
+  ferramenta ou serviço; escolher entre dois desenhos; mudar convenção; aceitar um risco.
+- Registre **ao menos duas opções com prós e contras**, os critérios, quem decidiu, quem foi
+  consultado e o **apoio de IA** (o que a IA sugeriu ou implementou; a decisão é sempre humana).
+- Decisão aceita não é reescrita. Fato novo ou melhoria → linha em "Revisões" da ADR. Mudou a decisão
+  → ADR nova; a antiga fica "Substituída por ADR-XXXX".
+- Quando a decisão surgir numa conversa com IA, **proponha a ADR antes de implementar**, com as
+  alternativas, e só registre como "Aceita" depois da escolha do responsável.
+- Mudanças em dependências ou infraestrutura (`pyproject.toml`, `package.json`, Docker, `core/db.py`,
+  `core/security.py`, `core/crypto.py`, `alembic/env.py`) exigem ADR ou revisão no mesmo commit
+  (`scripts/checar_decisoes.py`).
+- Decisão que depende do cliente ou da SECTI fica "Em análise" e entra em "Decisões em aberto".
 
 ## Antes de concluir uma tarefa
 1. `python -m pytest` (backend) e `npm run build` (frontend) passando.
 2. `docs/modulos/<id>.md` de cada módulo tocado atualizado, com linha no Histórico.
 3. Rotas e telas novas com permissão do catálogo; catálogo alterado → TS regenerado.
-4. Migração criada se houve mudança de tabela.
+4. Mudança de tabela: migração revisada e MER regenerado.
+5. Decisão técnica tomada: ADR criada ou revisada e linha do tempo atualizada.

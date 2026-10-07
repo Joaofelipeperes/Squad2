@@ -46,6 +46,8 @@ Sem tabelas próprias.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.md).
+
 - Colunas compatíveis com as planilhas atuais da GEDA (PBI-61).
 
 ## Pendências

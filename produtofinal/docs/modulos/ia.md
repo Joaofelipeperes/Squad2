@@ -7,7 +7,7 @@
 | **User stories** | US11, US28 (PBI-96) |
 | **Backend** | `backend/app/modules/ia/` · adaptadores em `backend/app/integrations/ai/` |
 | **Frontend** | `frontend/src/modules/ia/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Permite trocar entre modelos locais e comerciais sem alterar código e garante que dados pessoais
@@ -46,6 +46,8 @@ Todas as rotas exigem `ia.configurar` (dependência no nível do router).
 adaptadores `gemini`, `ollama`, `openai_compat`, `mock`.
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `ia_perfil_provedor` | nome, tipo, modelo, base_url, api_key_cifrada (Fernet), api_key_dica, execucao_local, temperatura, max_tokens, timeout_s, ativo |
@@ -67,6 +69,8 @@ adaptadores `gemini`, `ollama`, `openai_compat`, `mock`.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-0010](../adr/0010-deteccao-de-dados-pessoais-hibrida.md).
+
 - Tarefa sensível só aceita perfil local; checado ao vincular, ao editar o perfil e a cada chamada.
   Exceção apenas com `GDA_IA_PERMITIR_EXTERNO_PARA_SENSIVEL=true` (decisão da CGE-GO).
 - Chave de API cifrada no banco e nunca devolvida pela API.
@@ -82,3 +86,4 @@ Nenhum.
 |---|---|---|
 | 30/09/2026 | Implementação: perfis, tarefas, gateway com política LGPD e tela | Claude / Victor |
 | 30/09/2026 | Acesso passa a exigir `ia.configurar` do catálogo central | Claude / Victor |
+| 07/10/2026 | Link para o MER e as convenções do banco | Victor / Claude |
