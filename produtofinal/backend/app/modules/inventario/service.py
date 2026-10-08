@@ -20,6 +20,17 @@ class ColetaEmAndamento(RuntimeError):
     pass
 
 
+def recursos_atuais(ds: Dataset) -> list[Recurso]:
+    """Recursos do dataset que vieram no pacote da última coleta dele (ver `regras.recurso_atual`).
+    Recurso apagado do CKAN fica no banco, mas não conta para publicação nem atualização."""
+    return [r for r in ds.recursos if regras.recurso_atual(r, ds)]
+
+
+def condicao_recurso_atual():
+    """Mesma regra de `recursos_atuais` para consultas SQL (exige o join Recurso × Dataset)."""
+    return Recurso.ultima_coleta_id.is_not_distinct_from(Dataset.ultima_coleta_id)
+
+
 def coleta_em_andamento(db: Session) -> Coleta | None:
     return db.scalar(select(Coleta).where(Coleta.status == "executando"))
 
@@ -49,6 +60,9 @@ def executar(coleta_id: int, client: CkanClient | None = None) -> None:
         for o in orgs:
             db.merge(Organizacao(ckan_id=o["id"], name=o["name"], titulo=o.get("title") or o["name"],
                                  ultima_coleta_id=coleta_id))
+        # Grava os órgãos antes dos datasets: sem relationship Dataset→Organizacao (e com
+        # autoflush desligado) o SQLAlchemy não garante essa ordem e a FK falha no PostgreSQL.
+        db.flush()
         n_ds = n_res = 0
         vistos: set[str] = set()
         for pkg in client.iter_datasets():

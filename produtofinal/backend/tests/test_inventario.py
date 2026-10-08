@@ -54,6 +54,19 @@ def test_coleta_completa_com_paginacao():
         assert db.query(DatasetSnapshot).count() == 3
 
 
+def test_organizacoes_paginadas_alem_do_limite_do_ckan():
+    """CKAN 2.9 devolve no máximo 25 organizações por chamada com all_fields=True."""
+    todas = [{"id": f"o{i}", "name": f"org-{i}", "title": f"Org {i}"} for i in range(51)]
+
+    def handler(request: httpx.Request):
+        limit, offset = int(request.url.params["limit"]), int(request.url.params["offset"])
+        return httpx.Response(200, json={"success": True,
+                                         "result": todas[offset:offset + min(limit, 25)]})
+
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(handler))
+    assert [o["id"] for o in client.organizations()] == [o["id"] for o in todas]
+
+
 def test_coleta_concorrente_bloqueada(client, gerente):
     h = gerente
     with SessionLocal() as db:

@@ -73,8 +73,24 @@ class CkanClient:
     def status(self) -> dict:
         return self.action("status_show")
 
-    def organizations(self) -> list[dict]:
-        return self.action("organization_list", all_fields=True, include_extras=True, limit=1000)
+    def organizations(self, page_size: int = 25) -> list[dict]:
+        """Todas as organizações, paginando: o CKAN 2.9 limita `organization_list` com
+        `all_fields=True` a 25 itens por chamada (ckan.group_and_organization_list_all_fields_max),
+        e o portal tem mais que isso. Sem paginar, datasets de órgãos fora da 1ª página quebram a
+        coleta (FK de organização)."""
+        orgs: list[dict] = []
+        vistos: set[str] = set()
+        offset = 0
+        while True:
+            batch = self.action("organization_list", all_fields=True, include_extras=True,
+                                limit=page_size, offset=offset)
+            novos = [o for o in batch if o.get("id") not in vistos]
+            orgs.extend(novos)
+            vistos.update(o.get("id") for o in novos)
+            # página incompleta = fim; página só com repetidos = servidor ignorou o offset
+            if len(batch) < page_size or not novos:
+                return orgs
+            offset += len(batch)
 
     def iter_datasets(self, page_size: int | None = None) -> Iterator[dict]:
         """Percorre TODOS os datasets públicos com paginação (package_search), recursos inclusos."""
