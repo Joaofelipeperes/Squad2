@@ -37,3 +37,21 @@ textarea.text-input { resize: vertical; min-height: 72px; }
 .form-field label.check-line { text-transform: none; letter-spacing: 0; font-size: 13px;
   font-weight: 400; color: var(--ink); }
 .form-field label.check-line strong { font-weight: 600; }
+
+/* Monitoramento do PDA */
+.filter-field-largo { min-width: 260px; max-width: 420px; }
+.filter-field-limitado select { max-width: 300px; }
+.filter-badge { align-self: flex-end; padding-bottom: 7px; }
+.filter-actions-quebra { flex-wrap: wrap; justify-content: flex-end; }
+tbody tr:focus-visible { outline-offset: -2px; }
+a.btn { text-decoration: none; }
+.lista-rolavel { max-height: 200px; overflow-y: auto; border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm); padding: 0 10px; }
+.lista-rolavel .hist-row:last-child { border-bottom: none; }
+.lista-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.help-texto { font-size: 12.5px; color: var(--gray-500); line-height: 1.5; }
+.confirmar-texto { font-size: 13.5px; line-height: 1.55; color: var(--gray-700); }
+.confirmar-texto p + p { margin-top: 10px; }
+
+/* Diálogo recebe foco programático (Modal.tsx) — sem contorno no contêiner */
+.modal:focus { outline: none; }

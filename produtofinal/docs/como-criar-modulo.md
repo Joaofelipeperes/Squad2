@@ -1,6 +1,7 @@
 # Como criar um módulo
 
-Exemplo: módulo `pda` (já existe como esqueleto).
+Exemplo: módulo `pda` (já implementado — use-o como referência de estrutura; os passos abaixo mostram
+como ele foi criado).
 
 ## Backend
 

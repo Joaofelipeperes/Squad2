@@ -7,7 +7,7 @@
 | **User stories** | US20 (PBI-60, PBI-61, PBI-77) |
 | **Backend** | `backend/app/modules/relatorios/` |
 | **Frontend** | `frontend/src/modules/relatorios/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Substitui o controle manual em planilhas da GEDA por relatórios exportáveis com as mesmas colunas.
@@ -40,7 +40,8 @@ Sem tabelas próprias.
 ## Interações com outros módulos
 | Direção | Módulo | O quê |
 |---|---|---|
-| consome | pda, atualizacoes, lgpd, metadados, rastreabilidade, painel | dados de cada relatório |
+| consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)`: bases previstas, não publicadas e prazos, **sempre do PDA vigente** (a implementar) |
+| consome | atualizacoes, lgpd, metadados, rastreabilidade, painel | dados de cada relatório |
 
 ## Jobs agendados
 Nenhum.
@@ -55,3 +56,4 @@ Nenhum.
 | Data | Alteração | Autor |
 |---|---|---|
 | 30/09/2026 | Esqueleto: contrato e permissões | Claude / Victor |
+| 07/10/2026 | Interações: consumo do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Claude / Humberto |

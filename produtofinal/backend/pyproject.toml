@@ -17,13 +17,15 @@ dependencies = [
   "pyjwt>=2.8",
   "cryptography>=42",
   "psycopg[binary]>=3.1",
+  "python-multipart>=0.0.18",  # upload (planilha do PDA); <0.0.18 tem DoS (CVE-2024-53981)
+  "openpyxl>=3.1",            # leitura de .xlsx (PDA, PBI-12) e exportação XLSX (PBI-60)
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.5"]
 # Dependências que entram quando os módulos forem implementados:
 # lgpd = ["pandas>=2.2", "charset-normalizer>=3"]   # leitura de recursos tabulares (PBI-32)
-# reports = ["openpyxl>=3.1"]                        # exportação XLSX (PBI-60)
+# (openpyxl já está nas dependências principais: PDA e exportação XLSX)
 
 [tool.ruff]
 line-length = 100

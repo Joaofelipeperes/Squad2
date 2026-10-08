@@ -2,14 +2,15 @@
 
 Um arquivo por módulo, no formato de [`_MODELO.md`](_MODELO.md). **Regra do projeto (CLAUDE.md):
 toda alteração em um módulo atualiza o arquivo dele no mesmo commit**, incluindo uma linha no
-Histórico. O hook `.githooks/pre-commit` e o teste `test_guardas_do_projeto.py` verificam isso.
+Histórico. O hook `.githooks/pre-commit` (ative com `git config core.hooksPath produtofinal/.githooks`, a partir
+da raiz do repositório) e o teste `test_guardas_do_projeto.py` verificam isso.
 
 | Módulo | Telas | Status | Responsável |
 |---|---|---|---|
 | [acesso](acesso.md) | Login, Usuários e papéis | Implementado | João |
 | [inventario](inventario.md) | Datasets, botão Atualizar dados | Implementado (tela: esqueleto) | João |
-| [pda](pda.md) | Monitoramento PDA | Esqueleto | Humberto |
-| [atualizacoes](atualizacoes.md) | Atualizações | Esqueleto | Humberto |
+| [pda](pda.md) | Monitoramento PDA | Parcial (US7 pendente) | Humberto |
+| [atualizacoes](atualizacoes.md) | Atualizações | Parcial (última atualização real; tela: esqueleto) | Humberto |
 | [lgpd](lgpd.md) | Dados Pessoais (LGPD) | Parcial | Luiza |
 | [metadados](metadados.md) | — (alimenta Datasets e Relatórios) | Esqueleto | Luiza / João |
 | [rastreabilidade](rastreabilidade.md) | Rastreabilidade | Esqueleto | João / Humberto |
@@ -27,6 +28,7 @@ flowchart LR
   acesso --> inventario
   inventario --> pda & atualizacoes & lgpd & metadados & rastreabilidade
   parametros --> pda & lgpd & metadados
+  atualizacoes --> pda
   ia --> lgpd & assistente
   pda & atualizacoes & lgpd & metadados --> painel
   pda & atualizacoes & lgpd & metadados & rastreabilidade --> relatorios

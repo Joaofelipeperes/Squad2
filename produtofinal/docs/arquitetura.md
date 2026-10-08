@@ -80,7 +80,8 @@ Incluir um módulo novo não exige alterar nenhum outro arquivo além do registr
 | `ia` | Administração › Modelos de IA | US11, US28 | Luiza |
 | `parametros` | Administração › Parâmetros | US8, US11, US16, US17 | — |
 
-`acesso`, `inventario`, `ia`, `parametros` e `assistente` já estão implementados; os demais têm
+`acesso`, `inventario`, `ia`, `parametros` e `assistente` já estão implementados; `pda` e `atualizacoes`
+estão parcialmente implementados (ver docs/modulos); os demais têm
 contratos (`service.py`) com assinaturas e referência aos PBIs, prontos para os eixos.
 
 ### Fluxo de dados

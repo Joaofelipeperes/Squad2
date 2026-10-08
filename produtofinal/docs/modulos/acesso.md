@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -91,6 +91,7 @@ Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
 | inventario.coletar | ✓ | ✓ | | | |
 | pda.acessar | ✓ | ✓ | ✓ | | |
 | pda.editar_vinculos | ✓ | ✓ | | | |
+| pda.gerenciar_planos | ✓ | ✓ | | | |
 | atualizacoes.acessar | ✓ | ✓ | ✓ | | |
 | rastreabilidade.acessar | ✓ | ✓ | ✓ | | |
 | lgpd.acessar | ✓ | ✓ | ✓ | | |
@@ -110,12 +111,17 @@ Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
 
 Órgão publicador **exige órgão** vinculado. Os ajustes feitos na tela prevalecem sobre esta tabela.
 
+**Permissão nova em banco já existente:** o Administrador a recebe sozinho (`todas`); os demais
+papéis do sistema não mudam, porque `sincronizar_papeis_padrao` só cria papéis que faltam e não
+sobrescreve ajustes. Conceda pela tela Usuários e papéis (ex.: `pda.gerenciar_planos`, criada em
+07/10/2026, para a Gerência GEDA). A tabela acima vale para bancos novos.
+
 ## Interações com outros módulos
 | Direção | Módulo | O quê |
 |---|---|---|
 | consome | inventario | `Organizacao` para o vínculo `usuario.orgao_id` e a lista de órgãos |
 | é consumido por | todos | portão de permissões em toda rota (`require`, `autenticado`) |
-| é consumido por | assistente, envio | escopo de órgão (`filtrar_por_orgao`, `exigir_mesmo_orgao`) |
+| é consumido por | assistente, envio, pda | escopo de órgão (`filtrar_por_orgao`, `exigir_mesmo_orgao`) |
 | é consumido por | frontend (shell) | `/acesso/me` define menu, rotas, widgets e botões |
 
 ## Jobs agendados
@@ -139,3 +145,4 @@ Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.
 | Data | Alteração | Autor |
 |---|---|---|
 | 30/09/2026 | Módulo `auth` com três perfis fixos substituído por RBAC: catálogo central, papéis, escopo de órgão, guarda de subida e tela Usuários e papéis | Claude / Victor |
+| 07/10/2026 | Catálogo: `pda.gerenciar_planos` (importar PDA, definir o vigente e excluir PDA) para Administrador e Gerência GEDA; nota sobre permissão nova em banco existente | Claude / Humberto |

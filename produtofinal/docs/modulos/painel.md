@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 07/10/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -42,7 +42,7 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 | Direção | Módulo | O quê |
 |---|---|---|
 | consome | inventario | contagens e última coleta |
-| consome | pda | bases previstas × publicadas, prazos |
+| consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)`: bases previstas × publicadas e prazos por órgão, **sempre do PDA vigente** (a implementar) |
 | consome | atualizacoes | desatualizados por órgão |
 | consome | lgpd | indicador de risco e ranking de exposição (US27) |
 | consome | metadados | completude média |
@@ -61,3 +61,4 @@ Nenhum.
 | Data | Alteração | Autor |
 |---|---|---|
 | 30/09/2026 | Esqueleto: contratos, duas telas e permissão | Claude / Victor |
+| 07/10/2026 | Interações: consumo do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Claude / Humberto |

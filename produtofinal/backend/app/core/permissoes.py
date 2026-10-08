@@ -29,6 +29,7 @@ class P(StrEnum):
     # Eixo 1
     PDA_ACESSAR = "pda.acessar"
     PDA_EDITAR_VINCULOS = "pda.editar_vinculos"
+    PDA_GERENCIAR_PLANOS = "pda.gerenciar_planos"
     ATUALIZACOES_ACESSAR = "atualizacoes.acessar"
     RASTREABILIDADE_ACESSAR = "rastreabilidade.acessar"
     # Eixo 2
@@ -69,8 +70,11 @@ META: dict[P, MetaPermissao] = {
     P.PDA_ACESSAR: MetaPermissao("pda", "Ver Monitoramento do PDA",
                                  "Bases previstas, prazos de abertura e situação."),
     P.PDA_EDITAR_VINCULOS: MetaPermissao("pda", "Editar vínculos do PDA",
-                                         "Importar planilha de vinculação e reclassificar "
+                                         "Refazer vínculos pendentes com o CKAN e reclassificar "
                                          "bases PDA × espontâneas."),
+    P.PDA_GERENCIAR_PLANOS: MetaPermissao("pda", "Gerenciar PDAs",
+                                          "Importar planilhas de PDA, definir o PDA vigente "
+                                          "(rege indicadores e relatórios) e excluir PDAs."),
     P.ATUALIZACOES_ACESSAR: MetaPermissao("atualizacoes", "Ver Atualizações",
                                           "Atualização real dos recursos e periodicidade."),
     P.RASTREABILIDADE_ACESSAR: MetaPermissao("rastreabilidade", "Ver Rastreabilidade",
@@ -138,7 +142,8 @@ PAPEIS_PADRAO: list[PapelPadrao] = [
                 frozenset(P), todas=True),
     PapelPadrao("gerente_geda", "Gerência de Dados Abertos",
                 "Monitoramento completo, triagem LGPD e aprovação de anonimização.",
-                _VISUALIZACAO_GEDA | {P.INVENTARIO_COLETAR, P.PDA_EDITAR_VINCULOS, P.LGPD_TRIAR,
+                _VISUALIZACAO_GEDA | {P.INVENTARIO_COLETAR, P.PDA_EDITAR_VINCULOS,
+                                      P.PDA_GERENCIAR_PLANOS, P.LGPD_TRIAR,
                                       P.LGPD_APROVAR_CORRECAO, P.RELATORIOS_EXPORTAR,
                                       P.PARAMETROS_EDITAR, P.ACESSO_GERENCIAR_USUARIOS}),
     PapelPadrao("analista_geda", "Equipe GEDA",
