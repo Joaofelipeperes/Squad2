@@ -115,9 +115,10 @@ export function ImportarPdaModal({ aberto, primeiro, onFechar, onImportado }: Pr
           <input id="pda-imp-arquivo" className="text-input" type="file" accept=".xlsx,.csv"
                  required onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
           <span className="help">
-            Colunas lidas pelo cabeçalho: Orgão, Base de Dados, Descrição, Unidade Responsável, Atualização,
-            Políticas Públicas, Possui Conteúdo Sigiloso?, Disponível no Portal e, opcionalmente, Prazo.
-            Limite de 5 MB. O arquivo não é guardado; só os dados extraídos.
+            Colunas lidas pelo cabeçalho: Orgão e Base de Dados (obrigatórias); Descrição, Unidade Responsável,
+            Atualização e Meta/Prazo para abertura (mês/ano, ex.: Março/2025 — vale até o fim do mês);
+            opcionalmente Políticas Públicas, Possui Conteúdo Sigiloso? e Disponível no Portal (link do
+            dataset, usado para o vínculo). Limite de 5 MB. O arquivo não é guardado; só os dados extraídos.
           </span>
         </div>
         <label className="check-line full">
@@ -135,6 +136,11 @@ export function ImportarPdaModal({ aberto, primeiro, onFechar, onImportado }: Pr
   );
 }
 
+/** Colunas opcionais ausentes, menos as que já têm aviso próprio (prazo e portal). */
+const COM_AVISO_PROPRIO = ["Meta/Prazo para abertura", "Disponível no Portal"];
+const outrasAusentes = (r: ImportacaoResumo) =>
+  r.colunas_opcionais_ausentes.filter((c) => !COM_AVISO_PROPRIO.includes(c));
+
 function ResumoImportacao({ resumo }: { resumo: ImportacaoResumo }) {
   const r = resumo;
   return (
@@ -145,14 +151,19 @@ function ResumoImportacao({ resumo }: { resumo: ImportacaoResumo }) {
       </div>
       {!r.tem_coluna_prazo && (
         <div className="inline-msg err" style={{ marginTop: 10 }} role="alert">
-          A planilha não tem a coluna “Prazo” (ou “Prazo de abertura”): as bases não publicadas aparecem
-          como “Não publicado” e os filtros Ano e Prazo ficam vazios.
+          A planilha não tem a coluna “Meta/Prazo para abertura” (ou “Prazo”): as bases não publicadas
+          aparecem como “Não publicado” e os filtros Ano e Prazo ficam vazios.
         </div>
       )}
-      {r.colunas_opcionais_ausentes.filter((c) => c !== "Prazo").length > 0 && (
+      {!r.tem_coluna_portal && (
+        <div className="inline-msg err" style={{ marginTop: 10 }} role="alert">
+          A planilha não tem a coluna “Disponível no Portal”: nenhuma base foi vinculada a um dataset do
+          portal, então nenhuma aparece como publicada.
+        </div>
+      )}
+      {outrasAusentes(r).length > 0 && (
         <p className="help-texto" style={{ marginTop: 8 }}>
-          Colunas opcionais não encontradas:{" "}
-          {r.colunas_opcionais_ausentes.filter((c) => c !== "Prazo").join(", ")}.
+          Colunas opcionais não encontradas: {outrasAusentes(r).join(", ")}.
         </p>
       )}
       <div className="def-grid" style={{ marginTop: 16 }}>

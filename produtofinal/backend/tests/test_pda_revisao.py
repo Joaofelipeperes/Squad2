@@ -50,12 +50,19 @@ def _importar(client, h, nome, texto, arquivo="pda.csv", **campos):
 @pytest.mark.parametrize("sigla,esperado", [
     ("CASA CIVIL", "o-casacivil"),        # sigla de várias palavras: sequência contígua no name
     ("GOIÁS PARCERIAS", "o-parcerias"),   # sequência contígua no título
-    ("CASA MLITAR", None),                # erro de digitação: não casa
-    ("SECULT", None), ("SANEAGO", None), ("AGEHAB", None), ("AGR", None),
+    # de-para explícito (SIGLAS_CONHECIDAS), inclusive o erro de digitação da planilha
+    ("CASA MLITAR", "o-casamilitar"), ("SECULT", "o-cultura"), ("Saneago", "o-saneago"),
+    ("AGEHAB", "o-habitacao"), ("AGR", "o-agr"),
     ("SECRETARIA DE ESTADO", None),       # várias organizações contêm a sequência: não chuta
 ])
 def test_casar_orgao_siglas_de_varias_palavras(sigla, esperado):
     assert casar_orgao(sigla, ORGAOS_REAIS) == esperado
+
+
+def test_de_para_sem_a_organizacao_no_portal_nao_chuta():
+    """Organização do de-para que mudou de name (ou não existe) → segue a heurística, sem chutar."""
+    sem_saneago = [o for o in ORGAOS_REAIS if o[0] != "o-saneago"]
+    assert casar_orgao("SANEAGO", sem_saneago) is None
 
 
 def test_orgao_por_evidencia_so_com_organizacao_unica():
@@ -90,7 +97,7 @@ def test_prazo_brasileiro_com_hora():
 def test_colunas_opcionais_ausentes():
     lida = regras.ler_planilha("Órgão;Base de Dados\nABC;B1\n".encode(), "pda.csv")
     assert not lida.tem_coluna_prazo
-    assert "Prazo" in lida.colunas_opcionais_ausentes
+    assert "Meta/Prazo para abertura" in lida.colunas_opcionais_ausentes
 
 
 def test_xlsx_descompactado_grande_demais(monkeypatch):
@@ -182,7 +189,7 @@ def test_resumo_avisa_coluna_de_prazo_ausente(client, gerente):
     r = _importar(client, gerente, "PDA sem prazo", f"{CAB}\nABC;B1;Anual;Não\n")
     corpo = r.json()
     assert corpo["tem_coluna_prazo"] is False
-    assert "Prazo" in corpo["colunas_opcionais_ausentes"]
+    assert "Meta/Prazo para abertura" in corpo["colunas_opcionais_ausentes"]
 
 
 def test_nome_repetido_sem_diferenciar_maiusculas(client, gerente):

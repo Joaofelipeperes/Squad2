@@ -316,6 +316,7 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
         vinculos_resolvidos=resolvidos, vinculos_pendentes=pendentes, sem_vinculo=sem_vinculo,
         orgaos_sem_correspondencia=sorted(sem_correspondencia, key=regras.normalizar_texto),
         tem_coluna_prazo=lida.tem_coluna_prazo,
+        tem_coluna_portal=lida.tem_coluna_portal,
         colunas_opcionais_ausentes=lida.colunas_opcionais_ausentes)
 
 

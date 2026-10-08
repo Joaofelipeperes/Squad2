@@ -6,6 +6,7 @@
 - casamento da sigla do órgão com as organizações do portal;
 - situação da base quanto ao prazo de abertura (PBI-19) e flag de prazo (PBI-20/22).
 """
+import calendar
 import csv
 import io
 import re
@@ -134,6 +135,27 @@ def extrair_name_da_url(valor: object) -> str | None:
 _STOPWORDS = {"de", "da", "do", "das", "dos", "e", "a", "o"}
 Orgao = tuple[str, str, str, str | None]  # (ckan_id, name, titulo, sigla)
 
+# De-para explícito: siglas da planilha do PDA que nenhum critério automático deduz com segurança
+# (siglas silábicas, iniciais com "do Estado de Goiás", erro de digitação conhecido) → `name` da
+# organização no portal (coleta de 08/10/2026). Chave = sigla compacta (só letras e dígitos, sem
+# acento, minúscula). Se a organização mudar de name no portal, a entrada deixa de casar e vale a
+# heurística — nunca chuta outra organização. Pendente de validação da GEDA.
+SIGLAS_CONHECIDAS: dict[str, str] = {
+    "sead": "administracao",
+    "sedf": "secretaria-de-estado-do-entorno-do-distrito-federal",
+    "secom": "secretaria-de-estado-de-comunicacao",
+    "secult": "secretaria-de-estado-da-cultura",
+    "sic": "secretaria-de-estado-de-industria-comercio-e-servicos",
+    "casamlitar": "secretaria-de-estado-da-casa-militar",  # "CASA MLITAR" na planilha
+    "agehab": "agencia-goiana-de-habitacao",
+    "agr": "agencia-goiana-de-regulacao-controle-e-fiscalizacao-de-servicos-publicos",
+    "saneago": "saneamento-de-goias-s-a",
+    "detran": "departamento-estadual-de-transito-de-goias",
+    "cbm": "corpo-de-bombeiros-militar-do-estado-de-goias",
+    "pge": "procuradoria-geral-do-estado-de-goias",
+    "brcprevcom": "fundacao-de-previdencia-complemnetar-do-brail-central",  # grafia do portal
+}
+
 
 def _palavras(texto: str) -> list[str]:
     return [p for p in re.split(r"[^a-z0-9]+", normalizar_texto(texto)) if p]
@@ -150,6 +172,7 @@ def casar_orgao(sigla: object, orgaos: Iterable[Orgao]) -> str | None:
     """Sigla da planilha → ckan_id da organização, ou None se não houver correspondência ÚNICA.
 
     Critérios, em ordem (o primeiro com resultado decide; empate → None, nunca chuta):
+      0) de-para explícito `SIGLAS_CONHECIDAS` (sigla → name da organização);
       1) sigla igual a Organizacao.sigla;
       2) sigla compacta igual ao name inteiro sem hífens ou ao título inteiro compactado;
       3) sigla de UMA palavra como token inteiro do name (hífens) ou do título (espaço, hífen,
@@ -170,7 +193,9 @@ def casar_orgao(sigla: object, orgaos: Iterable[Orgao]) -> str | None:
         return len(palavras_sigla) > 1 and (_contem_sequencia(palavras_sigla, toks_name)
                                             or _contem_sequencia(palavras_sigla, toks_titulo))
 
+    conhecida = SIGLAS_CONHECIDAS.get(alvo)
     criterios = (
+        lambda o: conhecida is not None and o[1] == conhecida,
         lambda o: bool(o[3]) and _compacto(o[3]) == alvo,
         lambda o: alvo in (_compacto(o[1]), _compacto(o[2])),
         criterio_tokens,
@@ -267,16 +292,20 @@ _CABECALHOS: dict[str, str] = {
     "disponivel no portal": "portal",
     "prazo": "prazo",
     "prazo de abertura": "prazo",
+    "prazo para abertura": "prazo",
+    "meta/prazo para abertura": "prazo",  # planilha do PDA 2025-2027 exportada pela GEDA
+    "meta / prazo para abertura": "prazo",
 }
 _OBRIGATORIOS = {"orgao": "Órgão", "base": "Base de Dados"}
 # Colunas opcionais (campo → rótulo mostrado ao usuário quando a coluna não é encontrada)
 COLUNAS_OPCIONAIS: dict[str, str] = {
     "descricao": "Descrição", "unidade": "Unidade Responsável", "periodicidade": "Atualização",
     "politicas": "Políticas Públicas", "sigiloso": "Possui Conteúdo Sigiloso?",
-    "portal": "Disponível no Portal", "prazo": "Prazo",
+    "portal": "Disponível no Portal", "prazo": "Meta/Prazo para abertura",
 }
 _LINHAS_PROCURA_CABECALHO = 30
-_RODAPE = re.compile(r"^(total\b|nenhum filtro aplicado)")
+# Rodapés do relatório exportado: "Total", "Nenhum filtro aplicado", "Filtros aplicados:Ano é 2025"
+_RODAPE = re.compile(r"^(total\b|nenhum filtro aplicado|filtros? aplicados?\b)")
 _MSG_XLSX_INVALIDO = "Arquivo .xlsx ilegível ou corrompido."
 
 
@@ -309,6 +338,11 @@ class PlanilhaLida:
         return "prazo" in self.colunas
 
     @property
+    def tem_coluna_portal(self) -> bool:
+        """Sem "Disponível no Portal" nenhuma base é vinculada na importação (PBI-13)."""
+        return "portal" in self.colunas
+
+    @property
     def colunas_opcionais_ausentes(self) -> list[str]:
         """Rótulos das colunas opcionais que a planilha não tem (aviso no resumo da importação)."""
         return [rotulo for campo, rotulo in COLUNAS_OPCIONAIS.items() if campo not in self.colunas]
@@ -339,10 +373,30 @@ def interpretar_sim_nao(valor: object) -> bool | None:
     return None
 
 
+_MESES: dict[str, int] = {
+    nome: numero
+    for numero, nomes in enumerate(
+        (("janeiro", "jan"), ("fevereiro", "fev"), ("marco", "mar"), ("abril", "abr"),
+         ("maio", "mai"), ("junho", "jun"), ("julho", "jul"), ("agosto", "ago"),
+         ("setembro", "set"), ("outubro", "out"), ("novembro", "nov"), ("dezembro", "dez")),
+        start=1)
+    for nome in nomes
+}
+# Sobre o texto normalizado: "marco/2025", "dezembro2025", "setembro 2025", "marco de 2025",
+# "mar-2025", "03/2025"
+_MES_ANO = re.compile(r"([a-z]+|\d{1,2})\s*(?:/|-|\.|de)?\s*(\d{4})")
+
+
+def fim_do_mes(ano: int, mes: int) -> date:
+    return date(ano, mes, calendar.monthrange(ano, mes)[1])
+
+
 def interpretar_data(valor: object) -> date | None:
     """Prazo da planilha: date/datetime do xlsx, 'dd/mm/aaaa' ou 'aaaa-mm-dd' (com hora opcional,
-    ignorada) ou serial do Excel. Vazio → None. Valor presente e ilegível → ValueError (nunca
-    inventar prazo)."""
+    ignorada), serial do Excel ou MÊS/ANO da coluna "Meta/Prazo para abertura" ("Março/2025",
+    "Dezembro2025", "Setembro 2025", "03/2025"). Mês/ano = meta até o ÚLTIMO dia do mês (pendente
+    de validação da GEDA). Vazio → None. Valor presente e ilegível → ValueError (nunca inventar
+    prazo)."""
     if valor is None:
         return None
     if isinstance(valor, datetime):
@@ -362,6 +416,11 @@ def interpretar_data(valor: object) -> date | None:
     m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T][\d:.]+)?", t)
     if m:
         return date(int(m[1]), int(m[2]), int(m[3]))
+    m = _MES_ANO.fullmatch(normalizar_texto(t))
+    if m:
+        mes = int(m[1]) if m[1].isdigit() else _MESES.get(m[1])
+        if mes and 1 <= mes <= 12:
+            return fim_do_mes(int(m[2]), mes)
     raise ValueError(t)
 
 
@@ -413,12 +472,33 @@ def _protegido(linhas: Iterable[Sequence[object]]) -> Iterator[Sequence[object]]
         raise PlanilhaInvalida(_MSG_XLSX_INVALIDO) from exc
 
 
+# Trechos do formato numérico que não são códigos de data: "texto", [$-416], [Red], \/
+_FORMATO_LITERAIS = re.compile(r'"[^"]*"|\[[^\]]*\]|\\.')
+
+
+def _so_mes_e_ano(formato: str | None) -> bool:
+    """Formato de data que exibe só mês e ano ('mmmm/yyyy', '[$-416]mmm-yy;@')."""
+    f = _FORMATO_LITERAIS.sub("", (formato or "").split(";")[0]).lower()
+    return "y" in f and "d" not in f
+
+
+def _valor_celula(celula) -> object:
+    """Valor da célula do .xlsx. Data exibida só como mês/ano ("Março/2025" digitado no Excel em
+    pt-BR vira 01/03/2025 com formato "mmmm/aaaa") → texto "mm/aaaa", lido como meta até o fim do
+    mês, igual ao texto "Março/2025"."""
+    valor = getattr(celula, "value", None)
+    if isinstance(valor, datetime | date) and _so_mes_e_ano(getattr(celula, "number_format", None)):
+        return f"{valor.month:02d}/{valor.year}"
+    return valor
+
+
 def _abas_xlsx(wb) -> Iterator[Aba]:
     if len(wb.worksheets) > ABAS_MAXIMO:
         raise PlanilhaInvalida(f"Planilha com mais de {ABAS_MAXIMO} abas.")
     for ws in wb.worksheets:
         ws.reset_dimensions()  # alguns geradores gravam a dimensão errada (ex.: A1:A1)
-        yield _protegido(ws.iter_rows(max_col=COLUNAS_MAXIMO, values_only=True))
+        linhas = ws.iter_rows(max_col=COLUNAS_MAXIMO)
+        yield _protegido([_valor_celula(c) for c in linha] for linha in linhas)
 
 
 def _linhas_limitadas(linhas: Aba) -> Iterator[list[object]]:
@@ -513,7 +593,8 @@ def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
     if prazos_invalidos:
         lista = "; ".join(prazos_invalidos[:10]) + ("; …" if len(prazos_invalidos) > 10 else "")
         raise PlanilhaInvalida(
-            "Prazo em formato não reconhecido (use dd/mm/aaaa ou aaaa-mm-dd, com hora opcional): "
+            "Prazo em formato não reconhecido (use mês/ano como Março/2025, dd/mm/aaaa ou "
+            "aaaa-mm-dd): "
             f"{lista}.")
     return lida
 

@@ -31,6 +31,7 @@ export interface ImportacaoResumo {
   sem_vinculo: number;
   orgaos_sem_correspondencia: string[];
   tem_coluna_prazo: boolean;
+  tem_coluna_portal: boolean;
   colunas_opcionais_ausentes: string[];
 }
 

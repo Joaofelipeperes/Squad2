@@ -37,6 +37,7 @@ class ImportacaoResumoOut(BaseModel):
     sem_vinculo: int
     orgaos_sem_correspondencia: list[str]
     tem_coluna_prazo: bool  # sem a coluna "Prazo", as bases não publicadas ficam "Não publicado"
+    tem_coluna_portal: bool  # sem "Disponível no Portal", nenhuma base é vinculada na importação
     colunas_opcionais_ausentes: list[str]  # rótulos das colunas opcionais não encontradas
 
 

@@ -67,7 +67,8 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   do usuário), importado_em, total_bases, vinculos_resolvidos, vinculos_pendentes.
 - `ImportacaoResumoOut`: plano, bases_importadas, linhas_ignoradas `[{linha, motivo}]`,
   vinculos_resolvidos, vinculos_pendentes, sem_vinculo, orgaos_sem_correspondencia,
-  tem_coluna_prazo, colunas_opcionais_ausentes (rótulos).
+  tem_coluna_prazo, tem_coluna_portal (sem "Disponível no Portal" nenhuma base é vinculada),
+  colunas_opcionais_ausentes (rótulos).
 - `VinculosOut`: vinculos_resolvidos (nesta execução), vinculos_pendentes (que continuam pendentes).
 - `BaseOut`: dados da planilha + `orgao_chave` (organizacao_id ou `sigla:<SIGLA>`), orgao_nome,
   `vinculo` (resolvido/pendente/sem_vinculo), dataset_id, dataset_name e dataset_titulo **atuais**
@@ -80,13 +81,16 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
 ## Serviços e métodos
 `regras.py` (funções puras, reaproveitáveis numa extensão CKAN — ADR 0004):
 - `ler_planilha(conteudo: bytes, nome_arquivo: str) -> PlanilhaLida` — PBI-12; `linhas:
-  list[LinhaPda]`, `ignoradas: list[(linha, motivo)]`, `tem_coluna_prazo`,
+  list[LinhaPda]`, `ignoradas: list[(linha, motivo)]`, `tem_coluna_prazo`, `tem_coluna_portal`,
   `colunas_opcionais_ausentes`. Leitura sob demanda e limitada (`TAMANHO_DESCOMPACTADO_MAXIMO` 50 MB,
   `ABAS_MAXIMO` 20, `LINHAS_MAXIMO` 20.000, `COLUNAS_MAXIMO` 60, fim da aba após 1.000 linhas vazias
   seguidas). Lança `PlanilhaInvalida`.
 - `normalizar_periodicidade(texto) -> str` — valor do domínio `DOMINIO_PERIODICIDADE`.
 - `extrair_name_da_url(valor) -> str | None` — name de `.../dataset/<name>`, só para achar o ID (PBI-13).
-- `casar_orgao(sigla, orgaos: Iterable[(ckan_id, name, titulo, sigla)]) -> str | None`.
+- `casar_orgao(sigla, orgaos: Iterable[(ckan_id, name, titulo, sigla)]) -> str | None`; de-para
+  explícito em `SIGLAS_CONHECIDAS` (sigla compacta → name da organização).
+- `interpretar_data(valor) -> date | None` e `fim_do_mes(ano, mes)` — prazo da planilha, inclusive
+  mês/ano ("Março/2025" → 31/03/2025).
 - `orgao_por_evidencia(pares: Iterable[(sigla, organizacao_id)]) -> {chave_sigla: organizacao_id}`
   e `chave_sigla(sigla)` — órgão herdado das bases da mesma sigla vinculadas por ID.
 - `situacao_base(*, vinculada, dataset_ativo, recursos_validos, prazo, hoje, janela_dias) -> str` — PBI-15/19.
@@ -170,7 +174,10 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 - **Órgão da base**, em ordem: a) base vinculada herda o órgão do dataset; b) sem vínculo, a
   organização das bases da MESMA sigla vinculadas por ID neste PDA, se todas apontarem para uma só
   (evidência do próprio vínculo, não chute; evita a mesma sigla partida em duas opções do filtro,
-  como SEAD × "administracao"); c) `casar_orgao` (sem acento, minúsculo): 1) `Organizacao.sigla`;
+  como SEAD × "administracao"); c) `casar_orgao` (sem acento, minúsculo): 0) de-para explícito
+  `SIGLAS_CONHECIDAS` para as siglas que nenhum critério deduz (SEAD, SEDF, SECOM, SECULT, SIC, CASA
+  MLITAR, AGEHAB, AGR, SANEAGO, DETRAN, CBM, PGE, BrC-PREVCOM → name da organização; se o name mudar
+  no portal, a entrada deixa de casar e segue a heurística); 1) `Organizacao.sigla`;
   2) sigla compacta igual ao name sem hífens ou ao título compactado (goiasfomento, goiastelecom);
   3) sigla de uma palavra como token do name ou do título (abc, dgpp, fapeg, juceg) e sigla de
   várias palavras como sequência contígua desses tokens (CASA CIVIL, GOIÁS PARCERIAS); 4) iniciais
@@ -209,27 +216,38 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 - **Importação** (PBI-12): .xlsx (openpyxl `read_only`/`data_only`, primeira aba com o cabeçalho)
   ou .csv (UTF-8 com ou sem BOM → Windows-1252 → Latin-1; separador ";" ou ","), até 5 MB. Colunas
   localizadas pelo cabeçalho normalizado (nas 30 primeiras linhas); obrigatórias "Órgão" e "Base
-  de Dados"; aceita "Periodicidade" no lugar de "Atualização" e "Prazo de abertura" no lugar de
-  "Prazo". Linhas vazias e rodapés ("Total", "Nenhum filtro aplicado" — só na coluna Órgão) são
-  pulados; cabeçalho repetido no meio da planilha e linha sem Órgão ou Base de Dados vão para
+  de Dados"; aceita "Periodicidade" no lugar de "Atualização" e "Meta/Prazo para abertura" (formato
+  da planilha do PDA 2025-2027 exportada pela GEDA), "Prazo para abertura", "Prazo de abertura" ou
+  "Prazo" para o prazo. Linhas vazias e rodapés ("Total", "Nenhum filtro aplicado", "Filtros
+  aplicados:Ano é 2025" — só na coluna Órgão) são pulados; cabeçalho repetido no meio da planilha e linha sem Órgão ou Base de Dados vão para
   `linhas_ignoradas` (número 1-based e motivo). Tetos contra planilha malformada ou "bomba" de
   compressão: ver `ler_planilha`.
-- **Prazo** só da coluna opcional "Prazo" (date do xlsx, dd/mm/aaaa ou aaaa-mm-dd, com hora
-  opcional ignorada, ou serial do Excel 2000–2099). Sem a coluna → nulo; **nunca** derivado da vigência; valor presente e ilegível → 422
-  na importação inteira.
+- **Prazo** só da coluna opcional "Meta/Prazo para abertura" (ou sinônimos acima): **mês/ano**
+  ("Março/2025", "Dezembro2025", "Setembro 2025", "mar/2025", "03/2025") = meta até o **último dia
+  do mês** (decisão de 08/10/2026, pendente de validação da GEDA); data completa (date do xlsx,
+  dd/mm/aaaa ou aaaa-mm-dd, com hora opcional ignorada, ou serial do Excel 2000–2099) vale o dia.
+  No .xlsx, célula de data com formato só de mês e ano ("Março/2025" digitado no Excel em pt-BR vira
+  01/03/2025 formatado `mmmm/aaaa`) também é lida como fim do mês. Sem a coluna → nulo; **nunca**
+  derivado da vigência; valor presente e ilegível → 422 na importação inteira.
+- **Sem "Disponível no Portal"** (caso da planilha 2025-2027) nenhuma base é vinculada na
+  importação: todas ficam `sem_vinculo` e a situação vem só do prazo (com metas de 2025, "Em
+  atraso"). O resumo avisa (`tem_coluna_portal=false`). Vínculo por nome do dataset não é feito
+  (ADR-0006).
 - Importação **atômica** (qualquer erro → rollback). O arquivo bruto não é gravado: só os dados
   extraídos e o nome do arquivo. Textos longos são cortados no tamanho da coluna.
 - Bases espontâneas também devem ser monitoradas (Paloma e Júnior, 17/09) — ainda não
   implementado: `classificacao` é sempre "pda".
 
 ## Pendências
-- **Prazo de abertura ausente na planilha da GEDA**: sem a coluna "Prazo", quase todas as bases não
-  publicadas caem em "Não publicado" e os filtros Ano e Prazo ficam vazios. Pedir a coluna à GEDA.
+- **Vínculo das bases da planilha 2025-2027**: o formato novo não tem "Disponível no Portal", então
+  nenhuma base é vinculada e nenhuma aparece como Publicado. Decidir com a GEDA: pedir a coluna (ou
+  uma planilha de vinculação por ID, como prevê a ADR-0006) ou implementar a edição manual de
+  vínculo base a base (candidata ao PBI-14, permissão `pda.editar_vinculos`).
+- Validar com a GEDA que a meta em mês/ano vale até o último dia do mês.
 - Validar com a GEDA a regra de vários PDAs com um vigente (decisão de 07/10/2026).
 - "Bianual" mapeado para Bienal, mas é ambíguo (pode significar semestral) — validar com a GEDA.
-- De-para de órgãos: as organizações do portal não têm `sigla`; siglas como AGEHAB, AGR, SECULT,
-  SANEAGO, DETRAN e CASA MLITAR ficam sem correspondência quando a base não tem dataset vinculado. Hoje só há a
-  heurística; avaliar preencher `Organizacao.sigla` ou criar uma tabela de-para.
+- De-para de órgãos (`SIGLAS_CONHECIDAS`) fixo no código: validar as 13 entradas com a GEDA e, se
+  surgirem siglas novas com frequência, levar o de-para para `parametros` (editável pela GEDA).
 - Banco já existente: `sincronizar_papeis_padrao` não sobrescreve ajustes, então o papel Gerência
   GEDA **não** recebe `pda.gerenciar_planos` automaticamente — conceder pela tela Usuários e papéis
   (o Administrador recebe por `todas`).
@@ -256,3 +274,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 07/10/2026 | Link para o MER e as convenções do banco | Victor |
 | 07/10/2026 | Importação de planilhas, múltiplos PDAs com vigente, vínculo por ID, situação do prazo e tela de monitoramento (PBI-12, PBI-13, PBI-15, PBI-19 a PBI-22) | Humberto |
 | 08/10/2026 | Revisão (27 achados confirmados): órgão por evidência do vínculo por ID e siglas de várias palavras; recursos apagados do CKAN deixam de contar; contagens de `PlanoOut`/`GET /planos` com escopo de órgão; nome único sem diferenciar maiúsculas no banco (migração `c3f8a2d15e70`) e conflitos concorrentes → 409; tetos na leitura de .xlsx; cabeçalho repetido, rodapé só na coluna Órgão, prazo com hora e pontuação na periodicidade; resumo avisa coluna Prazo ausente; detalhe com data de publicação e formatos; foco de teclado nos modais; descrição de `pda.editar_vinculos` ajustada no catálogo; status passa a Parcial | Humberto |
+| 08/10/2026 | Formato da planilha do PDA 2025-2027: coluna "Meta/Prazo para abertura" com mês/ano (meta até o fim do mês, inclusive célula de data `mmmm/aaaa` no .xlsx), rodapé "Filtros aplicados", aviso `tem_coluna_portal` quando falta "Disponível no Portal" e de-para explícito de 13 siglas de órgão (`SIGLAS_CONHECIDAS`) | Humberto |

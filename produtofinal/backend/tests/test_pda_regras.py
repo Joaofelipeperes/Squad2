@@ -70,7 +70,8 @@ ORGAOS = [
 
 @pytest.mark.parametrize("sigla,esperado", [
     ("ABC", "o-abc"),
-    ("AGEHAB", None),             # nenhum critério casa: não chuta
+    ("AGEHAB", "o-agehab"),       # de-para explícito (SIGLAS_CONHECIDAS)
+    ("SEDETUR", None),            # nenhum critério casa: não chuta
     ("DGPP", "o-dgpp"),
     ("CGE", "o-cge"),             # iniciais de Controladoria-Geral do Estado
     ("GOIÁSFOMENTO", "o-fomento"),
@@ -78,7 +79,7 @@ ORGAOS = [
     ("FAPEG", "o-fapeg"),
     ("JUCEG", "o-juceg"),
     ("sead", "o-sead"),           # sigla cadastrada na organização
-    ("DETRAN", None),
+    ("DETRAN", "o-detran"),       # de-para explícito
     ("", None), (None, None),
 ])
 def test_casar_orgao(sigla, esperado):
@@ -145,8 +146,9 @@ def test_interpretar_data():
     assert regras.interpretar_data("2026-12-31") == date(2026, 12, 31)
     assert regras.interpretar_data(date(2026, 1, 2)) == date(2026, 1, 2)
     assert regras.interpretar_data("") is None and regras.interpretar_data(None) is None
+    assert regras.interpretar_data("dez/2026") == date(2026, 12, 31)  # mês/ano = fim do mês
     with pytest.raises(ValueError):
-        regras.interpretar_data("dez/2026")
+        regras.interpretar_data("depois/2026")
     with pytest.raises(ValueError):
         regras.interpretar_data(2026)  # ano solto não é data
 
