@@ -114,7 +114,9 @@ sem N+1. Testes: `tests/test_pda_regras.py`, `tests/test_pda_api.py` e
 `tests/test_pda_revisao.py` (regressões da revisão de 08/10/2026).
 
 ## Modelo de dados
-| Tabela | Colunas |
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
+| Tabela | Colunas relevantes |
 |---|---|
 | `pda_plano` | id, **nome** (200, único; também único sem diferenciar maiúsculas pelo índice `uq_pda_plano_nome_ci` em `lower(nome)`), vigencia_inicio, vigencia_fim, **vigente**, arquivo_nome (300), importado_por (200), importado_em (tz), total_bases, created_at, updated_at. Índice único parcial `uq_pda_plano_vigente` (`vigente` WHERE `vigente`): no máximo um vigente |
 | `pda_base_prevista` | id, **plano_id** → `pda_plano.id` (ON DELETE CASCADE, NOT NULL, indexado), orgao_sigla (100, como na planilha), organizacao_id → `organizacao.ckan_id` (indexado), nome_previsto (500), descricao (text), unidade_responsavel (500), prazo_abertura, periodicidade (40, normalizada, NOT NULL, padrão "Sem informação"), periodicidade_original (100), politicas_publicas (500), possui_conteudo_sigiloso, **dataset_id** → `dataset.ckan_id` (indexado), dataset_name_planilha (200: name extraído da URL da planilha; usado só para encontrar o ID — vínculo pendente / Atualizar vínculos — e para auditoria; nunca para recalcular vínculo resolvido), linha_planilha, classificacao (pda/espontanea, padrão "pda"), created_at, updated_at |
@@ -152,6 +154,8 @@ Nenhum. A situação é calculada na consulta, sobre o inventário da última co
 pendentes só são refeitos pelo botão Atualizar vínculos (não automaticamente após a coleta).
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
+
 - **Vários PDAs, um vigente** (decisão de 07/10/2026, Humberto/Eixo 1 — pendente de validação da
   GEDA). Nome obrigatório e único (espaços colapsados, sem diferenciar maiúsculas). O primeiro PDA
   cadastrado vira vigente mesmo sem `definir_vigente`. Garantia dupla: índice único parcial e
@@ -248,6 +252,7 @@ pendentes só são refeitos pelo botão Atualizar vínculos (não automaticament
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contratos, tabela `pda_base_prevista` e permissões | Claude / Victor |
-| 07/10/2026 | Importação de planilhas, múltiplos PDAs com vigente, vínculo por ID, situação do prazo e tela de monitoramento (PBI-12, PBI-13, PBI-15, PBI-19 a PBI-22) | Claude / Humberto |
-| 08/10/2026 | Revisão (27 achados confirmados): órgão por evidência do vínculo por ID e siglas de várias palavras; recursos apagados do CKAN deixam de contar; contagens de `PlanoOut`/`GET /planos` com escopo de órgão; nome único sem diferenciar maiúsculas no banco (migração `c3f8a2d15e70`) e conflitos concorrentes → 409; tetos na leitura de .xlsx; cabeçalho repetido, rodapé só na coluna Órgão, prazo com hora e pontuação na periodicidade; resumo avisa coluna Prazo ausente; detalhe com data de publicação e formatos; foco de teclado nos modais; descrição de `pda.editar_vinculos` ajustada no catálogo; status passa a Parcial | Claude / Humberto |
+| 30/09/2026 | Esqueleto: contratos, tabela `pda_base_prevista` e permissões | Victor |
+| 07/10/2026 | Link para o MER e as convenções do banco | Victor |
+| 07/10/2026 | Importação de planilhas, múltiplos PDAs com vigente, vínculo por ID, situação do prazo e tela de monitoramento (PBI-12, PBI-13, PBI-15, PBI-19 a PBI-22) | Humberto |
+| 08/10/2026 | Revisão (27 achados confirmados): órgão por evidência do vínculo por ID e siglas de várias palavras; recursos apagados do CKAN deixam de contar; contagens de `PlanoOut`/`GET /planos` com escopo de órgão; nome único sem diferenciar maiúsculas no banco (migração `c3f8a2d15e70`) e conflitos concorrentes → 409; tetos na leitura de .xlsx; cabeçalho repetido, rodapé só na coluna Órgão, prazo com hora e pontuação na periodicidade; resumo avisa coluna Prazo ausente; detalhe com data de publicação e formatos; foco de teclado nos modais; descrição de `pda.editar_vinculos` ajustada no catálogo; status passa a Parcial | Humberto |

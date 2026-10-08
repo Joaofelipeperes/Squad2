@@ -51,6 +51,8 @@ Sem tabelas próprias. Uso registrado em `ia_uso` pelo gateway, sem conteúdo.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-0011](../adr/0011-assistente-sem-banco-vetorial.md).
+
 - Sem banco vetorial: o backend monta os fatos e o modelo só redige (risco de infraestrutura do PGP).
 - O prompt proíbe inventar números; sem dado no contexto, indica a tela onde conferir.
 - Nunca recebe conteúdo de achados LGPD — por isso pode usar modelo comercial.
@@ -62,7 +64,7 @@ Nenhum.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Implementação inicial: contexto da coleta e widget de chat | Claude / Victor |
-| 30/09/2026 | Permissão `assistente.usar` e escopo de órgão no contexto | Claude / Victor |
-| 07/10/2026 | Interações: consumo previsto do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Claude / Humberto |
-| 08/10/2026 | Correção: o efeito de rolagem do chat devolvia a Promise de `scrollIntoView` (Chrome atual) e o React a chamava ao desmontar — sair ou sessão expirada deixava a tela em branco; contagem de recursos por órgão no contexto passa a usar só datasets ativos, recursos ainda no portal e sem dicionário de dados | Claude / Humberto |
+| 30/09/2026 | Implementação inicial: contexto da coleta e widget de chat | Victor |
+| 30/09/2026 | Permissão `assistente.usar` e escopo de órgão no contexto | Victor |
+| 07/10/2026 | Interações: consumo previsto do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Humberto |
+| 08/10/2026 | Correção: o efeito de rolagem do chat devolvia a Promise de `scrollIntoView` (Chrome atual) e o React a chamava ao desmontar — sair ou sessão expirada deixava a tela em branco; contagem de recursos por órgão no contexto passa a usar só datasets ativos, recursos ainda no portal e sem dicionário de dados | Humberto |

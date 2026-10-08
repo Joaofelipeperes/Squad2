@@ -54,6 +54,8 @@ pagina por `offset` de 25 em 25: o CKAN 2.9 limita `organization_list` com `all_
 itens por chamada e o portal tem 51 órgãos.
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `coleta` | iniciada_em, finalizada_em, status (executando/ok/erro), origem (agendada/manual), solicitada_por, totais, erro |
@@ -85,6 +87,8 @@ itens por chamada e o portal tem 51 órgãos.
 | `inventario.coleta_diaria` | `GDA_COLETA_CRON` (padrão `0 3 * * *`, America/Sao_Paulo) | `job_coleta_diaria` — roda no processo `app.worker` |
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md) · [ADR-0012](../adr/0012-agendamento-em-worker-proprio.md) · [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
+
 - Chave de tudo é o **ID do CKAN**; o `name` é editável pelos órgãos.
 - Atualização real = `last_modified` do **recurso**; `metadata_modified` não é indicador.
 - Dicionário de dados é marcado (`eh_dicionario_dados`) para ser excluído das contagens; a próxima
@@ -103,8 +107,9 @@ itens por chamada e o portal tem 51 órgãos.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Estrutura inicial: coleta, snapshots, API e job diário | Claude / Victor |
-| 30/09/2026 | Rotas com permissões do catálogo central (`inventario.acessar`, `inventario.coletar`) | Claude / Victor |
-| 07/10/2026 | Correção: coleta falhava no portal real (FK de organização) porque `organizations()` trazia só 25 dos 51 órgãos; agora pagina por `offset`; e `executar` faz `flush()` dos órgãos antes dos datasets (sem relationship, o SQLAlchemy não garantia a ordem dos INSERTs). Coleta real de 07/10: 51 órgãos, 447 datasets, 3.066 recursos | Claude / Humberto |
-| 07/10/2026 | Interações: pda passa a consumir também `Recurso` e `Organizacao` | Claude / Humberto |
-| 08/10/2026 | Dicionário de dados detectado em texto normalizado e por nome iniciado em "dicionário" (467 recursos no portal real, antes 140); `recursos_atuais`/`condicao_recurso_atual`: recurso apagado do CKAN deixa de contar (achados da revisão do pda) | Claude / Humberto |
+| 30/09/2026 | Estrutura inicial: coleta, snapshots, API e job diário | Victor |
+| 30/09/2026 | Rotas com permissões do catálogo central (`inventario.acessar`, `inventario.coletar`) | Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |
+| 07/10/2026 | Correção: coleta falhava no portal real (FK de organização) porque `organizations()` trazia só 25 dos 51 órgãos; agora pagina por `offset`; e `executar` faz `flush()` dos órgãos antes dos datasets (sem relationship, o SQLAlchemy não garantia a ordem dos INSERTs). Coleta real de 07/10: 51 órgãos, 447 datasets, 3.066 recursos | Humberto |
+| 07/10/2026 | Interações: pda passa a consumir também `Recurso` e `Organizacao` | Humberto |
+| 08/10/2026 | Dicionário de dados detectado em texto normalizado e por nome iniciado em "dicionário" (467 recursos no portal real, antes 140); `recursos_atuais`/`condicao_recurso_atual`: recurso apagado do CKAN deixa de contar (achados da revisão do pda) | Humberto |

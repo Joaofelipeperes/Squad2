@@ -51,6 +51,8 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.md).
+
 - Indicadores calculados somente a partir da última coleta, com data visível (PBI-58).
 - Bloco de alertas LGPD só aparece se o usuário também tiver `lgpd.acessar` (usar `<Pode>`).
 
@@ -60,5 +62,5 @@ Nenhum.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contratos, duas telas e permissão | Claude / Victor |
-| 07/10/2026 | Interações: consumo do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Claude / Humberto |
+| 30/09/2026 | Esqueleto: contratos, duas telas e permissão | Victor |
+| 07/10/2026 | Interações: consumo do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Humberto |

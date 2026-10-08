@@ -50,6 +50,8 @@ Sem tabelas próprias: lê `dataset` e `recurso`.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
+
 - Formato é atributo do **recurso**, não do dataset (Paloma, 17/09).
 - Dicionário de dados não conta como recurso de formato fechado.
 
@@ -59,4 +61,4 @@ Nenhum.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contratos e permissão | Claude / Victor |
+| 30/09/2026 | Esqueleto: contratos e permissão | Victor |

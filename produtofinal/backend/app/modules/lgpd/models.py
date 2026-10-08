@@ -13,6 +13,8 @@ from app.core.db import Base, TimestampMixin
 
 
 class Achado(TimestampMixin, Base):
+    """Possível dado pessoal localizado num recurso (local e tipo, nunca o valor)."""
+
     __tablename__ = "lgpd_achado"
 
     id: Mapped[int] = mapped_column(primary_key=True)

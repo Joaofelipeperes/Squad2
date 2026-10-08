@@ -5,6 +5,8 @@ from app.core.db import Base, TimestampMixin
 
 
 class Parametro(TimestampMixin, Base):
+    """Valor de negócio editável pela GEDA; ausente no banco = vale o padrão do catálogo."""
+
     __tablename__ = "parametro"
 
     chave: Mapped[str] = mapped_column(String(80), primary_key=True)

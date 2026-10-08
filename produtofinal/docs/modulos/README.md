@@ -1,6 +1,6 @@
 # Documentação dos módulos
 
-Um arquivo por módulo, no formato de [`_MODELO.md`](_MODELO.md). **Regra do projeto (CLAUDE.md):
+Um arquivo por módulo, no formato de [`_MODELO.md`](_MODELO.md). **Regra do projeto (AGENTS.md):
 toda alteração em um módulo atualiza o arquivo dele no mesmo commit**, incluindo uma linha no
 Histórico. O hook `.githooks/pre-commit` (ative com `git config core.hooksPath produtofinal/.githooks`, a partir
 da raiz do repositório) e o teste `test_guardas_do_projeto.py` verificam isso.

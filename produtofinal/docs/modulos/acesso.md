@@ -74,6 +74,8 @@ Frontend:
 - `permissoes.gen.ts` — tipos gerados do catálogo; manifesto de tela sem `permissao` válida não compila.
 
 ## Modelo de dados
+Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
+
 | Tabela | Colunas relevantes |
 |---|---|
 | `usuario` | email (único), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao`, ultimo_acesso |
@@ -128,6 +130,8 @@ sobrescreve ajustes. Conceda pela tela Usuários e papéis (ex.: `pda.gerenciar_
 Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.py`).
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
+
 - Toda rota declara controle de acesso; a API não sobe sem isso.
 - O sistema nunca fica sem administrador ativo (bloqueio ao remover/desativar o último).
 - Só quem tem `acesso.gerenciar_papeis` concede o papel Administrador.
@@ -144,5 +148,6 @@ Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Módulo `auth` com três perfis fixos substituído por RBAC: catálogo central, papéis, escopo de órgão, guarda de subida e tela Usuários e papéis | Claude / Victor |
-| 07/10/2026 | Catálogo: `pda.gerenciar_planos` (importar PDA, definir o vigente e excluir PDA) para Administrador e Gerência GEDA; nota sobre permissão nova em banco existente | Claude / Humberto |
+| 30/09/2026 | Módulo `auth` com três perfis fixos substituído por RBAC: catálogo central, papéis, escopo de órgão, guarda de subida e tela Usuários e papéis | Victor |
+| 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |
+| 07/10/2026 | Catálogo: `pda.gerenciar_planos` (importar PDA, definir o vigente e excluir PDA) para Administrador e Gerência GEDA; nota sobre permissão nova em banco existente | Humberto |

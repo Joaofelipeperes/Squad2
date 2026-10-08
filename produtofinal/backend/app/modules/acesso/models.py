@@ -15,6 +15,8 @@ usuario_papel = Table(
 
 
 class Papel(TimestampMixin, Base):
+    """Conjunto nomeado de permissões atribuível a usuários (ex.: Gerência GEDA)."""
+
     __tablename__ = "acesso_papel"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -30,6 +32,8 @@ class Papel(TimestampMixin, Base):
 
 
 class PapelPermissao(Base):
+    """Código de permissão do catálogo (app/core/permissoes.py) concedido a um papel."""
+
     __tablename__ = "acesso_papel_permissao"
 
     papel_id: Mapped[int] = mapped_column(ForeignKey("acesso_papel.id", ondelete="CASCADE"),
@@ -40,6 +44,8 @@ class PapelPermissao(Base):
 
 
 class Usuario(TimestampMixin, Base):
+    """Pessoa com acesso à solução; com órgão vinculado, fica restrita aos dados dele."""
+
     __tablename__ = "usuario"
 
     id: Mapped[int] = mapped_column(primary_key=True)

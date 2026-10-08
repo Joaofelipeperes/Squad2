@@ -37,4 +37,4 @@ como ele foi criado).
 
 1. Copie `docs/modulos/_MODELO.md` para `docs/modulos/pda.md` e preencha.
 2. Inclua o módulo no índice `docs/modulos/README.md`.
-3. Daqui em diante, **todo commit que tocar o módulo atualiza esse arquivo** (regra do CLAUDE.md).
+3. Daqui em diante, **todo commit que tocar o módulo atualiza esse arquivo** (regra do AGENTS.md).

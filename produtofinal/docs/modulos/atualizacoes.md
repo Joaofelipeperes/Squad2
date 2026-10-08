@@ -60,6 +60,8 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 Nenhum.
 
 ## Regras de negócio e decisões
+Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
+
 - `metadata_modified` **nunca** é indicador de atualização.
 - Ressalva do recurso parcial (17/09): dataset anual atualizado no meio do ano (PBI-78).
 - Dicionário de dados não conta. A data de criação (`created`) só é usada quando nenhum recurso
@@ -73,5 +75,5 @@ Nenhum.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
-| 30/09/2026 | Esqueleto: contratos e permissão | Claude / Victor |
-| 07/10/2026 | `regras.ultima_atualizacao_real` implementada com `UltimaAtualizacao(data, estimada)` (PBI-23 a PBI-25); `service.py` delega e o módulo pda a consome | Claude / Humberto |
+| 30/09/2026 | Esqueleto: contratos e permissão | Victor |
+| 07/10/2026 | `regras.ultima_atualizacao_real` implementada com `UltimaAtualizacao(data, estimada)` (PBI-23 a PBI-25); `service.py` delega e o módulo pda a consome | Humberto |

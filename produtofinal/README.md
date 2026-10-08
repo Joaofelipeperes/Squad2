@@ -50,7 +50,7 @@ Depois de clonar, ative o hook que exige a documentação dos módulos:
 ## Estrutura
 
 ```
-CLAUDE.md          contexto do projeto e regras obrigatórias (leia primeiro)
+AGENTS.md          contexto do projeto e regras obrigatórias (leia primeiro)
 backend/app/
   core/            configuração, banco, cifragem, contrato de módulo
     permissoes.py  CATÁLOGO CENTRAL de permissões e papéis
@@ -68,17 +68,19 @@ frontend/src/
   shared/          cliente HTTP, componentes de UI, acesso (<Pode>, permissoes.gen.ts)
 docs/
   modulos/         um .md por módulo: telas, API, métodos, interações, histórico
-  adr/             decisões de arquitetura
-scripts/           gerar_permissoes_ts.py · checar_docs_modulos.py
-.githooks/         pre-commit (documentação e catálogo de permissões)
+  adr/             decisões com alternativas, prós e contras + linha do tempo
+  banco/           MER (gerado) e convenções de modelagem
+scripts/           gerar_permissoes_ts.py · gerar_mer.py · checar_docs_modulos.py · checar_decisoes.py
+.githooks/         pre-commit (docs por módulo, decisões, permissões, MER)
 prototipos/        Protótipo V1 (referência visual — PBI-66)
 ```
 
 ## Documentação
 
-- [CLAUDE.md — contexto e regras](CLAUDE.md)
+- [AGENTS.md — contexto e regras](AGENTS.md)
 - [Arquitetura](docs/arquitetura.md)
 - [Módulos](docs/modulos/README.md)
-- [Decisões (ADRs)](docs/adr/)
+- [Decisões — linha do tempo (ADRs)](docs/adr/README.md)
+- [MER e dicionário de dados](docs/banco/mer.md) · [Convenções do banco](docs/banco/convencoes.md)
 - [Como criar um módulo](docs/como-criar-modulo.md)
 - [Padrões de código e commits](docs/padroes.md)
