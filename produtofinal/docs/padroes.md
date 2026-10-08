@@ -17,7 +17,7 @@ Um PBI por PR; descrição cita o ID do ClickUp; ao menos uma revisão de outro 
 
 ## Documentação de módulo
 Todo PR que altera um módulo atualiza `docs/modulos/<modulo>.md`, com linha no Histórico. O hook
-de pre-commit verifica: ative com `git config core.hooksPath .githooks`.
+de pre-commit verifica: ative com `git config core.hooksPath produtofinal/.githooks` (rodado na raiz do repositório).
 
 ## Código
 - Python: `ruff` (linha 100); nomes de domínio em português, termos do CKAN em inglês

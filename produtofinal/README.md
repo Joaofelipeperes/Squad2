@@ -45,7 +45,7 @@ cd ../frontend && npm install && npm run dev  # web em :5173 (proxy /api → :80
 ```
 
 Depois de clonar, ative o hook que exige a documentação dos módulos:
-`git config core.hooksPath .githooks`.
+`git config core.hooksPath produtofinal/.githooks` (a raiz do git é a pasta acima de `produtofinal/`).
 
 ## Estrutura
 

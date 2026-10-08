@@ -52,7 +52,7 @@ npm run build                          # tsc estrito + build
 
 # raiz
 python scripts/gerar_permissoes_ts.py  # após alterar o catálogo de permissões
-git config core.hooksPath .githooks    # uma vez por clone: ativa o pre-commit
+git config core.hooksPath produtofinal/.githooks  # uma vez por clone (na raiz do git): ativa o pre-commit
 docker compose up -d --build           # ambiente completo
 ```
 

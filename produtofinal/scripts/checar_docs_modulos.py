@@ -41,9 +41,11 @@ def modulo_do_arquivo(caminho: str) -> str | None:
 def arquivos_alterados(argv: list[str]) -> list[str]:
     if "--base" in argv:
         base = argv[argv.index("--base") + 1]
-        cmd = ["git", "diff", "--name-only", f"{base}...HEAD"]
+        # --relative: a raiz do git pode ficar acima de produtofinal/ (repositório da residência);
+        # os caminhos passam a ser relativos a RAIZ e arquivos de fora são ignorados
+        cmd = ["git", "diff", "--relative", "--name-only", f"{base}...HEAD"]
     else:
-        cmd = ["git", "diff", "--cached", "--name-only"]
+        cmd = ["git", "diff", "--cached", "--relative", "--name-only"]
     saida = subprocess.run(cmd, cwd=RAIZ, capture_output=True, text=True, check=True).stdout
     return [linha for linha in saida.splitlines() if linha]
 

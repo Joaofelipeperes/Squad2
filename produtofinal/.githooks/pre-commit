@@ -1,0 +1,11 @@
+#!/bin/sh
+# Hook de pre-commit do projeto (ative uma vez por clone; a raiz do git é a pasta acima de
+# produtofinal/):  git config core.hooksPath produtofinal/.githooks
+# 1) regra 1 do CLAUDE.md: alterou módulo → atualize docs/modulos/<modulo>.md
+# 2) catálogo de permissões e permissoes.gen.ts sincronizados
+RAIZ="$(git rev-parse --show-toplevel)"
+cd "$RAIZ/produtofinal" 2>/dev/null || cd "$RAIZ" || exit 1
+PY="$(command -v python3 || command -v python)"
+"$PY" scripts/checar_docs_modulos.py --staged || exit 1
+"$PY" scripts/gerar_permissoes_ts.py --check || {
+  echo "permissoes.gen.ts desatualizado: rode python scripts/gerar_permissoes_ts.py"; exit 1; }
