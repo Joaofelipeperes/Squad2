@@ -14,7 +14,9 @@ export default function AssistenteChat() {
     { autor: "bot", texto: "Olá! Pergunte sobre um órgão, uma base ou um prazo do PDA." },
   ]);
   const fim = useRef<HTMLDivElement>(null);
-  useEffect(() => fim.current?.scrollIntoView({ behavior: "smooth" }), [msgs]);
+  // Corpo com chaves: no Chrome atual scrollIntoView devolve uma Promise, e o React a trataria
+  // como função de limpeza ao desmontar (logout/401 deixava a tela em branco).
+  useEffect(() => { fim.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
 
   const perguntar = useMutation({
     mutationFn: (pergunta: string) => api.post<{ resposta: string }>("/assistente/perguntar", { pergunta }),

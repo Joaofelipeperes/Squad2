@@ -12,7 +12,7 @@ from app.integrations.ai.base import ChatMessage, ChatRequest
 from app.integrations.ai.policy import TarefaIA
 from app.modules.ia.gateway import AIGateway
 from app.modules.inventario.models import Dataset, Organizacao, Recurso
-from app.modules.inventario.service import ultima_coleta
+from app.modules.inventario.service import condicao_recurso_atual, ultima_coleta
 
 SYSTEM = (
     "Você é o Assistente GEDA da Controladoria-Geral do Estado de Goiás. Responda em português, "
@@ -40,8 +40,11 @@ def montar_contexto(db: Session, pergunta: str, user: UsuarioAtual) -> str:
         if citado or user.restrito_a_orgao:
             n_ds = db.scalar(select(func.count()).select_from(Dataset)
                              .where(Dataset.organizacao_id == org.ckan_id, Dataset.ativo_no_portal))
+            # Recursos dos datasets ativos que ainda estão no portal; dicionário de dados não conta
             n_rec = db.scalar(select(func.count()).select_from(Recurso).join(Dataset)
-                              .where(Dataset.organizacao_id == org.ckan_id))
+                              .where(Dataset.organizacao_id == org.ckan_id, Dataset.ativo_no_portal,
+                                     condicao_recurso_atual(),
+                                     Recurso.eh_dicionario_dados.is_(False)))
             linhas.append(f"Órgão {org.titulo}: {n_ds} datasets ativos, {n_rec} recursos.")
     return "\n".join(linhas)
 

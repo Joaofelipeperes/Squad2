@@ -7,7 +7,7 @@
 | **User stories** | US28 (PBI-96, PBI-97) |
 | **Backend** | `backend/app/modules/assistente/` |
 | **Frontend** | `frontend/src/modules/assistente/` (widget global) |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 08/10/2026 |
 
 ## Propósito
 Responde em linguagem natural perguntas sobre órgãos, bases, prazos e alertas, com base na última coleta.
@@ -44,7 +44,8 @@ Sem tabelas próprias. Uso registrado em `ia_uso` pelo gateway, sem conteúdo.
 | consome | ia | `AIGateway.chat(TarefaIA.ASSISTENTE, ...)` |
 | consome | inventario | `Coleta`, `Organizacao`, `Dataset`, `Recurso` |
 | consome | acesso | `filtrar_por_orgao` |
-| consumirá | pda, atualizacoes, lgpd | situação de prazos, atrasos e **contagem** de achados |
+| consumirá | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)`: situação de prazos **sempre do PDA vigente**, só agregados e com `user` para respeitar o escopo de órgão |
+| consumirá | atualizacoes, lgpd | atrasos e **contagem** de achados |
 
 ## Jobs agendados
 Nenhum.
@@ -63,3 +64,5 @@ Nenhum.
 |---|---|---|
 | 30/09/2026 | Implementação inicial: contexto da coleta e widget de chat | Claude / Victor |
 | 30/09/2026 | Permissão `assistente.usar` e escopo de órgão no contexto | Claude / Victor |
+| 07/10/2026 | Interações: consumo previsto do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Claude / Humberto |
+| 08/10/2026 | Correção: o efeito de rolagem do chat devolvia a Promise de `scrollIntoView` (Chrome atual) e o React a chamava ao desmontar — sair ou sessão expirada deixava a tela em branco; contagem de recursos por órgão no contexto passa a usar só datasets ativos, recursos ainda no portal e sem dicionário de dados | Claude / Humberto |
