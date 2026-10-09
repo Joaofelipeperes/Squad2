@@ -1,0 +1,27 @@
+# Liga o produto final ao CKAN local deste repositório (docker-compose.yml da raiz).
+#
+# Os dois ambientes são projetos Compose separados; de dentro do container da API,
+# "localhost:5000" NÃO é o CKAN. Este arquivo coloca a API e o worker também na rede do CKAN
+# e aponta a coleta para o container dele.
+#
+# Uso (em produtofinal/, com o CKAN da raiz já no ar):
+#   docker compose -f docker-compose.yml -f docker-compose.ckan-local.yml up -d --build
+#
+# A rede do CKAN se chama "<pasta da raiz>_default" (ex.: squad2_default). Confira com
+# `docker network ls`; se o nome for outro, defina CKAN_NETWORK antes de subir:
+#   PowerShell: $env:CKAN_NETWORK = "outra_default"     bash: export CKAN_NETWORK=outra_default
+services:
+  api:
+    environment:
+      GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
+    networks: [default, ckan]
+
+  worker:
+    environment:
+      GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
+    networks: [default, ckan]
+
+networks:
+  ckan:
+    external: true
+    name: ${CKAN_NETWORK:-squad2_default}

@@ -99,7 +99,7 @@ def _upsert_dataset(db: Session, pkg: dict, coleta_id: int) -> None:
     ds.organizacao_id = (pkg.get("organization") or {}).get("id")
     ds.autor, ds.autor_email = pkg.get("author"), pkg.get("author_email")
     ds.licenca = pkg.get("license_id")
-    ds.periodicidade_declarada = extras.get("periodicidade") or pkg.get("periodicidade")
+    ds.periodicidade_declarada = regras.periodicidade_declarada(extras, pkg)
     ds.metadata_created = regras.parse_ckan_datetime(pkg.get("metadata_created"))
     ds.metadata_modified = regras.parse_ckan_datetime(pkg.get("metadata_modified"))
     ds.extras, ds.ativo_no_portal, ds.ultima_coleta_id = extras, True, coleta_id

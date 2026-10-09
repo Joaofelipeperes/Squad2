@@ -1,0 +1,4 @@
+# Contexto de build do CKAN: so o que o Dockerfile copia.
+*
+!ckanext-dsaudit-ckan29/
+!docker/

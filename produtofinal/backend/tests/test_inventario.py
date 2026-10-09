@@ -2,7 +2,7 @@ import httpx
 
 from app.core.db import SessionLocal
 from app.integrations.ckan.client import CkanClient
-from app.modules.inventario import service
+from app.modules.inventario import regras, service
 from app.modules.inventario.models import Dataset, DatasetSnapshot, Recurso
 
 ORGS = [{"id": "o1", "name": "ses", "title": "Secretaria da Saúde"},
@@ -72,3 +72,14 @@ def test_coleta_concorrente_bloqueada(client, gerente):
     with SessionLocal() as db:
         service.iniciar(db, origem="agendada")
     assert client.post("/api/v1/inventario/coletas", headers=h).status_code == 409
+
+
+def test_periodicidade_usa_extra_atualizacao_do_portal():
+    # chave real do portal de Goiás, com acento, maiúscula e espaços sobrando
+    assert regras.periodicidade_declarada({"Atualização": " Mensal "}) == "Mensal"
+    assert regras.periodicidade_declarada({"atualizacao": "Anual"}) == "Anual"
+    # "periodicidade" tem preferência quando existe
+    assert regras.periodicidade_declarada({"Atualização": "Anual", "periodicidade": "Mensal"}) == "Mensal"
+    # sem extra: usa o campo do pacote; sem nada: None
+    assert regras.periodicidade_declarada({}, {"periodicidade": "Semestral"}) == "Semestral"
+    assert regras.periodicidade_declarada({"Fonte": "DGPC"}) is None

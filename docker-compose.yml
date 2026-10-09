@@ -61,7 +61,6 @@ services:
       # versoes (separadas por espaco). Sem chave unica -> compara por posicao.
       # Por recurso: campo "chave_auditoria" (ex.: "codigo" ou "ano,municipio").
       - CKANEXT__DSAUDIT__FILE_KEY_COLUMNS=id codigo cod_ibge
-      # - CKANEXT__DSAUDIT__PREVIEW_RECORDS=12     linhas exibidas por evento
       # Timeout por requisicao (segundos) -- cargas grandes precisam de mais tempo
       - UWSGI_HARAKIRI=300
       # Interface em portugues (opcional):

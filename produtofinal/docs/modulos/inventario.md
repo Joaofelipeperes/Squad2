@@ -46,6 +46,9 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 - `recursos_atuais(ds) -> list[Recurso]` e `condicao_recurso_atual()` (mesma regra em SQL): só os
   recursos ainda presentes no pacote do dataset. Recurso apagado do CKAN fica no banco (achados LGPD
   e correções apontam para ele), mas não conta para publicação nem atualização.
+- `periodicidade_declarada(extras, pkg)` — periodicidade informada pelo órgão. Procura nos extras,
+  sem diferenciar acento/maiúsculas/espaços, `periodicidade` e depois `Atualização` (chave usada
+  no portal de Goiás); cai no campo `periodicidade` do pacote.
 - `extras_como_dict(extras)` · `snapshot_payload(pkg)` · `hash_payload(payload)`.
 
 `integrations/ckan/client.py`: `CkanClient.action`, `.organizations()`, `.iter_datasets()`,
@@ -86,6 +89,12 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 |---|---|---|
 | `inventario.coleta_diaria` | `GDA_COLETA_CRON` (padrão `0 3 * * *`, America/Sao_Paulo) | `job_coleta_diaria` — roda no processo `app.worker` |
 
+## Ambiente de testes com o CKAN local
+O CKAN em Docker da raiz do repositório serve de portal de testes. Para a coleta enxergá-lo, suba
+o produto final com `docker-compose.ckan-local.yml` (coloca `api` e `worker` na rede do CKAN e
+define `GDA_CKAN_BASE_URL=http://ckansquad2-ckan-1:5000`). Os dados devem ser carregados com
+`importar_ckan_goias.py`, que preserva os IDs e o `last_modified` dos recursos do portal.
+
 ## Regras de negócio e decisões
 Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md) · [ADR-0012](../adr/0012-agendamento-em-worker-proprio.md) · [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 
@@ -113,3 +122,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 07/10/2026 | Correção: coleta falhava no portal real (FK de organização) porque `organizations()` trazia só 25 dos 51 órgãos; agora pagina por `offset`; e `executar` faz `flush()` dos órgãos antes dos datasets (sem relationship, o SQLAlchemy não garantia a ordem dos INSERTs). Coleta real de 07/10: 51 órgãos, 447 datasets, 3.066 recursos | Humberto |
 | 07/10/2026 | Interações: pda passa a consumir também `Recurso` e `Organizacao` | Humberto |
 | 08/10/2026 | Dicionário de dados detectado em texto normalizado e por nome iniciado em "dicionário" (467 recursos no portal real, antes 140); `recursos_atuais`/`condicao_recurso_atual`: recurso apagado do CKAN deixa de contar (achados da revisão do pda) | Humberto |
+| 08/10/2026 | Periodicidade lida também do extra `Atualização` do portal (`regras.periodicidade_declarada`); `docker-compose.ckan-local.yml` liga a coleta ao CKAN local | João |
