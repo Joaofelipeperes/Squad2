@@ -33,6 +33,23 @@ docker compose exec api python -m app.cli semear-ia     # perfis de IA de exempl
 
 Web em http://localhost:8080 · API em http://localhost:8000/api/v1/docs
 
+**Com o CKAN local deste repositório** (portal de testes, `docker-compose.yml` da raiz):
+
+No Windows, `.\subir_ambiente.ps1 -Tudo -AdminEmail voce@cge.go.gov.br` (na raiz) faz todos os passos abaixo:
+sobe o CKAN, gera o token, carrega os dados, descobre a rede, preenche as chaves do `.env` e sobe a solução.
+
+```bash
+# 1) na raiz: suba o CKAN e carregue os dados (o script preserva IDs e last_modified do portal)
+docker compose up -d --build
+CKAN_API_KEY=<token do admin> python importar_ckan_goias.py
+# 2) em produtofinal/: suba a solução ligada à rede do CKAN
+docker compose -f docker-compose.yml -f docker-compose.ckan-local.yml up -d --build
+docker compose exec api python -c "from app.integrations.ckan.client import CkanClient; print(CkanClient().status())"
+```
+
+A rede do CKAN é `<pasta da raiz>_default` (ex.: `squad2_default`); se for outra, defina
+`CKAN_NETWORK` antes de subir. Depois, o botão **Atualizar dados** coleta do CKAN local.
+
 **Sem Docker** (desenvolvimento):
 
 ```bash

@@ -13,13 +13,21 @@
 # DataStore, faz alteracoes conhecidas e depois le o que a auditoria gravou.
 # ---------------------------------------------------------------------------
 param(
-    [string]$Org = "agencia-goiana-de-infraestrtutura-e-transportes-goinfra",
-    [string]$Token = "7446a8f0-5431-4e39-a1d5-aede1a387167",
-    [string]$Url = "http://localhost:5000",
+    [string]$Org = "",
+    # padrao: o token deixado pelo subir_ambiente.ps1 (variavel CKAN_API_KEY);
+    # se estiver vazio ou invalido, um novo token e gerado para o admin
+    [string]$Token = $env:CKAN_API_KEY,
+    [string]$Url = $(if ($env:CKAN_URL) { $env:CKAN_URL } else { "http://localhost:5000" }),
     # teste de volume: upsert com N linhas (0 = nao executa)
     [int]$Linhas = 5000
 )
 $ErrorActionPreference = "Stop"
+
+# chamadas a localhost sem o proxy do Windows (ver subir_ambiente.ps1)
+$ProxyOriginal = [System.Net.WebRequest]::DefaultWebProxy
+[System.Net.WebRequest]::DefaultWebProxy = $null
+$PSDefaultParameterValues = @{ "Invoke-RestMethod:UseBasicParsing" = $true }
+if ($PSVersionTable.PSVersion.Major -ge 6) { $PSDefaultParameterValues["Invoke-RestMethod:NoProxy"] = $true }
 
 function Api([string]$Action, $Body) {
     $json = $Body | ConvertTo-Json -Depth 10 -Compress
@@ -41,15 +49,28 @@ function Show($v) {
 }
 
 # 1) token de API ------------------------------------------------------------
-if (-not $Token) {
+function TokenValido([string]$t) {
+    if (-not $t) { return $false }
+    try {
+        $r = Invoke-RestMethod -Method Post -Uri "$Url/api/3/action/api_token_list" `
+            -Headers @{ Authorization = $t } -ContentType "application/json" `
+            -Body '{"user": "admin"}' -TimeoutSec 15
+        return [bool]$r.success
+    } catch { return $false }
+}
+
+if (-not (TokenValido $Token)) {
     Write-Host "Gerando token de API para o usuario admin..."
-    # o CLI do CKAN escreve logs no stderr; no Windows PowerShell 5.1 isso
-    # viraria erro com ErrorActionPreference=Stop
+    # os logs do CLI do CKAN vao para o stderr; descartados dentro do container
+    # para nao virarem erro no Windows PowerShell 5.1
     $ErrorActionPreference = "Continue"
-    $out = docker compose exec -T ckan ckan -c /srv/app/ckan.ini user token add admin teste-auditoria 2>$null
+    $out = docker compose exec -T ckan sh -c "ckan -c /srv/app/ckan.ini user token add admin teste-auditoria 2>/dev/null"
     $ErrorActionPreference = "Stop"
-    $Token = ($out | Where-Object { $_.Trim() -ne "" } | Select-Object -Last 1).Trim()
-    if (-not $Token) { throw "Nao foi possivel gerar o token. Passe -Token manualmente." }
+    $m = [regex]::Match(($out -join "`n"), 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
+    if (-not $m.Success -or -not (TokenValido $m.Value)) {
+        throw "Nao foi possivel gerar um token valido. Rode .\subir_ambiente.ps1 ou passe -Token."
+    }
+    $Token = $m.Value
 }
 
 # 2) organizacao --------------------------------------------------------------
@@ -184,5 +205,6 @@ foreach ($a in $events) {
 
 Write-Host ""
 Write-Host ("Total de eventos: {0}" -f $audit.result.count)
-Write-Host "Veja no navegador (logado como admin): $Url/dataset/$ds/auditoria" -ForegroundColor Green
-Write-Host "CSV: $Url/dataset/$ds/auditoria.csv"
+Write-Host "API completa: $Url/api/3/action/dsaudit_activity_list?id=$ds&limit=50" -ForegroundColor Green
+
+[System.Net.WebRequest]::DefaultWebProxy = $ProxyOriginal
