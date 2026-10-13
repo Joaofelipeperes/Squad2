@@ -1,23 +1,24 @@
-# ckanext-dsaudit-ckan29 — camada enxuta de auditoria para CKAN 2.9.5
+# ckanext-dsaudit — versão enxuta de auditoria para CKAN 2.9.5
 
-Arquivos aplicados pelo `Dockerfile` **por cima** da extensão oficial
-[`ckan/ckanext-dsaudit`](https://github.com/ckan/ckanext-dsaudit) (commit `c398842`).
-A oficial é escrita para CKAN 2.10/2.11 e quebra no 2.9.5; esta pasta corrige isso e amplia a
-captura.
+Código completo da extensão, vendorizado neste repositório. Ponto de partida: a extensão oficial
+[`ckan/ckanext-dsaudit`](https://github.com/ckan/ckanext-dsaudit), commit
+`c3988427821c43e5dac5078c6adc42f7f16d3fa4`. A oficial é escrita para CKAN 2.10/2.11 e quebra no
+2.9.5; os arquivos abaixo corrigem isso e ampliam a captura. O `Dockerfile` copia esta pasta para
+`/srv/app/src/ckanext-dsaudit` e instala com `pip install -e`.
 
 **Só captura e armazena.** Não há telas: os registros são lidos pela API
 `dsaudit_activity_list` (pelo produto final, pelo `teste_auditoria.ps1` ou por SQL).
 
 ## Arquivos
 
-| Arquivo | No container | O que faz |
+| Arquivo | Situação | O que faz |
 |---|---|---|
-| `plugins.py` | substitui o do upstream | Registra as actions (`IActions`) e os ganchos de upload (`IResourceController`). Não registra templates, helpers nem páginas. |
-| `actions.py` | substitui o do upstream | Captura do DataStore com valor anterior → novo, metadados campo a campo, modo estrito, API `dsaudit_activity_list` e correção do `activity_diff` nativo. |
-| `versions.py` | novo | Guarda cada versão de arquivo enviado e calcula o diff linha a linha de CSV/TSV/TXT/XLSX. |
+| `ckanext/dsaudit/plugins.py` | alterado (era do upstream) | Registra as actions (`IActions`) e os ganchos de upload (`IResourceController`). Não registra templates, helpers nem páginas. |
+| `ckanext/dsaudit/actions.py` | alterado (era do upstream) | Captura do DataStore com valor anterior → novo, metadados campo a campo, modo estrito, API `dsaudit_activity_list` e correção do `activity_diff` nativo. |
+| `ckanext/dsaudit/versions.py` | novo | Guarda cada versão de arquivo enviado e calcula o diff linha a linha de CSV/TSV/TXT/XLSX. |
 
-O `Dockerfile` também **remove** do upstream o que só serve para telas: `views.py`, `helpers.py`,
-`templates/` e `2.9_templates/`. O `prerun.py` corrigido do CKAN fica em `docker/prerun.py`.
+Foram **removidos** do upstream os arquivos que só servem para telas: `views.py`, `helpers.py`,
+`templates/` e `2.9_templates/`. `setup.py`, `setup.cfg`, `i18n/` e as licenças (`COPYING*`) são os originais. O `prerun.py` corrigido do CKAN fica em `docker/prerun.py`.
 
 ## O que é registrado (tabela `activity` do banco `ckan`)
 

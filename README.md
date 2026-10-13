@@ -49,7 +49,7 @@ Durante a execução, as chamadas HTTP ignoram o proxy do Windows (que pode inte
 
 | Parâmetro | Efeito |
 |---|---|
-| `-Reconstruir` | Build sem cache e recria os containers (após mudar o `Dockerfile` ou `ckanext-dsaudit-ckan29/`) |
+| `-Reconstruir` | Build sem cache e recria os containers (após mudar o `Dockerfile` ou `ckanext-dsaudit/`) |
 | `-Importar` | Carga dos datasets do portal |
 | `-Substituir` | Com `-Importar`: reimporta datasets da carga antiga (ID diferente do portal) |
 | `-Testar` | Teste da auditoria |
@@ -147,7 +147,7 @@ Recursos que já existiam antes desta versão: a versão atual é guardada autom
 
 ### Camada 2 — Conteúdo do DataStore, linha a linha (`ckanext-dsaudit` + compatibilidade 2.9)
 
-A imagem instala [`ckanext-dsaudit`](https://github.com/ckan/ckanext-dsaudit) fixado no commit `c398842` e aplica por cima a camada enxuta da pasta [`ckanext-dsaudit-ckan29/`](ckanext-dsaudit-ckan29/README.md) (`plugins.py`, `actions.py`, `versions.py`), que só **captura e armazena** — sem telas. Ela encadeia as actions de escrita do DataStore e grava uma atividade para cada uma:
+A extensão fica inteira neste repositório, na pasta [`ckanext-dsaudit/`](ckanext-dsaudit/README-CKAN29.md): é a [`ckanext-dsaudit`](https://github.com/ckan/ckanext-dsaudit) oficial (commit `c398842`) já com a camada enxuta para o CKAN 2.9 (`plugins.py`, `actions.py`, `versions.py`). O `Dockerfile` copia essa pasta e instala com `pip install -e`, sem baixar nada do GitHub. Ela só **captura e armazena** — sem telas. Ela encadeia as actions de escrita do DataStore e grava uma atividade para cada uma:
 
 | Action | Atividade | O que fica registrado |
 |---|---|---|
