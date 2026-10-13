@@ -9,7 +9,16 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, Upl
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
 from app.modules.pda import regras, service
-from app.modules.pda.schemas import BaseOut, BasesOut, ImportacaoResumoOut, PlanoOut, VinculosOut
+from app.modules.pda.schemas import (
+    BaseIn,
+    BaseOut,
+    BasesOut,
+    FormularioOut,
+    ImportacaoResumoOut,
+    PlanoIn,
+    PlanoOut,
+    VinculosOut,
+)
 
 router = APIRouter()
 _FLAGS_PRAZO = {"vencido", "proximo"}
@@ -69,6 +78,30 @@ def importar_plano(
             conteudo=conteudo, importado_por=user.nome)
 
 
+@router.post("/planos/manual", response_model=PlanoOut, status_code=status.HTTP_201_CREATED)
+def criar_plano(dados: PlanoIn, db: DbSession,
+                user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Cria um PDA vazio, sem planilha (as bases são incluídas uma a uma). JSON."""
+    with _erros_http():
+        return service.criar_plano(db, dados, criado_por=user.nome)
+
+
+@router.get("/planos/{plano_id}", response_model=PlanoOut)
+def obter_plano(plano_id: int, db: DbSession,
+                user: Annotated[UsuarioAtual, Depends(require(P.PDA_ACESSAR))]):
+    """Um PDA (totais e vínculos no escopo de órgão do usuário)."""
+    with _erros_http():
+        return service.obter_plano(db, plano_id, user)
+
+
+@router.put("/planos/{plano_id}", response_model=PlanoOut,
+            dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
+def atualizar_plano(plano_id: int, dados: PlanoIn, db: DbSession):
+    """Edita nome e vigência do PDA (o vigente é trocado em /vigente)."""
+    with _erros_http():
+        return service.atualizar_plano(db, plano_id, dados)
+
+
 @router.put("/planos/{plano_id}/vigente", response_model=PlanoOut,
             dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
 def definir_vigente(plano_id: int, db: DbSession):
@@ -80,7 +113,7 @@ def definir_vigente(plano_id: int, db: DbSession):
 @router.delete("/planos/{plano_id}", status_code=status.HTTP_204_NO_CONTENT,
                response_class=Response, dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
 def excluir_plano(plano_id: int, db: DbSession):
-    """Exclui um PDA não vigente e suas bases."""
+    """Exclui um PDA e suas bases (o vigente só quando é o único PDA)."""
     with _erros_http():
         service.excluir_plano(db, plano_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -125,3 +158,37 @@ def obter_base(base_id: int, db: DbSession,
     """Detalhe de uma base prevista (modal da tela)."""
     with _erros_http():
         return BaseOut.model_validate(service.obter_base(db, base_id, user))
+
+
+@router.get("/formulario", response_model=FormularioOut)
+def opcoes_formulario(db: DbSession,
+                      user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Opções do formulário de base: organizações do portal e periodicidades."""
+    return service.opcoes_formulario(db, user)
+
+
+@router.post("/planos/{plano_id}/bases", response_model=BaseOut,
+             status_code=status.HTTP_201_CREATED)
+def criar_base(plano_id: int, dados: BaseIn, db: DbSession,
+               user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Inclui uma base prevista no PDA."""
+    with _erros_http():
+        return BaseOut.model_validate(service.criar_base(db, plano_id, dados, user))
+
+
+@router.put("/bases/{base_id}", response_model=BaseOut)
+def atualizar_base(base_id: int, dados: BaseIn, db: DbSession,
+                   user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Edita uma base prevista (inclusive o endereço do dataset no portal)."""
+    with _erros_http():
+        return BaseOut.model_validate(service.atualizar_base(db, base_id, dados, user))
+
+
+@router.delete("/bases/{base_id}", status_code=status.HTTP_204_NO_CONTENT,
+               response_class=Response)
+def excluir_base(base_id: int, db: DbSession,
+                 user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Remove uma base prevista do PDA."""
+    with _erros_http():
+        service.excluir_base(db, base_id, user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -67,3 +67,4 @@ Regras vindas da própria GEDA nas reuniões citadas; incorporadas ao Backlog v2
 |---|---|---|
 | 22/09/2026 | Correções por anonimização excluídas do cálculo de atualização (PBI-79) | Squad 2 |
 | 30/09/2026 | Regras implementadas em `inventario/regras.py`; ID do CKAN como PK das tabelas espelhadas | Victor |
+| 13/10/2026 | Vínculo PDA × CKAN também pode ser informado base a base no cadastro manual do PDA: o endereço do dataset digitado (link ou name) serve só para achar o ID, que é o vínculo gravado; vínculo resolvido não é recalculado pelo nome (módulo `pda`) | Humberto |

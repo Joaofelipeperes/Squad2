@@ -4,9 +4,11 @@ import { useState } from "react";
 import type { BasePda, BasesPda, FiltrosPda, ImportacaoResumo, Opcao, PlanoPda } from "./api";
 import { FILTROS_VAZIOS, SITUACOES, pdaApi } from "./api";
 import { BaseDetalheModal } from "./BaseDetalheModal";
+import { BaseFormModal } from "./BaseFormModal";
 import { ConfirmarModal } from "./ConfirmarModal";
 import { abreviarId, fmtData, fmtDataHora, plural } from "./formato";
 import { ImportarPdaModal } from "./ImportarPdaModal";
+import { PlanoFormModal } from "./PlanoFormModal";
 import { SituacaoBadge } from "./SituacaoBadge";
 import { Pode } from "@/shared/acesso/Pode";
 import { PageLede } from "@/shared/ui/PageLede";
@@ -26,6 +28,10 @@ export default function PdaPage() {
   const [importarAberto, setImportarAberto] = useState(false);
   const [confirmacao, setConfirmacao] = useState<"vigente" | "excluir" | null>(null);
   const [detalhe, setDetalhe] = useState<BasePda | null>(null);
+  // Formulários do CRUD manual: PDA (novo/editar) e base (null = incluir; BasePda = editar)
+  const [planoForm, setPlanoForm] = useState<"novo" | "editar" | null>(null);
+  const [baseForm, setBaseForm] = useState<{ base: BasePda | null } | null>(null);
+  const [baseExcluir, setBaseExcluir] = useState<BasePda | null>(null);
 
   const lista = planos.data ?? [];
   const vigente = lista.find((p) => p.vigente) ?? null;
@@ -60,6 +66,35 @@ export default function PdaPage() {
     trocarPlano(r.plano.id);
     recarregar();
   }
+
+  function aoSalvarPlano(p: PlanoPda, criado: boolean) {
+    setPlanoForm(null);
+    toast(criado ? `PDA “${p.nome}” criado. Inclua as bases previstas.` : `PDA “${p.nome}” atualizado.`);
+    if (criado) {
+      qc.setQueryData<PlanoPda[]>(["pda", "planos"], (atual) => [
+        ...(atual ?? []).map((x) => (p.vigente ? { ...x, vigente: false } : x)), p]);
+      trocarPlano(p.id);
+    }
+    recarregar();
+  }
+
+  function aoSalvarBase(b: BasePda, criada: boolean) {
+    setBaseForm(null);
+    if (!criada && detalhe?.id === b.id) setDetalhe(b);
+    toast(criada ? `Base “${b.nome_previsto}” incluída.` : `Base “${b.nome_previsto}” atualizada.`);
+    recarregar();
+  }
+
+  const excluirBase = useMutation({
+    mutationFn: (b: BasePda) => pdaApi.excluirBase(b.id).then(() => b),
+    onSuccess: (b) => {
+      toast(`Base “${b.nome_previsto}” removida do PDA.`);
+      setDetalhe(null);
+      recarregar();
+    },
+    onError: (e: Error) => toast(e.message, true),
+    onSettled: () => setBaseExcluir(null),
+  });
 
   const definirVigente = useMutation({
     mutationFn: (p: PlanoPda) => pdaApi.definirVigente(p.id),
@@ -101,12 +136,15 @@ export default function PdaPage() {
           <div className="inline-msg err" role="alert">Não foi possível carregar os PDAs: {planos.error.message}</div>
         </div></div>
       )}
-      {planos.isSuccess && !plano && <SemPda onImportar={() => setImportarAberto(true)} />}
+      {planos.isSuccess && !plano && (
+        <SemPda onImportar={() => setImportarAberto(true)} onCriar={() => setPlanoForm("novo")} />
+      )}
 
       {plano && (
         <>
           <PainelPlano planos={lista} plano={plano} onTrocar={trocarPlano}
             onImportar={() => setImportarAberto(true)}
+            onNovo={() => setPlanoForm("novo")} onEditar={() => setPlanoForm("editar")}
             onDefinirVigente={() => setConfirmacao("vigente")}
             onExcluir={() => setConfirmacao("excluir")}
             onVincular={() => vincular.mutate(plano)} vinculando={vincular.isPending} />
@@ -120,6 +158,11 @@ export default function PdaPage() {
                   : bases.isError ? "" : "Carregando…"}
                 {bases.isPlaceholderData && " · atualizando…"}
               </div>
+              <Pode permissao="pda.gerenciar_planos">
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setBaseForm({ base: null })}>
+                  <i className="fa-solid fa-plus" />Incluir base
+                </button>
+              </Pode>
             </div>
             <div className="table-scroll">
               <table>
@@ -168,34 +211,62 @@ export default function PdaPage() {
               O <strong>{plano.nome}</strong> e suas {plural(plano.total_bases, "base prevista", "bases previstas")} serão
               removidos do monitor.
             </p>
-            <p>Nada é alterado no portal CKAN. A exclusão não pode ser desfeita: para recuperar, importe a planilha novamente.</p>
+            <p>
+              Nada é alterado no portal CKAN. A exclusão não pode ser desfeita
+              {plano.arquivo_nome ? ": para recuperar, importe a planilha novamente." : "."}
+            </p>
           </ConfirmarModal>
+
+          <ConfirmarModal aberto={baseExcluir != null} titulo="Excluir base prevista" perigo
+            rotuloConfirmar="Excluir base" icone="fa-trash" processando={excluirBase.isPending}
+            onConfirmar={() => baseExcluir && excluirBase.mutate(baseExcluir)} onFechar={() => setBaseExcluir(null)}>
+            <p>
+              A base <strong>{baseExcluir?.nome_previsto}</strong> ({baseExcluir?.orgao_sigla}) será removida
+              do <strong>{plano.nome}</strong>.
+            </p>
+            <p>Nada é alterado no portal CKAN. A exclusão não pode ser desfeita.</p>
+          </ConfirmarModal>
+
+          <PlanoFormModal aberto={planoForm != null} plano={planoForm === "editar" ? plano : null}
+            primeiro={false} onFechar={() => setPlanoForm(null)} onSalvo={aoSalvarPlano} />
+          <BaseFormModal aberto={baseForm != null} plano={plano} base={baseForm?.base ?? null}
+            onFechar={() => setBaseForm(null)} onSalva={aoSalvarBase} />
         </>
       )}
 
       <ImportarPdaModal aberto={importarAberto} primeiro={planos.isSuccess && lista.length === 0}
         onFechar={() => setImportarAberto(false)} onImportado={aoImportar} />
-      <BaseDetalheModal base={detalhe} onFechar={() => setDetalhe(null)} />
+      {!plano && (
+        <PlanoFormModal aberto={planoForm === "novo"} plano={null} primeiro={planos.isSuccess && lista.length === 0}
+          onFechar={() => setPlanoForm(null)} onSalvo={aoSalvarPlano} />
+      )}
+      <BaseDetalheModal base={detalhe} onFechar={() => setDetalhe(null)}
+        onEditar={(b) => setBaseForm({ base: b })} onExcluir={setBaseExcluir} />
     </section>
   );
 }
 
 /* ------------------------------------------------------------------ Estado vazio */
 
-function SemPda({ onImportar }: { onImportar: () => void }) {
+function SemPda({ onImportar, onCriar }: { onImportar: () => void; onCriar: () => void }) {
   return (
     <div className="panel">
       <div className="empty-state">
         <i className="fa-solid fa-clipboard-list" />
         <p>
-          Nenhum PDA cadastrado. Importe a planilha do Plano de Dados Abertos (.xlsx ou .csv) para acompanhar
-          as bases previstas em relação ao que está publicado no portal.
+          Nenhum PDA cadastrado. Importe a planilha do Plano de Dados Abertos (.xlsx ou .csv) ou crie o PDA e
+          inclua as bases previstas manualmente para acompanhá-las em relação ao que está publicado no portal.
         </p>
         <Pode permissao="pda.gerenciar_planos"
-          senao={<p style={{ marginTop: 8 }}>Peça à Gerência de Dados Abertos para importar o PDA.</p>}>
-          <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 14 }} onClick={onImportar}>
-            Importar PDA
-          </button>
+          senao={<p style={{ marginTop: 8 }}>Peça à Gerência de Dados Abertos para cadastrar o PDA.</p>}>
+          <div style={{ marginTop: 14, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+            <button type="button" className="btn btn-outline btn-sm" onClick={onCriar}>
+              <i className="fa-solid fa-plus" />Criar PDA manualmente
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={onImportar}>
+              <i className="fa-solid fa-file-import" />Importar PDA
+            </button>
+          </div>
         </Pode>
       </div>
     </div>
@@ -209,6 +280,8 @@ interface PainelPlanoProps {
   plano: PlanoPda;
   onTrocar: (id: number) => void;
   onImportar: () => void;
+  onNovo: () => void;
+  onEditar: () => void;
   onDefinirVigente: () => void;
   onExcluir: () => void;
   onVincular: () => void;
@@ -222,10 +295,15 @@ function vigencia(p: PlanoPda): string | null {
   return null;
 }
 
-function PainelPlano({ planos, plano, onTrocar, onImportar, onDefinirVigente, onExcluir, onVincular, vinculando }: PainelPlanoProps) {
+function PainelPlano({
+  planos, plano, onTrocar, onImportar, onNovo, onEditar, onDefinirVigente, onExcluir, onVincular, vinculando,
+}: PainelPlanoProps) {
+  const origem = plano.arquivo_nome ? "importado" : "criado manualmente";
+  // O vigente só pode ser excluído quando é o único PDA (regra do backend)
+  const podeExcluir = !plano.vigente || planos.length === 1;
   const info = [
     plural(plano.total_bases, "base prevista", "bases previstas"),
-    `importado em ${fmtDataHora(plano.importado_em)}${plano.importado_por ? ` por ${plano.importado_por}` : ""}`,
+    `${origem} em ${fmtDataHora(plano.importado_em)}${plano.importado_por ? ` por ${plano.importado_por}` : ""}`,
     vigencia(plano),
   ].filter(Boolean).join(" · ");
 
@@ -257,15 +335,21 @@ function PainelPlano({ planos, plano, onTrocar, onImportar, onDefinirVigente, on
           </Pode>
           <Pode permissao="pda.gerenciar_planos">
             {!plano.vigente && (
-              <>
-                <button type="button" className="btn btn-outline btn-sm" onClick={onDefinirVigente}>
-                  <i className="fa-solid fa-star" />Definir como vigente
-                </button>
-                <button type="button" className="btn btn-outline btn-sm" onClick={onExcluir}>
-                  <i className="fa-solid fa-trash" />Excluir PDA
-                </button>
-              </>
+              <button type="button" className="btn btn-outline btn-sm" onClick={onDefinirVigente}>
+                <i className="fa-solid fa-star" />Definir como vigente
+              </button>
             )}
+            <button type="button" className="btn btn-outline btn-sm" onClick={onEditar}>
+              <i className="fa-solid fa-pen" />Editar PDA
+            </button>
+            {podeExcluir && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={onExcluir}>
+                <i className="fa-solid fa-trash" />Excluir PDA
+              </button>
+            )}
+            <button type="button" className="btn btn-outline btn-sm" onClick={onNovo}>
+              <i className="fa-solid fa-plus" />Novo PDA
+            </button>
             <button type="button" className="btn btn-primary btn-sm" onClick={onImportar}>
               <i className="fa-solid fa-file-import" />Importar PDA
             </button>

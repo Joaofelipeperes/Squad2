@@ -99,6 +99,31 @@ export const SITUACOES = [
   "Publicado", "Em dia", "Em atraso", "Próximo do prazo", "Não publicado", "Sem recurso",
 ] as const;
 
+/** Criação manual (POST /pda/planos/manual) e edição (PUT /pda/planos/{id}) de um PDA. */
+export interface PlanoEntrada {
+  nome: string;
+  vigencia_inicio: string | null;
+  vigencia_fim: string | null;
+  definir_vigente?: boolean; // só na criação
+}
+
+/** Inclusão (POST /pda/planos/{id}/bases) e edição (PUT /pda/bases/{id}) de uma base. */
+export interface BaseEntrada {
+  orgao_sigla: string;
+  organizacao_id: string | null; // vazio = identificar pela sigla
+  nome_previsto: string;
+  descricao: string | null;
+  unidade_responsavel: string | null;
+  periodicidade: string | null;
+  prazo_abertura: string | null;
+  politicas_publicas: string | null;
+  possui_conteudo_sigiloso: boolean | null;
+  dataset_link: string | null; // link do portal ou name; serve só para achar o ID
+}
+
+/** Opções do formulário de base: organizações do portal (valor = ID CKAN) e periodicidades. */
+export interface FormularioPda { organizacoes: Opcao[]; periodicidades: string[] }
+
 /** Limite de tamanho do arquivo aceito pelo backend (413 acima disso). */
 export const TAMANHO_MAX_ARQUIVO = 5 * 1024 * 1024;
 
@@ -115,6 +140,12 @@ function consultaBases(planoId: number | null, f: FiltrosPda): string {
 export const pdaApi = {
   planos: () => api.get<PlanoPda[]>("/pda/planos"),
   importar: (form: FormData) => api.upload<ImportacaoResumo>("/pda/planos", form),
+  criarPlano: (dados: PlanoEntrada) => api.post<PlanoPda>("/pda/planos/manual", dados),
+  atualizarPlano: (id: number, dados: PlanoEntrada) => api.put<PlanoPda>(`/pda/planos/${id}`, dados),
+  formulario: () => api.get<FormularioPda>("/pda/formulario"),
+  criarBase: (planoId: number, dados: BaseEntrada) => api.post<BasePda>(`/pda/planos/${planoId}/bases`, dados),
+  atualizarBase: (id: number, dados: BaseEntrada) => api.put<BasePda>(`/pda/bases/${id}`, dados),
+  excluirBase: (id: number) => api.del<void>(`/pda/bases/${id}`),
   definirVigente: (id: number) => api.put<PlanoPda>(`/pda/planos/${id}/vigente`),
   excluir: (id: number) => api.del<void>(`/pda/planos/${id}`),
   vincular: (id: number) => api.post<VinculosResultado>(`/pda/planos/${id}/vincular`),

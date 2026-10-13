@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
 from app.core.db import utcnow
-from app.core.deps import UsuarioAtual, filtrar_por_orgao
+from app.core.deps import UsuarioAtual, exigir_mesmo_orgao, filtrar_por_orgao
 from app.modules.atualizacoes.service import ultima_atualizacao_real
 from app.modules.inventario.models import Dataset, Organizacao
 from app.modules.inventario.service import recursos_atuais
@@ -31,12 +31,15 @@ from app.modules.parametros.router import obter as obter_parametro
 from app.modules.pda import regras
 from app.modules.pda.models import BasePrevista, PlanoPda
 from app.modules.pda.schemas import (
+    BaseIn,
     BaseOut,
     BasesOut,
+    FormularioOut,
     ImportacaoResumoOut,
     LinhaIgnoradaOut,
     OpcaoOut,
     OpcoesOut,
+    PlanoIn,
     PlanoOut,
 )
 
@@ -185,14 +188,67 @@ def definir_vigente(db: Session, plano_id: int) -> PlanoOut:
 
 
 def excluir_plano(db: Session, plano_id: int) -> None:
-    """Exclui um PDA não vigente e suas bases (o vigente não pode ser excluído)."""
+    """Exclui um PDA e suas bases. O vigente só pode ser excluído quando é o ÚNICO PDA cadastrado
+    (havendo outros, defina outro como vigente antes)."""
     plano = _plano_ou_404(db, plano_id)
-    if plano.vigente:
-        raise Conflito("O PDA vigente não pode ser excluído. Defina outro PDA como vigente antes.")
+    if plano.vigente and db.scalar(select(func.count()).select_from(PlanoPda)) > 1:
+        raise Conflito("O PDA vigente não pode ser excluído enquanto houver outros PDAs. Defina "
+                       "outro PDA como vigente antes.")
     # Exclusão explícita das bases: o SQLite só aplica ON DELETE CASCADE com PRAGMA foreign_keys
     db.execute(delete(BasePrevista).where(BasePrevista.plano_id == plano.id))
     db.delete(plano)
     db.commit()
+
+
+def obter_plano(db: Session, plano_id: int, user: UsuarioAtual | None = None) -> PlanoOut:
+    return _plano_out_db(db, _plano_ou_404(db, plano_id), user)
+
+
+def _validar_plano(db: Session, nome: str | None, inicio: date | None, fim: date | None, *,
+                   ignorar_id: int | None = None) -> str:
+    """Nome obrigatório e único (espaços colapsados, sem diferenciar maiúsculas) e vigência
+    coerente. Retorna o nome normalizado."""
+    nome = re.sub(r"\s+", " ", nome or "").strip()
+    if not nome:
+        raise Invalido("Informe o nome do PDA.")
+    if len(nome) > 200:
+        raise Invalido("O nome do PDA deve ter no máximo 200 caracteres.")
+    if inicio and fim and fim < inicio:
+        raise Invalido("O fim da vigência não pode ser anterior ao início.")
+    if _nome_em_uso(db, nome, ignorar_id):
+        raise Conflito(f'Já existe um PDA chamado "{nome}".')
+    return nome
+
+
+def criar_plano(db: Session, dados: PlanoIn, criado_por: str | None) -> PlanoOut:
+    """Cria um PDA vazio, sem planilha; as bases são incluídas depois, uma a uma (`criar_base`).
+    O primeiro PDA cadastrado vira vigente mesmo sem `definir_vigente`."""
+    nome = _validar_plano(db, dados.nome, dados.vigencia_inicio, dados.vigencia_fim)
+    with _transacao(db):
+        primeiro_pda = db.scalar(select(func.count()).select_from(PlanoPda)) == 0
+        plano = PlanoPda(nome=nome, vigencia_inicio=dados.vigencia_inicio,
+                         vigencia_fim=dados.vigencia_fim, vigente=False, arquivo_nome=None,
+                         importado_por=_corte(criado_por, 200), importado_em=utcnow(),
+                         total_bases=0)
+        db.add(plano)
+        if dados.definir_vigente or primeiro_pda:
+            _tornar_unico_vigente(db, plano)
+        db.flush()
+    return plano_out(plano)
+
+
+def atualizar_plano(db: Session, plano_id: int, dados: PlanoIn) -> PlanoOut:
+    """Edita nome e vigência de um PDA (importado ou manual). Não troca o vigente: para isso,
+    `definir_vigente`. As bases não são alteradas."""
+    plano = _plano_ou_404(db, plano_id)
+    nome = _validar_plano(db, dados.nome, dados.vigencia_inicio, dados.vigencia_fim,
+                          ignorar_id=plano.id)
+    with _transacao(db):
+        plano.nome = nome
+        plano.vigencia_inicio = dados.vigencia_inicio
+        plano.vigencia_fim = dados.vigencia_fim
+        db.flush()
+    return _plano_out_db(db, plano)
 
 
 # ------------------------------------------------------------------ importação (PBI-12/13)
@@ -200,12 +256,14 @@ def _corte(valor: str | None, tamanho: int) -> str | None:
     return valor[:tamanho] if valor else valor
 
 
-def _nome_em_uso(db: Session, nome: str) -> bool:
+def _nome_em_uso(db: Session, nome: str, ignorar_id: int | None = None) -> bool:
     """Checagem prévia, só para a mensagem amigável; quem garante a unicidade sem diferenciar
-    maiúsculas é o índice `uq_pda_plano_nome_ci` (lower(nome))."""
-    return db.scalar(select(func.count()).select_from(PlanoPda)
-                     .where(func.lower(PlanoPda.nome) == nome.lower())) > 0 or \
-        nome.casefold() in {n.casefold() for n in db.scalars(select(PlanoPda.nome))}
+    maiúsculas é o índice `uq_pda_plano_nome_ci` (lower(nome)). `ignorar_id`: o próprio PDA, na
+    edição."""
+    outros = select(PlanoPda.nome)
+    if ignorar_id is not None:
+        outros = outros.where(PlanoPda.id != ignorar_id)
+    return nome.casefold() in {n.casefold() for n in db.scalars(outros)}
 
 
 def _datasets_por_name(db: Session, names: set[str]) -> dict[str, Dataset]:
@@ -237,15 +295,7 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
     apontarem para uma só organização); por fim, `regras.casar_orgao`. O primeiro PDA cadastrado
     vira vigente mesmo sem `definir_vigente`. O arquivo bruto não é gravado.
     """
-    nome = re.sub(r"\s+", " ", nome or "").strip()
-    if not nome:
-        raise Invalido("Informe o nome do PDA.")
-    if len(nome) > 200:
-        raise Invalido("O nome do PDA deve ter no máximo 200 caracteres.")
-    if vigencia_inicio and vigencia_fim and vigencia_fim < vigencia_inicio:
-        raise Invalido("O fim da vigência não pode ser anterior ao início.")
-    if _nome_em_uso(db, nome):
-        raise Conflito(f'Já existe um PDA chamado "{nome}".')
+    nome = _validar_plano(db, nome, vigencia_inicio, vigencia_fim)
     try:
         lida = regras.ler_planilha(conteudo, arquivo_nome)
     except regras.PlanilhaInvalida as exc:
@@ -320,15 +370,20 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
         colunas_opcionais_ausentes=lida.colunas_opcionais_ausentes)
 
 
-def _completar_orgao_por_evidencia(db: Session, plano_id: int) -> int:
-    """Bases do plano SEM organização herdam a organização das bases da mesma sigla vinculadas
-    por ID, quando todas apontam para uma só organização. Nunca sobrescreve organização já
-    definida. Retorna quantas bases foram completadas."""
+def _evidencia_do_plano(db: Session, plano_id: int) -> dict[str, str]:
+    """{chave_sigla: organização} das bases do plano vinculadas por ID (organização única)."""
     vinculadas = db.execute(
         select(BasePrevista.orgao_sigla, Dataset.organizacao_id)
         .join(Dataset, Dataset.ckan_id == BasePrevista.dataset_id)
         .where(BasePrevista.plano_id == plano_id)).all()
-    mapa = regras.orgao_por_evidencia((sigla, org) for sigla, org in vinculadas)
+    return regras.orgao_por_evidencia((sigla, org) for sigla, org in vinculadas)
+
+
+def _completar_orgao_por_evidencia(db: Session, plano_id: int) -> int:
+    """Bases do plano SEM organização herdam a organização das bases da mesma sigla vinculadas
+    por ID, quando todas apontam para uma só organização. Nunca sobrescreve organização já
+    definida. Retorna quantas bases foram completadas."""
+    mapa = _evidencia_do_plano(db, plano_id)
     if not mapa:
         return 0
     completadas = 0
@@ -520,3 +575,144 @@ def obter_base(db: Session, base_id: int, user: UsuarioAtual) -> BaseCalculada:
     if base is None:
         raise NaoEncontrado("Base prevista não encontrada.")
     return calcular_base(base, base.plano.nome, hoje_local(), janela_alerta_dias(db))
+
+
+# ------------------------------------------------------------------ cadastro manual das bases
+def opcoes_formulario(db: Session, user: UsuarioAtual) -> FormularioOut:
+    """Opções do formulário de base: organizações do portal visíveis ao usuário e o domínio de
+    periodicidade."""
+    orgs = db.scalars(filtrar_por_orgao(select(Organizacao), Organizacao.ckan_id, user)).all()
+    opcoes = [OpcaoOut(valor=o.ckan_id, rotulo=(o.titulo or o.name).strip()
+                       + (f" ({o.sigla})" if o.sigla else "")) for o in orgs]
+    return FormularioOut(
+        organizacoes=sorted(opcoes, key=lambda o: regras.normalizar_texto(o.rotulo)),
+        periodicidades=list(regras.DOMINIO_PERIODICIDADE))
+
+
+def _limpo(valor: str | None) -> str | None:
+    return (valor.strip() or None) if valor is not None else None
+
+
+def _base_ou_404(db: Session, base_id: int) -> BasePrevista:
+    base = db.get(BasePrevista, base_id)
+    if base is None:
+        raise NaoEncontrado("Base prevista não encontrada.")
+    return base
+
+
+def _vinculo_informado(db: Session, link: str | None, atual: BasePrevista | None
+                       ) -> tuple[str | None, str | None]:
+    """Endereço do dataset digitado → (dataset_id, dataset_name_planilha). O name serve só para
+    achar o ID (PBI-13); name sem dataset no inventário → vínculo pendente. Na edição, endereço
+    igual ao atual mantém o vínculo resolvido (nunca é recalculado pelo nome)."""
+    texto = _limpo(link)
+    if texto is None:
+        return None, None
+    name = regras.name_do_link(texto)
+    if name is None:
+        raise Invalido("Endereço do dataset não reconhecido: informe o link do portal "
+                       "(https://dadosabertos.go.gov.br/dataset/<name>) ou o name do dataset.")
+    if atual is not None and atual.dataset_id:
+        nome_atual = atual.dataset.name if atual.dataset is not None else None
+        if name in {atual.dataset_name_planilha, nome_atual}:
+            return atual.dataset_id, atual.dataset_name_planilha or name
+    ds = _datasets_por_name(db, {name}).get(name)
+    return (ds.ckan_id if ds is not None else None), name
+
+
+def _orgao_informado(db: Session, plano_id: int, sigla: str, escolhido: str | None,
+                     dataset_id: str | None) -> str | None:
+    """Órgão da base cadastrada à mão: o do dataset vinculado; senão o escolhido no formulário;
+    senão, como na importação, a evidência do vínculo por ID e `casar_orgao` (nunca chuta)."""
+    if escolhido and db.get(Organizacao, escolhido) is None:
+        raise Invalido("Organização não encontrada no inventário do portal.")
+    org_dataset = (db.scalar(select(Dataset.organizacao_id).where(Dataset.ckan_id == dataset_id))
+                   if dataset_id else None)
+    if org_dataset:
+        if escolhido and escolhido != org_dataset:
+            raise Invalido("O dataset informado pertence a outra organização do portal: ajuste o "
+                           "órgão ou o endereço do dataset.")
+        return org_dataset
+    if escolhido:
+        return escolhido
+    evidencia = _evidencia_do_plano(db, plano_id).get(regras.chave_sigla(sigla))
+    if evidencia:
+        return evidencia
+    orgaos = [(o.ckan_id, o.name, o.titulo, o.sigla) for o in db.scalars(select(Organizacao))]
+    return regras.casar_orgao(sigla, orgaos)
+
+
+def _valores_da_base(db: Session, plano_id: int, dados: BaseIn,
+                     atual: BasePrevista | None = None) -> dict[str, object]:
+    """Valida o formulário e calcula os campos da base (nada é gravado aqui)."""
+    sigla, nome = _limpo(dados.orgao_sigla), _limpo(dados.nome_previsto)
+    if not sigla:
+        raise Invalido("Informe o órgão (sigla).")
+    if not nome:
+        raise Invalido("Informe o nome da base prevista.")
+    original = _limpo(dados.periodicidade)
+    periodicidade = regras.periodicidade_informada(original)
+    if atual is not None and periodicidade == atual.periodicidade:
+        original = atual.periodicidade_original  # mantém o texto da planilha ("Mnsal")
+    dataset_id, name = _vinculo_informado(db, dados.dataset_link, atual)
+    return {
+        "orgao_sigla": sigla,
+        "organizacao_id": _orgao_informado(db, plano_id, sigla, _limpo(dados.organizacao_id),
+                                           dataset_id),
+        "nome_previsto": nome,
+        "descricao": _limpo(dados.descricao),
+        "unidade_responsavel": _limpo(dados.unidade_responsavel),
+        "periodicidade": periodicidade,
+        "periodicidade_original": original,
+        "prazo_abertura": dados.prazo_abertura,
+        "politicas_publicas": _limpo(dados.politicas_publicas),
+        "possui_conteudo_sigiloso": dados.possui_conteudo_sigiloso,
+        "dataset_id": dataset_id,
+        "dataset_name_planilha": name,
+    }
+
+
+def _atualizar_total(db: Session, plano_id: int) -> None:
+    total = db.scalar(select(func.count()).select_from(BasePrevista)
+                      .where(BasePrevista.plano_id == plano_id))
+    db.execute(update(PlanoPda).where(PlanoPda.id == plano_id).values(total_bases=total))
+
+
+def criar_base(db: Session, plano_id: int, dados: BaseIn, user: UsuarioAtual) -> BaseCalculada:
+    """Inclui uma base prevista no PDA (PDA criado à mão ou base que faltou na planilha)."""
+    plano = _plano_ou_404(db, plano_id)
+    valores = _valores_da_base(db, plano.id, dados)
+    exigir_mesmo_orgao(user, valores["organizacao_id"])
+    with _transacao(db):
+        base = BasePrevista(plano_id=plano.id, linha_planilha=None, classificacao="pda", **valores)
+        db.add(base)
+        db.flush()
+        _atualizar_total(db, plano.id)
+    db.expire_all()
+    return obter_base(db, base.id, user)
+
+
+def atualizar_base(db: Session, base_id: int, dados: BaseIn, user: UsuarioAtual
+                   ) -> BaseCalculada:
+    """Edita os dados de uma base prevista, inclusive o endereço do dataset (vínculo por ID)."""
+    base = _base_ou_404(db, base_id)
+    exigir_mesmo_orgao(user, base.organizacao_id)
+    valores = _valores_da_base(db, base.plano_id, dados, base)
+    exigir_mesmo_orgao(user, valores["organizacao_id"])
+    with _transacao(db):
+        for campo, valor in valores.items():
+            setattr(base, campo, valor)
+        db.flush()
+    db.expire_all()
+    return obter_base(db, base.id, user)
+
+
+def excluir_base(db: Session, base_id: int, user: UsuarioAtual) -> None:
+    """Remove uma base prevista do PDA (nada é alterado no CKAN)."""
+    base = _base_ou_404(db, base_id)
+    exigir_mesmo_orgao(user, base.organizacao_id)
+    plano_id = base.plano_id
+    with _transacao(db):
+        db.delete(base)
+        db.flush()
+        _atualizar_total(db, plano_id)

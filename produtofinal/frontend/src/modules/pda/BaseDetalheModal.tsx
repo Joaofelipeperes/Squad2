@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { BasePda } from "./api";
 import { fmtData, fmtDataHora } from "./formato";
 import { SituacaoBadge } from "./SituacaoBadge";
+import { Pode } from "@/shared/acesso/Pode";
 import { Modal } from "@/shared/ui/Modal";
 
 const PORTAL = "https://dadosabertos.go.gov.br/dataset/";
@@ -22,11 +23,18 @@ const Nota = ({ children }: { children: ReactNode }) => (
   <div className="cell-muted" style={{ fontWeight: 400 }}>{children}</div>
 );
 
+interface Props {
+  base: BasePda | null;
+  onFechar: () => void;
+  onEditar: (b: BasePda) => void;
+  onExcluir: (b: BasePda) => void;
+}
+
 /**
  * Detalhe de uma base prevista (equivalente ao showDatasetDetails() do protótipo V1).
- * Só leitura: os dados refletem o CKAN sem alterá-lo.
+ * Os dados refletem o CKAN sem alterá-lo; editar e excluir mexem só no cadastro do PDA.
  */
-export function BaseDetalheModal({ base, onFechar }: { base: BasePda | null; onFechar: () => void }) {
+export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props) {
   if (!base) return null;
   const b = base;
   const orgao = b.orgao_nome ?? b.orgao_sigla;
@@ -38,6 +46,14 @@ export function BaseDetalheModal({ base, onFechar }: { base: BasePda | null; onF
     <Modal aberto titulo={b.nome_previsto} onFechar={onFechar}
       subtitulo={`${orgao} · Camada de monitoramento (dados refletem o CKAN, sem alterá-lo)`}
       rodape={<>
+        <Pode permissao="pda.gerenciar_planos">
+          <button type="button" className="btn btn-danger-line btn-sm" onClick={() => onExcluir(b)}>
+            <i className="fa-solid fa-trash" />Excluir base
+          </button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => onEditar(b)}>
+            <i className="fa-solid fa-pen" />Editar
+          </button>
+        </Pode>
         {linkPortal && (
           <a className="btn btn-ghost btn-sm" href={linkPortal} target="_blank" rel="noopener noreferrer">
             <i className="fa-solid fa-arrow-up-right-from-square" />Abrir no portal
@@ -72,11 +88,11 @@ export function BaseDetalheModal({ base, onFechar }: { base: BasePda | null; onF
             <>
               <span className="mono" style={{ fontWeight: 500, wordBreak: "break-all" }}>{b.dataset_name_planilha}</span>{" "}
               <span className="badge badge-amber">vínculo pendente</span>
-              <Nota>Endereço informado na planilha; nenhum dataset do inventário atual corresponde a ele.</Nota>
+              <Nota>Endereço informado no PDA; nenhum dataset do inventário atual corresponde a ele.</Nota>
             </>
           )}
           {b.vinculo === "sem_vinculo" && (
-            <>—<Nota>A planilha não informa endereço desta base no portal.</Nota></>
+            <>—<Nota>Nenhum endereço desta base no portal foi informado.</Nota></>
           )}
         </Item>
         <Item rotulo="Prazo previsto (PDA)">{fmtData(b.prazo_abertura)}</Item>

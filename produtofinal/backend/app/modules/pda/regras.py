@@ -103,6 +103,14 @@ def normalizar_periodicidade(texto: object) -> str:
     return SEM_INFORMACAO
 
 
+def periodicidade_informada(texto: object) -> str:
+    """Periodicidade escolhida no formulário manual: valor do domínio fica como está ("Múltipla",
+    "Sem informação"); texto livre passa por `normalizar_periodicidade`."""
+    if isinstance(texto, str) and texto.strip() in DOMINIO_PERIODICIDADE:
+        return texto.strip()
+    return normalizar_periodicidade(texto)
+
+
 # ------------------------------------------------------------------ vínculo pelo portal
 
 
@@ -128,6 +136,19 @@ def extrair_name_da_url(valor: object) -> str | None:
             name = segmentos[i + 1].lower()
             return name if re.fullmatch(r"[a-z0-9_\-]+", name) else None
     return None
+
+
+def name_do_link(valor: object) -> str | None:
+    """Endereço do dataset digitado no formulário manual: URL do portal ('.../dataset/<name>') ou
+    só o name ('folha-de-pagamento'). Vazio ou fora desses formatos → None. Como na planilha, o
+    name serve SÓ para achar o ID do dataset (PBI-13)."""
+    if not isinstance(valor, str) or not valor.strip():
+        return None
+    name = extrair_name_da_url(valor)
+    if name:
+        return name
+    texto = valor.strip().strip("/").lower()
+    return texto if re.fullmatch(r"[a-z0-9_\-]+", texto) else None
 
 
 # ------------------------------------------------------------------ órgão

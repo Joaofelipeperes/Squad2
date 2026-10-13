@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 08/10/2026 |
+| **Última atualização** | 13/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -17,11 +17,20 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; detalhe da base (clique ou Enter na linha); **Importar PDA** (`pda.gerenciar_planos`); **Definir como vigente** e **Excluir PDA**, só para PDA não vigente e com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes (`pda.editar_vinculos`) |
+| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes (`pda.editar_vinculos`) |
 
 - **Painel "PDA"** (acima dos filtros): select com os PDAs ("Nome (vigente)"), badge Vigente /
-  Não vigente e a linha "N bases previstas · importado em dd/mm/aaaa por Fulano · vigência … ·
-  arquivo". Trocar o PDA limpa os filtros e fecha o detalhe.
+  Não vigente e a linha "N bases previstas · importado (ou criado manualmente) em dd/mm/aaaa por
+  Fulano · vigência … · arquivo". Trocar o PDA limpa os filtros e fecha o detalhe.
+- **Modal Novo PDA / Editar PDA** (`PlanoFormModal.tsx`): nome*, início e fim da vigência; na
+  criação, "Definir como vigente" (marcado e travado quando é o primeiro PDA). O PDA criado nasce
+  vazio e já fica selecionado. Editar não troca o vigente.
+- **Modal Incluir / Editar base** (`BaseFormModal.tsx`): órgão (sigla)*, organização no portal
+  (select; vazio = identificar pela sigla), base de dados*, descrição, unidade responsável,
+  periodicidade (domínio), meta/prazo para abertura (data), conteúdo sigiloso (Sim / Não / Não
+  informado), políticas públicas e "Disponível no portal" (link do dataset ou name). "Incluir
+  base" fica acima da tabela; "Editar" e "Excluir base" (confirmação em modal), no rodapé do
+  detalhe.
 - **Filtros** (enviados ao backend): Órgão, Periodicidade e Ano (opções vindas de `opcoes` em
   `GET /bases`); Situação com os 6 rótulos fixos na ordem do protótipo (constante `SITUACOES` em
   `frontend/src/modules/pda/api.ts`, espelho de `regras.SITUACOES`); Prazo (Vencido / Próximos N
@@ -43,8 +52,8 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
   dados da própria linha (não chama `GET /bases/{id}`).
 - **Teclado**: os modais (`shared/ui/Modal.tsx`) recebem o foco ao abrir, prendem Tab/Shift+Tab
   e devolvem o foco ao fechar; as linhas da tabela abrem o detalhe com Enter ou Espaço.
-- **Estado vazio** (nenhum PDA): orienta a importar; botão Importar PDA ou, sem permissão, "Peça à
-  Gerência de Dados Abertos para importar o PDA."
+- **Estado vazio** (nenhum PDA): orienta a importar ou criar; botões "Criar PDA manualmente" e
+  "Importar PDA" ou, sem permissão, "Peça à Gerência de Dados Abertos para cadastrar o PDA."
 
 Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA`,
 `pdaSituacaoDeadlineFlag`, `showDatasetDetails`, `statusBadge`). Ressalva de 17/09: PDA trata do
@@ -55,8 +64,15 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 |---|---|---|---|
 | GET | `/planos` | `pda.acessar` | PDAs cadastrados (`PlanoOut[]`): vigente primeiro, depois `importado_em` desc. Totais e vínculos respeitam o escopo de órgão do usuário |
 | POST | `/planos` | `pda.gerenciar_planos` | multipart: `nome`, `arquivo`, `vigencia_inicio`/`vigencia_fim` (aaaa-mm-dd, opcionais), `definir_vigente` (padrão false) → 201 `ImportacaoResumoOut` (PBI-12). **409** nome repetido (sem diferenciar maiúsculas); **413** arquivo > 5 MB; **422** nome vazio ou com mais de 200 caracteres, extensão diferente de .xlsx/.csv, .xlsx/.csv ilegível, .xlsx grande demais descompactado (> 50 MB), mais de 20 abas ou de 20.000 linhas, cabeçalho obrigatório ausente, prazo ilegível, planilha sem base, data inválida ou fim < início |
+| POST | `/planos/manual` | `pda.gerenciar_planos` | JSON `PlanoIn` (`nome`, `vigencia_inicio`, `vigencia_fim`, `definir_vigente`) → 201 `PlanoOut` de um PDA **vazio**, sem planilha (`arquivo_nome` nulo; `importado_por` = quem criou). **409** nome repetido; **422** nome vazio/longo ou fim < início |
+| GET | `/planos/{id}` | `pda.acessar` | `PlanoOut` (totais no escopo de órgão); **404** |
+| PUT | `/planos/{id}` | `pda.gerenciar_planos` | JSON `PlanoIn` → `PlanoOut`: edita nome e vigência (não troca o vigente; `definir_vigente` é ignorado). **409** nome de outro PDA; **422**; **404** |
 | PUT | `/planos/{id}/vigente` | `pda.gerenciar_planos` | Define o PDA vigente → `PlanoOut`; **404** |
-| DELETE | `/planos/{id}` | `pda.gerenciar_planos` | Exclui o PDA e suas bases → 204; **409** se for o vigente; **404** |
+| DELETE | `/planos/{id}` | `pda.gerenciar_planos` | Exclui o PDA e suas bases → 204; **409** se for o vigente e houver outros PDAs; **404** |
+| POST | `/planos/{id}/bases` | `pda.gerenciar_planos` | JSON `BaseIn` → 201 `BaseOut`: inclui uma base prevista. **422** sigla ou nome vazios, endereço do dataset não reconhecido, organização inexistente ou diferente da do dataset; **403** órgão de outro escopo; **404** plano |
+| PUT | `/bases/{id}` | `pda.gerenciar_planos` | JSON `BaseIn` → `BaseOut`: edita a base (inclusive o endereço do dataset). Mesmos erros; **404** |
+| DELETE | `/bases/{id}` | `pda.gerenciar_planos` | Remove a base do PDA → 204 (atualiza `total_bases`); **403**; **404** |
+| GET | `/formulario` | `pda.gerenciar_planos` | `FormularioOut`: organizações do portal visíveis ao usuário (`{valor: ckan_id, rotulo}`) e o domínio de periodicidade |
 | POST | `/planos/{id}/vincular` | `pda.editar_vinculos` | Tenta de novo os vínculos pendentes → `VinculosOut` (PBI-12/13); **404** |
 | GET | `/bases` | `pda.acessar` | `?plano_id=&orgao=&situacao=&periodicidade=&ano=&prazo=` → `BasesOut` (PBI-19 a 21). Sem `plano_id` usa o vigente; sem PDA → `plano=null` e listas vazias. **404** plano inexistente; **422** `ano` não numérico ou `prazo` diferente de `vencido`/`proximo` |
 | GET | `/bases/{id}` | `pda.acessar` | `BaseOut`; **404** se não existe ou é de outro órgão para usuário restrito |
@@ -70,6 +86,11 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   tem_coluna_prazo, tem_coluna_portal (sem "Disponível no Portal" nenhuma base é vinculada),
   colunas_opcionais_ausentes (rótulos).
 - `VinculosOut`: vinculos_resolvidos (nesta execução), vinculos_pendentes (que continuam pendentes).
+- `PlanoIn`: nome, vigencia_inicio, vigencia_fim, definir_vigente (só na criação).
+- `BaseIn`: orgao_sigla*, organizacao_id (vazio = pela sigla), nome_previsto*, descricao,
+  unidade_responsavel, periodicidade (valor do domínio ou texto livre, normalizado),
+  prazo_abertura, politicas_publicas, possui_conteudo_sigiloso, dataset_link (link do portal ou name).
+- `FormularioOut`: organizacoes `[{valor, rotulo}]`, periodicidades.
 - `BaseOut`: dados da planilha + `orgao_chave` (organizacao_id ou `sigla:<SIGLA>`), orgao_nome,
   `vinculo` (resolvido/pendente/sem_vinculo), dataset_id, dataset_name e dataset_titulo **atuais**
   do inventário, dataset_name_planilha, dataset_ativo, data_publicacao, recursos_validos,
@@ -85,8 +106,11 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   `colunas_opcionais_ausentes`. Leitura sob demanda e limitada (`TAMANHO_DESCOMPACTADO_MAXIMO` 50 MB,
   `ABAS_MAXIMO` 20, `LINHAS_MAXIMO` 20.000, `COLUNAS_MAXIMO` 60, fim da aba após 1.000 linhas vazias
   seguidas). Lança `PlanilhaInvalida`.
-- `normalizar_periodicidade(texto) -> str` — valor do domínio `DOMINIO_PERIODICIDADE`.
-- `extrair_name_da_url(valor) -> str | None` — name de `.../dataset/<name>`, só para achar o ID (PBI-13).
+- `normalizar_periodicidade(texto) -> str` — valor do domínio `DOMINIO_PERIODICIDADE`;
+  `periodicidade_informada(texto)` — no cadastro manual, valor do domínio fica como está
+  ("Múltipla", "Sem informação"), texto livre é normalizado.
+- `extrair_name_da_url(valor) -> str | None` — name de `.../dataset/<name>`, só para achar o ID (PBI-13);
+  `name_do_link(valor)` — idem, aceitando também só o name (cadastro manual).
 - `casar_orgao(sigla, orgaos: Iterable[(ckan_id, name, titulo, sigla)]) -> str | None`; de-para
   explícito em `SIGLAS_CONHECIDAS` (sigla compacta → name da organização).
 - `interpretar_data(valor) -> date | None` e `fim_do_mes(ano, mes)` — prazo da planilha, inclusive
@@ -102,8 +126,13 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
 - `importar_plano(db, *, nome, vigencia_inicio, vigencia_fim, definir_vigente, arquivo_nome,
   conteudo, importado_por) -> ImportacaoResumoOut` — PBI-12/13, atômico.
 - `resolver_vinculos_pendentes(db, plano_id) -> {"vinculos_resolvidos", "vinculos_pendentes"}` — PBI-12/13.
-- `listar_planos(db, user=None) -> list[PlanoOut]` · `definir_vigente(db, plano_id) -> PlanoOut` ·
-  `excluir_plano(db, plano_id) -> None`.
+- `listar_planos(db, user=None) -> list[PlanoOut]` · `obter_plano(db, plano_id, user=None)` ·
+  `definir_vigente(db, plano_id) -> PlanoOut` · `excluir_plano(db, plano_id) -> None`.
+- CRUD manual: `criar_plano(db, PlanoIn, criado_por) -> PlanoOut` (PDA vazio) ·
+  `atualizar_plano(db, plano_id, PlanoIn) -> PlanoOut` · `criar_base(db, plano_id, BaseIn, user)` ·
+  `atualizar_base(db, base_id, BaseIn, user)` (ambas `-> BaseCalculada`) ·
+  `excluir_base(db, base_id, user)` · `opcoes_formulario(db, user) -> FormularioOut`. A validação do
+  nome e da vigência (`_validar_plano`) é a mesma da importação.
 - `listar_bases(db, user, *, plano_id, orgao, situacao, periodicidade, ano, prazo) -> BasesOut` — PBI-20/21.
 - `obter_base(db, base_id, user) -> BaseCalculada`.
 - **Para outros módulos:** `plano_vigente(db) -> PlanoPda | None` e
@@ -114,8 +143,9 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   `calcular_base(base, plano_nome, hoje, janela_dias)` · `orgao_chave(organizacao_id, orgao_sigla)`.
 
 Datasets, recursos e organizações são carregados com `selectinload`: 7 consultas para ~450 bases,
-sem N+1. Testes: `tests/test_pda_regras.py`, `tests/test_pda_api.py` e
-`tests/test_pda_revisao.py` (regressões da revisão de 08/10/2026).
+sem N+1. Testes: `tests/test_pda_regras.py`, `tests/test_pda_api.py`,
+`tests/test_pda_revisao.py` (regressões da revisão de 08/10/2026), `tests/test_pda_formato_2025.py`
+e `tests/test_pda_crud.py` (cadastro manual).
 
 ## Modelo de dados
 Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
@@ -137,7 +167,7 @@ SQLite só aplica ON DELETE CASCADE com `PRAGMA foreign_keys`. Migração `c3f8a
 |---|---|
 | `pda.acessar` | Administrador, Gerência GEDA, Equipe GEDA |
 | `pda.editar_vinculos` | Administrador, Gerência GEDA — Atualizar vínculos (e a futura reclassificação PDA × espontânea) |
-| `pda.gerenciar_planos` | Administrador, Gerência GEDA — importar PDA, definir o vigente e excluir PDA |
+| `pda.gerenciar_planos` | Administrador, Gerência GEDA — importar ou criar PDA, editar e excluir PDA, incluir/editar/remover bases previstas e definir o vigente |
 
 Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozinha (ver Pendências).
 
@@ -163,7 +193,8 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 - **Vários PDAs, um vigente** (decisão de 07/10/2026, Humberto/Eixo 1 — pendente de validação da
   GEDA). Nome obrigatório e único (espaços colapsados, sem diferenciar maiúsculas). O primeiro PDA
   cadastrado vira vigente mesmo sem `definir_vigente`. Garantia dupla: índice único parcial e
-  transação (desmarca todos, marca o escolhido, flush). O vigente não pode ser excluído. Outros
+  transação (desmarca todos, marca o escolhido, flush). O vigente só pode ser excluído quando é o
+  único PDA cadastrado (havendo outros, defina outro como vigente antes; 13/10/2026). Outros
   PDAs podem ser consultados na tela, mas indicadores e relatórios usam sempre o vigente.
 - **Vínculo sempre pelo ID do dataset** (PBI-13). "Disponível no Portal" → `extrair_name_da_url`
   → `Dataset.name` do inventário → grava `Dataset.ckan_id`. Name com dataset = resolvido; name sem
@@ -235,14 +266,27 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   (ADR-0006).
 - Importação **atômica** (qualquer erro → rollback). O arquivo bruto não é gravado: só os dados
   extraídos e o nome do arquivo. Textos longos são cortados no tamanho da coluna.
+- **Cadastro manual** (13/10/2026): um PDA pode ser criado vazio, sem planilha, e receber as bases
+  uma a uma; qualquer PDA (importado ou manual) pode ter nome e vigência editados e bases
+  incluídas, editadas ou removidas. `total_bases` é recalculado a cada inclusão/remoção. Base
+  incluída à mão tem `linha_planilha` nula. As mesmas regras da importação valem para o formulário:
+  - **órgão**: o do dataset vinculado; senão a organização escolhida no formulário; senão evidência
+    do vínculo por ID e `casar_orgao`. Organização escolhida diferente da do dataset → 422;
+  - **vínculo**: "Disponível no portal" (link ou name) → `name_do_link` → ID do dataset no
+    inventário (resolvido) ou pendente; vazio → sem vínculo. Na edição, endereço igual ao atual
+    mantém o vínculo resolvido (**nunca recalculado pelo nome**); endereço novo é resolvido de novo;
+  - **periodicidade**: valor do domínio fica como está; na edição, manter a mesma periodicidade
+    preserva o texto original da planilha (ex.: "Mnsal").
+  Usuário restrito a órgão só altera bases do próprio órgão (`exigir_mesmo_orgao`), embora os papéis
+  padrão de órgão não tenham `pda.gerenciar_planos`.
 - Bases espontâneas também devem ser monitoradas (Paloma e Júnior, 17/09) — ainda não
   implementado: `classificacao` é sempre "pda".
 
 ## Pendências
 - **Vínculo das bases da planilha 2025-2027**: o formato novo não tem "Disponível no Portal", então
-  nenhuma base é vinculada e nenhuma aparece como Publicado. Decidir com a GEDA: pedir a coluna (ou
-  uma planilha de vinculação por ID, como prevê a ADR-0006) ou implementar a edição manual de
-  vínculo base a base (candidata ao PBI-14, permissão `pda.editar_vinculos`).
+  a importação não vincula nenhuma base. Agora o vínculo pode ser informado base a base em "Editar"
+  (endereço do dataset → ID); para as ~450 bases, ainda vale pedir à GEDA a coluna ou uma planilha
+  de vinculação por ID (ADR-0006) para vincular em lote.
 - Validar com a GEDA que a meta em mês/ano vale até o último dia do mês.
 - Validar com a GEDA a regra de vários PDAs com um vigente (decisão de 07/10/2026).
 - "Bianual" mapeado para Bienal, mas é ambíguo (pode significar semestral) — validar com a GEDA.
@@ -252,14 +296,16 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   GEDA **não** recebe `pda.gerenciar_planos` automaticamente — conceder pela tela Usuários e papéis
   (o Administrador recebe por `todas`).
 - Fora deste escopo: critério das bases espontâneas e reclassificação PDA × espontânea (PBI-16 a
-  PBI-18, PBI-82); edição manual de vínculo base a base.
+  PBI-18, PBI-82); escolha do dataset numa lista com busca (hoje o vínculo manual é pelo endereço
+  digitado).
+- Edição e remoção de bases não têm histórico de quem alterou o quê (entra com a `rastreabilidade`).
 - Relatórios e exportação das bases do PDA (US20): consumir `bases_do_plano` no módulo `relatorios`.
 - A última atualização usa `created` só quando nenhum recurso válido tem `last_modified`; o PBI-25
   pode pedir o fallback por recurso — validar.
 - O órgão de uma base já vinculada não acompanha mudança de órgão do dataset após a importação.
 - US7 (PBI-16 a PBI-18, PBI-82) e os PBI-14 e PBI-80 do Backlog v2 não foram atendidos nesta
-  entrega: conferir no backlog o escopo de cada um (a edição manual de vínculo base a base é
-  candidata ao PBI-14).
+  entrega: conferir no backlog o escopo de cada um (o vínculo manual base a base pelo endereço, de
+  13/10/2026, é candidato a atender o PBI-14).
 - Detalhe da base sem "Situação de atualização" (ressalva de 17/09: o PDA trata do prazo de
   abertura; a situação por periodicidade do `atualizacoes` ainda é esqueleto — validar com a GEDA
   se volta ao detalhe) e sem "Histórico recente" (entra quando a `rastreabilidade` existir).
@@ -275,3 +321,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 07/10/2026 | Importação de planilhas, múltiplos PDAs com vigente, vínculo por ID, situação do prazo e tela de monitoramento (PBI-12, PBI-13, PBI-15, PBI-19 a PBI-22) | Humberto |
 | 08/10/2026 | Revisão (27 achados confirmados): órgão por evidência do vínculo por ID e siglas de várias palavras; recursos apagados do CKAN deixam de contar; contagens de `PlanoOut`/`GET /planos` com escopo de órgão; nome único sem diferenciar maiúsculas no banco (migração `c3f8a2d15e70`) e conflitos concorrentes → 409; tetos na leitura de .xlsx; cabeçalho repetido, rodapé só na coluna Órgão, prazo com hora e pontuação na periodicidade; resumo avisa coluna Prazo ausente; detalhe com data de publicação e formatos; foco de teclado nos modais; descrição de `pda.editar_vinculos` ajustada no catálogo; status passa a Parcial | Humberto |
 | 08/10/2026 | Formato da planilha do PDA 2025-2027: coluna "Meta/Prazo para abertura" com mês/ano (meta até o fim do mês, inclusive célula de data `mmmm/aaaa` no .xlsx), rodapé "Filtros aplicados", aviso `tem_coluna_portal` quando falta "Disponível no Portal" e de-para explícito de 13 siglas de órgão (`SIGLAS_CONHECIDAS`) | Humberto |
+| 13/10/2026 | CRUD manual: criar PDA vazio (sem planilha), editar nome e vigência, excluir (o vigente quando é o único PDA) e incluir/editar/remover bases previstas, com vínculo pelo endereço do dataset (→ ID) e órgão escolhido ou pela sigla; rotas `POST /planos/manual`, `GET`/`PUT /planos/{id}`, `POST /planos/{id}/bases`, `PUT`/`DELETE /bases/{id}`, `GET /formulario`; modais `PlanoFormModal` e `BaseFormModal` | Humberto |

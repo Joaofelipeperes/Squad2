@@ -3,10 +3,39 @@ Datas em "aaaa-mm-dd"; datetimes em ISO 8601."""
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 Vinculo = Literal["resolvido", "pendente", "sem_vinculo"]
 FlagPrazo = Literal["vencido", "proximo", ""]
+
+
+class PlanoIn(BaseModel):
+    """Criação manual (sem planilha) e edição de um PDA. O vigente é trocado por
+    PUT /planos/{id}/vigente; `definir_vigente` só vale na criação."""
+
+    nome: str = Field(max_length=200)
+    vigencia_inicio: date | None = None
+    vigencia_fim: date | None = None
+    definir_vigente: bool = False
+
+
+class BaseIn(BaseModel):
+    """Inclusão e edição manual de uma base prevista (mesmos campos da planilha).
+
+    `organizacao_id` vazio → órgão identificado pela sigla, como na importação. `dataset_link` =
+    endereço do dataset no portal (ou só o name): serve SÓ para achar o ID (PBI-13); vazio →
+    sem vínculo."""
+
+    orgao_sigla: str = Field(max_length=100)
+    organizacao_id: str | None = None
+    nome_previsto: str = Field(max_length=500)
+    descricao: str | None = None
+    unidade_responsavel: str | None = Field(default=None, max_length=500)
+    periodicidade: str | None = Field(default=None, max_length=100)
+    prazo_abertura: date | None = None
+    politicas_publicas: str | None = Field(default=None, max_length=500)
+    possui_conteudo_sigiloso: bool | None = None
+    dataset_link: str | None = Field(default=None, max_length=500)
 
 
 class PlanoOut(BaseModel):
@@ -55,6 +84,14 @@ class OpcoesOut(BaseModel):
     orgaos: list[OpcaoOut]
     periodicidades: list[str]
     anos: list[int]
+
+
+class FormularioOut(BaseModel):
+    """Opções do formulário de base: organizações do portal (valor = ckan_id) e o domínio de
+    periodicidade."""
+
+    organizacoes: list[OpcaoOut]
+    periodicidades: list[str]
 
 
 class BaseOut(BaseModel):

@@ -73,8 +73,10 @@ META: dict[P, MetaPermissao] = {
                                          "Refazer vínculos pendentes com o CKAN e reclassificar "
                                          "bases PDA × espontâneas."),
     P.PDA_GERENCIAR_PLANOS: MetaPermissao("pda", "Gerenciar PDAs",
-                                          "Importar planilhas de PDA, definir o PDA vigente "
-                                          "(rege indicadores e relatórios) e excluir PDAs."),
+                                          "Criar PDAs (por planilha ou manualmente), editá-los e "
+                                          "excluí-los, incluir, editar e remover bases previstas "
+                                          "e definir o PDA vigente (rege indicadores e "
+                                          "relatórios)."),
     P.ATUALIZACOES_ACESSAR: MetaPermissao("atualizacoes", "Ver Atualizações",
                                           "Atualização real dos recursos e periodicidade."),
     P.RASTREABILIDADE_ACESSAR: MetaPermissao("rastreabilidade", "Ver Rastreabilidade",
