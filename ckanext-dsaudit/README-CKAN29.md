@@ -18,7 +18,21 @@ Código completo da extensão, vendorizado neste repositório. Ponto de partida:
 | `ckanext/dsaudit/versions.py` | novo | Guarda cada versão de arquivo enviado e calcula o diff linha a linha de CSV/TSV/TXT/XLSX. |
 
 Foram **removidos** do upstream os arquivos que só servem para telas: `views.py`, `helpers.py`,
-`templates/` e `2.9_templates/`. `setup.py`, `setup.cfg`, `i18n/` e as licenças (`COPYING*`) são os originais. O `prerun.py` corrigido do CKAN fica em `docker/prerun.py`.
+`templates/` e `2.9_templates/`. No `setup.py` foi declarada a dependência `openpyxl` e foi
+acrescentado o `MANIFEST.in`; `setup.cfg`, `i18n/` e as licenças (`COPYING*`) são os originais.
+
+## Requisitos e instalação
+
+* CKAN **2.9.x** em Python 3 (não funciona no 2.10 ou superior), com o plugin `datastore` ativo e o
+  activity stream habilitado (padrão do 2.9).
+* Dependência instalada automaticamente pelo `pip`: `openpyxl` (diff de planilhas `.xlsx`).
+* Não cria tabelas nem exige migração de banco: grava na tabela `activity` do próprio CKAN.
+
+```bash
+pip install -e /caminho/ckanext-dsaudit      # ou: pip install /caminho/ckanext-dsaudit
+```
+
+No `ckan.ini`, acrescente `dsaudit` em `ckan.plugins` (depois de `datastore`) e reinicie o CKAN.
 
 ## O que é registrado (tabela `activity` do banco `ckan`)
 
@@ -30,7 +44,8 @@ Foram **removidos** do upstream os arquivos que só servem para telas: `views.py
 | `changed metadata` | `package_create` / `package_update` / `package_delete` | campos do dataset e dos recursos alterados (antes → depois), inclusive datasets privados |
 | `changed resource file` | upload de arquivo (interface ou API) | versão nova e anterior (nome, tamanho, sha256) e diff linha a linha do conteúdo |
 
-Versões dos arquivos: `/var/lib/ckan/dsaudit_versions/<resource_id>/` (volume `ckan_storage`).
+Versões dos arquivos: `<ckan.storage_path>/dsaudit_versions/<resource_id>/` (no Docker deste
+repositório, `/var/lib/ckan/dsaudit_versions`, volume `ckan_storage`).
 
 Não passam pela extensão (ficam só no histórico nativo do CKAN, sem antes → depois): ações em
 massa da página da organização (`bulk_update_private/public/delete`) e `dataset_purge`.
@@ -42,15 +57,21 @@ GET /api/3/action/dsaudit_activity_list?id=<dataset>&resource_id=&activity_type=
 Authorization: <token de quem pode editar o dataset>
 ```
 
-## Configuração (variáveis no `docker-compose.yml`)
+## Configuração
 
-| Variável | Padrão | Efeito |
-|---|---|---|
-| `CKANEXT__DSAUDIT__STRICT` | `true` | Recusa a alteração se a auditoria completa não puder ser gravada |
-| `CKANEXT__DSAUDIT__MAX_DIFF_RECORDS` | `0` (sem limite) | Limite de linhas cujo "antes" é capturado por chamada |
-| `CKANEXT__DSAUDIT__CAPTURE_DROP` | `true` | Guarda o conteúdo da tabela excluída por inteiro |
-| `CKANEXT__DSAUDIT__FILE_KEY_COLUMNS` | `id` | Colunas-chave para casar linhas entre versões de arquivo |
-| `CKANEXT__DSAUDIT__VERSIONS_PATH` | `<storage_path>/dsaudit_versions` | Onde as versões dos arquivos ficam |
+Cada opção pode ir no `ckan.ini` ou, com o plugin `envvars`, numa variável de ambiente (como no
+`docker-compose.yml`).
+
+| `ckan.ini` | Variável de ambiente | Padrão | Efeito |
+|---|---|---|---|
+| `ckanext.dsaudit.strict` | `CKANEXT__DSAUDIT__STRICT` | `true` | Recusa a alteração se a auditoria completa não puder ser gravada |
+| `ckanext.dsaudit.max_diff_records` | `CKANEXT__DSAUDIT__MAX_DIFF_RECORDS` | `0` (sem limite) | Limite de linhas cujo "antes" é capturado por chamada |
+| `ckanext.dsaudit.capture_drop` | `CKANEXT__DSAUDIT__CAPTURE_DROP` | `true` | Guarda o conteúdo da tabela excluída por inteiro |
+| `ckanext.dsaudit.file_key_columns` | `CKANEXT__DSAUDIT__FILE_KEY_COLUMNS` | `id` | Colunas-chave candidatas, separadas por espaço (usa a primeira com valores únicos) para casar linhas entre versões de arquivo; sem nenhuma, compara por posição |
+| `ckanext.dsaudit.versions_path` | `CKANEXT__DSAUDIT__VERSIONS_PATH` | `<storage_path>/dsaudit_versions` | Onde as versões dos arquivos ficam |
+
+Por recurso, o campo extra `chave_auditoria` (ex.: `codigo` ou `ano,municipio`) tem prioridade
+sobre `file_key_columns`.
 
 ## Diferenças para o upstream
 
