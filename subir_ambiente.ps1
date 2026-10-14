@@ -22,7 +22,7 @@
 #
 # Parametros:
 #   -Reconstruir   build sem cache e recria os containers (apos mudar Dockerfile
-#                  ou a pasta ckanext-dsaudit-ckan29)
+#                  ou a pasta ckanext-dsaudit)
 #   -Importar      carrega metadados_ckan_goias.json no CKAN (dentro do container,
 #                  nao precisa de Python na maquina)
 #   -Substituir    junto com -Importar: reimporta datasets da carga antiga (ID errado)

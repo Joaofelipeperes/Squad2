@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# ckanext-dsaudit -- trecho a acrescentar no ckan.ini (secao [app:main])
+# ---------------------------------------------------------------------------
+# NAO substitua o seu ckan.ini por este arquivo: copie apenas as linhas abaixo.
+
+[app:main]
+
+# 1) Acrescente "dsaudit" a lista de plugins que ja existe, depois de "datastore".
+#    Mantenha os plugins que voces ja usam; o exemplo abaixo e ilustrativo.
+#    No CKAN 2.9 NAO existe o plugin "activity" (o activity stream e do core).
+ckan.plugins = image_view text_view recline_view datastore dsaudit
+
+# 2) O activity stream precisa estar ligado (padrao do CKAN 2.9).
+ckan.activity_streams_enabled = true
+
+# 3) Diretorio de arquivos do CKAN. As versoes dos arquivos enviados ficam em
+#    <ckan.storage_path>/dsaudit_versions, a menos que versions_path seja definido.
+#    (Use o valor que o CKAN de voces ja tem.)
+# ckan.storage_path = /var/lib/ckan/default
+
+# 4) Opcoes da extensao (os valores abaixo sao os padroes).
+
+# Recusa a alteracao (DataStore, metadados ou troca de arquivo) quando a auditoria
+# completa nao pode ser gravada. false = aplica a alteracao mesmo assim e
+# registra o erro no log.
+ckanext.dsaudit.strict = true
+
+# Limite de linhas cujo valor anterior e capturado por chamada.
+# 0 = sem limite. Com strict = true, uma chamada acima do limite e recusada.
+ckanext.dsaudit.max_diff_records = 0
+
+# Guarda o conteudo inteiro da tabela quando ela e excluida do DataStore.
+ckanext.dsaudit.capture_drop = true
+
+# Colunas-chave candidatas (separadas por espaco) para comparar versoes de
+# arquivos CSV/XLSX; usa a primeira com valores unicos. Sem nenhuma, compara
+# por posicao. Por recurso, o campo extra "chave_auditoria" tem prioridade.
+ckanext.dsaudit.file_key_columns = id
+
+# Onde guardar as versoes dos arquivos (padrao: <ckan.storage_path>/dsaudit_versions).
+# ckanext.dsaudit.versions_path = /var/lib/ckan/default/dsaudit_versions

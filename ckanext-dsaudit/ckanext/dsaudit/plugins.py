@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-ckanext-dsaudit -- plugin enxuto para CKAN 2.9.5 (substitui o plugins.py do
-upstream ckan/ckanext-dsaudit@c398842).
+ckanext-dsaudit -- plugin enxuto para CKAN 2.9.5 (versao modificada do
+plugins.py de ckan/ckanext-dsaudit@c398842).
 
 So captura e armazena; nao ha telas. Registra:
   * DataStore: linhas inseridas/alteradas/removidas com valor anterior -> novo
