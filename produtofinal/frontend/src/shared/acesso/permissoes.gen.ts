@@ -23,7 +23,8 @@ export const PERMISSOES = [
   "parametros.editar",
   "ia.configurar",
   "acesso.gerenciar_usuarios",
-  "acesso.gerenciar_papeis"
+  "acesso.gerenciar_papeis",
+  "acesso.ver_logs"
 ] as const;
 
 export type Permissao = (typeof PERMISSOES)[number];
@@ -50,5 +51,6 @@ export const ROTULOS_PERMISSAO: Record<Permissao, string> = {
   "parametros.editar": "Editar parâmetros",
   "ia.configurar": "Configurar modelos de IA",
   "acesso.gerenciar_usuarios": "Gerenciar usuários",
-  "acesso.gerenciar_papeis": "Gerenciar papéis"
+  "acesso.gerenciar_papeis": "Gerenciar papéis",
+  "acesso.ver_logs": "Ver log de acesso"
 };

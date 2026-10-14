@@ -43,6 +43,7 @@ a fonte.
 | 01/10/2026 | Reforço da detecção híbrida e do modelo offline (LIGO e orientador) | Técnica | Revisão da ADR-0010 | [ADR-0010](0010-deteccao-de-dados-pessoais-hibrida.md) |
 | 01/10/2026 | Registrar toda decisão técnica como ADR numa linha do tempo | Processo | Aceita | [ADR-0015](0015-registro-de-decisoes.md) |
 | 07/10/2026 | Convenções de modelagem formalizadas e MER gerado do código | Técnica | Revisão da ADR-0013 | [ADR-0013](0013-banco-de-dados-e-convencoes.md) |
+| 14/10/2026 | Log de acesso: toda requisição à API gravada em `acesso_log` por middleware | Técnica | Aceita | [ADR-0016](0016-log-de-acesso-no-banco.md) |
 
 ## Decisões em aberto
 
@@ -55,6 +56,7 @@ a fonte.
 | Hospedagem do protótipo navegável | Oracle Cloud (camada gratuita, conta do coordenador) × OpenShift da TI Central | Victor, com a Paloma | Sugestão do orientador (01/10) |
 | Distribuição dos papéis padrão | Matriz atual × ajustes da GEDA | Paloma | ADR-0005 |
 | Envio de recursos pelos órgãos | Incluir no escopo × manter fora | Paloma / Júnior, com a SECTI | docs/modulos/envio.md |
+| Retenção do log de acesso | Prazo de guarda (ex.: 6 meses, Marco Civil) e expurgo automático × guarda indefinida | Paloma, com a coordenação | ADR-0016 |
 
 ## Pendências de validação com a CGE-GO
 

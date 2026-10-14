@@ -1,5 +1,7 @@
 """API do módulo acesso. Login é a única rota pública do sistema (além de /saude)."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 
 from app.core.deps import CurrentUser, DbSession, UsuarioAtual, publico, require, require_qualquer
@@ -8,8 +10,8 @@ from app.core.security import create_access_token
 from app.modules.acesso import service
 from app.modules.acesso.models import Papel, Usuario
 from app.modules.acesso.schemas import (
-    GrupoPermissoesOut, LoginIn, OrgaoResumo, PapelIn, PapelOut, PermissaoOut, SessaoOut,
-    TokenOut, UsuarioIn, UsuarioOut,
+    GrupoPermissoesOut, LogAcessoOut, LoginIn, OrgaoResumo, PapelIn, PapelOut, PermissaoOut,
+    SessaoOut, TokenOut, UsuarioIn, UsuarioOut,
 )
 
 router = APIRouter()
@@ -21,7 +23,8 @@ def _erro(exc: Exception):
 
 
 @router.post("/login", response_model=TokenOut, dependencies=[Depends(publico)])
-def login(body: LoginIn, db: DbSession):
+def login(body: LoginIn, db: DbSession, request: Request):
+    request.state.usuario = body.email.lower()  # log de acesso: inclui tentativas que falham
     u = service.autenticar(db, body.email, body.senha)
     if not u:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-mail ou senha incorretos.")
@@ -116,3 +119,12 @@ def excluir_papel(papel_id: int, db: DbSession):
         service.excluir_papel(db, p)
     except service.ErroAcesso as exc:
         _erro(exc)
+
+
+# ------------------------------------------------------------------ log de acesso
+@router.get("/logs", response_model=list[LogAcessoOut],
+            dependencies=[Depends(require(P.ACESSO_VER_LOGS))])
+def listar_logs(db: DbSession, usuario: str | None = None, desde: datetime | None = None,
+                ate: datetime | None = None, limite: int = Query(200, ge=1, le=5000)):
+    """Mais recentes primeiro. `usuario` filtra por trecho do e-mail."""
+    return service.listar_logs(db, usuario, desde, ate, limite)

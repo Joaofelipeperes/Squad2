@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 13/10/2026 |
+| **Última atualização** | 14/10/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -50,6 +50,7 @@ Após o login o usuário cai na **primeira tela permitida** (órgão publicador 
 | POST | `/papeis` | `acesso.gerenciar_papeis` | Cria papel personalizado |
 | PUT | `/papeis/{id}` | `acesso.gerenciar_papeis` | Edita papel (exceto Administrador) |
 | DELETE | `/papeis/{id}` | `acesso.gerenciar_papeis` | Exclui papel personalizado sem usuários |
+| GET | `/logs?usuario=&desde=&ate=&limite=200` | `acesso.ver_logs` | Log de acesso, mais recente primeiro; `usuario` filtra por trecho do e-mail; `limite` até 5000 |
 
 ## Serviços e métodos
 Portão (`app/core/deps.py`) — usado por **todos** os módulos:
@@ -67,6 +68,12 @@ Serviço (`modules/acesso/service.py`):
   não sobrescreve ajustes feitos na tela. Roda na subida da API.
 - `salvar_usuario(db, dados, usuario=None, editor=None)` · `criar_usuario(...)` (CLI/testes).
 - `salvar_papel(db, dados, papel=None)` · `excluir_papel(db, papel)`.
+- `registrar_acesso(**campos)` — grava uma linha em `acesso_log` em sessão própria; erro no log
+  vai para o log da aplicação e não derruba a requisição. Chamado pelo middleware `log_de_acesso`
+  (`main.py`), que roda em **toda** requisição exceto `OPTIONS` e `/saude`; o e-mail vem de
+  `get_current_user` (portão) ou do `/login` (inclusive tentativas que falham), via
+  `request.state.usuario`.
+- `listar_logs(db, usuario, desde, ate, limite)`.
 
 Frontend:
 - `useAuth().pode(permissao)` — ponto único de checagem na interface.
@@ -82,6 +89,7 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | `acesso_papel` | codigo (único), nome, descricao, sistema, exige_orgao, todas |
 | `acesso_papel_permissao` | papel_id, permissao (código do catálogo) |
 | `acesso_usuario_papel` | usuario_id, papel_id |
+| `acesso_log` | ocorrido_em, usuario (e-mail, sem FK), metodo, caminho (com query), rota (modelo, ex.: `/api/v1/acesso/papeis/{papel_id}`), acao (função), status_http, ip, user_agent — somente inserção |
 
 ## Permissões
 Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
@@ -110,6 +118,7 @@ Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
 | ia.configurar | ✓ | | | | |
 | acesso.gerenciar_usuarios | ✓ | ✓ | | | |
 | acesso.gerenciar_papeis | ✓ | | | | |
+| acesso.ver_logs | ✓ | | | | |
 
 Órgão publicador **exige órgão** vinculado. Os ajustes feitos na tela prevalecem sobre esta tabela.
 
@@ -125,12 +134,13 @@ sobrescreve ajustes. Conceda pela tela Usuários e papéis (ex.: `pda.gerenciar_
 | é consumido por | todos | portão de permissões em toda rota (`require`, `autenticado`) |
 | é consumido por | assistente, envio, pda | escopo de órgão (`filtrar_por_orgao`, `exigir_mesmo_orgao`) |
 | é consumido por | frontend (shell) | `/acesso/me` define menu, rotas, widgets e botões |
+| é consumido por | todos | o middleware `log_de_acesso` registra toda requisição de qualquer módulo em `acesso_log` |
 
 ## Jobs agendados
 Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.py`).
 
 ## Regras de negócio e decisões
-Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
+Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-0016](../adr/0016-log-de-acesso-no-banco.md) (log de acesso).
 
 - Toda rota declara controle de acesso; a API não sobe sem isso.
 - O sistema nunca fica sem administrador ativo (bloqueio ao remover/desativar o último).
@@ -143,7 +153,11 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
 ## Pendências
 - Vincular usuário a órgão exige ao menos uma coleta (os órgãos vêm do inventário).
 - Recuperação de senha por e-mail e login institucional (SSO do Estado) não estão no escopo.
-- Trilha de auditoria de quem alterou papéis/usuários (hoje só `updated_at`).
+- Trilha de auditoria de quem alterou papéis/usuários: o `acesso_log` mostra quem chamou
+  `PUT /usuarios/{id}` e quando, mas não o antes/depois dos campos.
+- Log de acesso: sem tela (só `GET /acesso/logs`) e sem expurgo automático; a tabela cresce
+  ~1 linha por minuto por aba aberta só com o polling da Topbar. Prazo de retenção a definir (ADR-0016).
+- Log de acesso fora do Backlog v2: pedido da coordenação em 14/10/2026; validar com a Paloma.
 
 ## Histórico de alterações
 | Data | Alteração | Autor |
@@ -152,3 +166,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
 | 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |
 | 07/10/2026 | Catálogo: `pda.gerenciar_planos` (importar PDA, definir o vigente e excluir PDA) para Administrador e Gerência GEDA; nota sobre permissão nova em banco existente | Humberto |
 | 13/10/2026 | Catálogo: descrição de `pda.gerenciar_planos` passa a cobrir o cadastro manual (criar, editar e excluir PDAs e bases previstas); papéis inalterados | Humberto |
+| 14/10/2026 | Log de acesso: tabela `acesso_log`, middleware em `main.py`, rota `GET /logs` e permissão `acesso.ver_logs` (ADR-0016) | Victor |

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -52,6 +52,7 @@ def _marcar(fn, valor):
 
 
 def get_current_user(
+    request: Request,
     db: DbSession,
     cred: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> UsuarioAtual:
@@ -66,6 +67,7 @@ def get_current_user(
     user = carregar_usuario_atual(db, int(payload["sub"]))
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuário inativo ou inexistente.")
+    request.state.usuario = user.email  # autoria no log de acesso (middleware em main.py)
     return user
 
 

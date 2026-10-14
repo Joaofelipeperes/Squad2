@@ -1,12 +1,15 @@
-"""Regras do módulo acesso: autenticação, resolução de permissões e administração de papéis."""
+"""Regras do módulo acesso: autenticação, permissões, administração de papéis e log de acesso."""
+import logging
+from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.db import utcnow
+from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
 from app.core.permissoes import PAPEIS_PADRAO, P
 from app.core.security import hash_password, verify_password
-from app.modules.acesso.models import Papel, PapelPermissao, Usuario, usuario_papel
+from app.modules.acesso.models import LogAcesso, Papel, PapelPermissao, Usuario, usuario_papel
 from app.modules.acesso.schemas import (
     OrgaoResumo, PapelIn, PapelOut, PapelResumo, SessaoOut, UsuarioIn, UsuarioOut,
 )
@@ -171,3 +174,27 @@ def criar_usuario(db: Session, email: str, nome: str, senha: str, papel_codigos:
     ids = list(db.scalars(select(Papel.id).where(Papel.codigo.in_(papel_codigos))).all())
     return salvar_usuario(db, UsuarioIn(email=email, nome=nome, senha=senha, papel_ids=ids,
                                         orgao_id=orgao_id))
+
+
+# ------------------------------------------------------------------ log de acesso (ADR-0016)
+def registrar_acesso(**campos) -> None:
+    """Grava uma linha em `acesso_log` numa sessão própria. Chamado pelo middleware de main.py
+    depois da resposta; falha no log é registrada, mas não derruba a requisição."""
+    try:
+        with SessionLocal() as db:
+            db.add(LogAcesso(**campos))
+            db.commit()
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("Falha ao gravar o log de acesso.")
+
+
+def listar_logs(db: Session, usuario: str | None, desde: datetime | None, ate: datetime | None,
+                limite: int) -> list[LogAcesso]:
+    stmt = select(LogAcesso).order_by(LogAcesso.id.desc()).limit(limite)
+    if usuario:
+        stmt = stmt.where(LogAcesso.usuario.contains(usuario.lower()))
+    if desde:
+        stmt = stmt.where(LogAcesso.ocorrido_em >= desde)
+    if ate:
+        stmt = stmt.where(LogAcesso.ocorrido_em <= ate)
+    return list(db.scalars(stmt).all())

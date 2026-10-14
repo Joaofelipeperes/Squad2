@@ -81,3 +81,18 @@ class PapelIn(BaseModel):
     descricao: str | None = None
     exige_orgao: bool = False
     permissoes: list[str] = Field(default_factory=list)
+
+
+class LogAcessoOut(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int
+    ocorrido_em: datetime
+    usuario: str | None
+    metodo: str
+    caminho: str
+    rota: str | None
+    acao: str | None
+    status_http: int
+    ip: str | None
+    user_agent: str | None

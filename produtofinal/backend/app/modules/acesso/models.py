@@ -2,10 +2,10 @@
 aqui fica só a atribuição: usuário ↔ papéis ↔ códigos de permissão."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Table, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.db import Base, TimestampMixin
+from app.core.db import Base, TimestampMixin, utcnow
 
 usuario_papel = Table(
     "acesso_usuario_papel", Base.metadata,
@@ -58,3 +58,21 @@ class Usuario(TimestampMixin, Base):
     ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     papeis: Mapped[list[Papel]] = relationship(secondary=usuario_papel, lazy="selectin")
+
+
+class LogAcesso(Base):
+    """Log de acesso: uma linha por requisição à API (quem, de onde, o quê, resultado). Só inserção."""
+
+    __tablename__ = "acesso_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ocorrido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow,
+                                                  index=True)
+    usuario: Mapped[str | None] = mapped_column(String(200), index=True)  # e-mail; None = anônimo
+    metodo: Mapped[str] = mapped_column(String(10))                       # GET, POST, PUT, DELETE
+    caminho: Mapped[str] = mapped_column(String(500))                     # URL com query string
+    rota: Mapped[str | None] = mapped_column(String(200))  # modelo da rota: /api/v1/pda/planos/{id}
+    acao: Mapped[str | None] = mapped_column(String(100))  # função que atendeu: excluir_papel
+    status_http: Mapped[int] = mapped_column(Integer)
+    ip: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(String(500))

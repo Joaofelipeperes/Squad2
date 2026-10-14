@@ -4,12 +4,24 @@
 > Não edite à mão: altere o modelo (ou sua docstring), crie a migração e rode o script.
 > Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 
-18 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final).
+19 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final).
 
 ## Diagrama
 
 ```mermaid
 erDiagram
+    acesso_log {
+        int id PK
+        datetime ocorrido_em
+        varchar usuario
+        varchar metodo
+        varchar caminho
+        varchar rota
+        varchar acao
+        int status_http
+        varchar ip
+        varchar user_agent
+    }
     acesso_papel {
         int id PK
         varchar codigo UK
@@ -258,11 +270,31 @@ erDiagram
 | `lgpd_correcao.aprovado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `ia_vinculo_tarefa.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `parametro.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
+| `acesso_log.usuario` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 
 ## Dicionário de dados
 
 ### Módulo `acesso` — Acesso (usuários e papéis)
 Documentação do módulo: [docs/modulos/acesso.md](../modulos/acesso.md)
+
+#### `acesso_log`
+
+Log de acesso: uma linha por requisição à API (quem, de onde, o quê, resultado). Só inserção.
+
+| Coluna | Tipo | Nulo | Chave | Referência | Padrão |
+|---|---|:-:|---|---|---|
+| `id` | int | não | PK |  |  |
+| `ocorrido_em` | datetime | não |  |  | função |
+| `usuario` | varchar(200) | sim |  |  |  |
+| `metodo` | varchar(10) | não |  |  |  |
+| `caminho` | varchar(500) | não |  |  |  |
+| `rota` | varchar(200) | sim |  |  |  |
+| `acao` | varchar(100) | sim |  |  |  |
+| `status_http` | int | não |  |  |  |
+| `ip` | varchar(45) | sim |  |  |  |
+| `user_agent` | varchar(500) | sim |  |  |  |
+
+Índices: `ix_acesso_log_ocorrido_em`, `ix_acesso_log_usuario`
 
 #### `acesso_papel`
 

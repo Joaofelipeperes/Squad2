@@ -150,3 +150,21 @@ def test_papel_personalizado_e_efeito_imediato(client, admin):
 def test_papel_do_sistema_nao_exclui(client, admin):
     pid = _papel_id(client, admin, "analista_geda")
     assert client.delete(f"{API}/papeis/{pid}", headers=admin).status_code == 422
+
+
+# ---------------------------------------------------------- log de acesso
+def test_log_de_acesso_registra_cada_requisicao(client, admin, analista):
+    client.post(f"{API}/login", json={"email": "Paloma@cge.go.gov.br", "senha": "errada"})
+    client.delete(f"{API}/papeis/999999", headers=analista)          # 403
+    client.get("/api/v1/saude")                                       # fora do log
+    logs = client.get(f"{API}/logs", headers=admin).json()
+    assert [(x["usuario"], x["metodo"], x["acao"], x["status_http"]) for x in logs[:2]] == [
+        ("estagiario@cge.go.gov.br", "DELETE", "excluir_papel", 403),
+        ("paloma@cge.go.gov.br", "POST", "login", 401),
+    ]
+    assert logs[0]["rota"] == "/api/v1/acesso/papeis/{papel_id}"
+    assert logs[0]["caminho"] == "/api/v1/acesso/papeis/999999"
+    assert not any(x["caminho"].endswith("/saude") for x in logs)
+    assert [x["usuario"] for x in client.get(f"{API}/logs?usuario=paloma", headers=admin)
+            .json()] == ["paloma@cge.go.gov.br"]
+    assert client.get(f"{API}/logs", headers=analista).status_code == 403

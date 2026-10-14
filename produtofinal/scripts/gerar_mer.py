@@ -43,6 +43,7 @@ REFERENCIAS_LOGICAS = [
     ("lgpd_correcao", "aprovado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("ia_vinculo_tarefa", "alterado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("parametro", "alterado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
+    ("acesso_log", "usuario", "usuario", "email", False, "Autoria congelada como e-mail."),
 ]
 # (origem, coluna, destino, coluna destino, desenhar no diagrama?, observação)
 

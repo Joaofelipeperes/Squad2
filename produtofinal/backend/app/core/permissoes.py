@@ -50,6 +50,7 @@ class P(StrEnum):
     IA_CONFIGURAR = "ia.configurar"
     ACESSO_GERENCIAR_USUARIOS = "acesso.gerenciar_usuarios"
     ACESSO_GERENCIAR_PAPEIS = "acesso.gerenciar_papeis"
+    ACESSO_VER_LOGS = "acesso.ver_logs"
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,9 @@ META: dict[P, MetaPermissao] = {
     P.ACESSO_GERENCIAR_PAPEIS: MetaPermissao("acesso", "Gerenciar papéis",
                                              "Criar papéis e definir suas permissões.",
                                              sensivel=True),
+    P.ACESSO_VER_LOGS: MetaPermissao("acesso", "Ver log de acesso",
+                                     "Consultar o que cada usuário fez na solução (inclui IP).",
+                                     sensivel=True),
 }
 
 
