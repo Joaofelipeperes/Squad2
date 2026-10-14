@@ -1,0 +1,65 @@
+{% macro resource(act) %}
+  <a href="{{ h.dsaudit_resource_url(act.object_id, act.data.resource_id) }}">{{ act.data.resource_id }}</a>
+{% endmacro %}
+
+<li class="item {{ activity.activity_type|replace(' ', '-')|lower }}">
+  {% block icon %}
+    <span class="fa-stack fa-lg">
+      <i class="fa fa-circle fa-stack-2x icon"></i>
+      <i class="fa fa-plus fa-stack-1x fa-inverse"></i>
+    </span>
+  {% endblock %}
+  {% set total =
+    activity.data.total if 'total' in activity.data else
+    activity.data.count if 'count' in activity.data else
+    activity.data.records|count %}
+  {% if activity.data.method == 'insert' %}
+    {% set msg=ngettext(
+      '{actor} inserted %(num)d record in datastore resource {resource}',
+      '{actor} inserted %(num)d records in datastore resource {resource}',
+      total) %}
+  {% elif activity.data.method == 'update' %}
+    {% set msg=ngettext(
+      '{actor} updated %(num)d record in datastore resource {resource}',
+      '{actor} updated %(num)d records in datastore resource {resource}',
+      total) %}
+  {% else %}
+    {% set msg=ngettext(
+      '{actor} inserted (for new records) or updated (for existing records) %(num)d record in datastore resource {resource}',
+      '{actor} inserted (for new records) or updated (for existing records) %(num)d records in datastore resource {resource}',
+      total) %}
+  {% endif %}
+  {% block message %}
+    {{ msg.format(actor=ah.actor(activity), resource=resource(activity))|safe }}
+  {% endblock %}
+
+  {% if activity.data.records %}
+    {% set cols = h.dsaudit_data_columns(activity.data) %}
+    <div style="margin: 5px 0 0 40px;">
+      <table class="table table-sm table-responsive">
+        <thead>
+          {% for c in cols %}<th scope="col">{{ c }}</th>{% endfor %}
+        </thead>
+        <tbody>
+          {% for r in activity.data.records[:h.dsaudit_preview_records()] %}
+            <tr>
+              {% for c in cols %}<td>{{ r.get(c, '') }}</td>{% endfor %}
+            </tr>
+          {% endfor %}
+          {% if activity.data.records|count > h.dsaudit_preview_records() %}
+            <tr>
+              <td colspan="{{ cols|count }}">
+                ...
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  <p>
+    <span class="date" title="{{ h.render_datetime(activity.timestamp, with_hours=True) }}">
+      {{ h.time_ago_from_timestamp(activity.timestamp) }}
+    </span>
+  </p>
+</li>
