@@ -3,8 +3,8 @@
 ckanext-dsaudit -- actions adaptadas para CKAN 2.9.5
 ====================================================
 
-Este arquivo SUBSTITUI ckanext/dsaudit/actions.py do commit fixado no
-Dockerfile (ckan/ckanext-dsaudit@c398842). O upstream e escrito para CKAN
+Versao modificada do actions.py de ckan/ckanext-dsaudit@c398842. O original e
+escrito para CKAN
 2.10/2.11 e quebra no 2.9 em quatro pontos:
 
 1. h.datastore_rw_resource_url_types() -> helper so existe no CKAN 2.11.

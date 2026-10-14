@@ -147,7 +147,7 @@ Recursos que já existiam antes desta versão: a versão atual é guardada autom
 
 ### Camada 2 — Conteúdo do DataStore, linha a linha (`ckanext-dsaudit` + compatibilidade 2.9)
 
-A extensão fica inteira neste repositório, na pasta [`ckanext-dsaudit/`](ckanext-dsaudit/README-CKAN29.md): é a [`ckanext-dsaudit`](https://github.com/ckan/ckanext-dsaudit) oficial (commit `c398842`) já com a camada enxuta para o CKAN 2.9 (`plugins.py`, `actions.py`, `versions.py`). O `Dockerfile` copia essa pasta e instala com `pip install -e`, sem baixar nada do GitHub. Ela só **captura e armazena** — sem telas. Ela encadeia as actions de escrita do DataStore e grava uma atividade para cada uma:
+A extensão fica inteira neste repositório, na pasta [`ckanext-dsaudit/`](ckanext-dsaudit/README-CKAN29.md): é a [`ckanext-dsaudit`](https://github.com/ckan/ckanext-dsaudit) oficial (commit `c398842`) já com a camada enxuta para o CKAN 2.9 (`plugins.py`, `actions.py`, `versions.py`). O `Dockerfile` copia essa pasta e instala com `pip install -e`, sem baixar nada do GitHub. Para instalar num CKAN 2.9 fora deste Docker (ex.: produção), use a pasta [`instalacao-ckan-producao/`](instalacao-ckan-producao/README.md), que traz uma cópia da extensão, as dependências para instalação sem internet e o passo a passo para os administradores. Ela só **captura e armazena** — sem telas. Ela encadeia as actions de escrita do DataStore e grava uma atividade para cada uma:
 
 | Action | Atividade | O que fica registrado |
 |---|---|---|

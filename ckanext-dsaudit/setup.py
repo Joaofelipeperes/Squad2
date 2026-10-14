@@ -6,7 +6,7 @@ version = '0.0.1'
 setup(
     name='ckanext-dsaudit',
     version=version,
-    description="Activities for Auditing Datastore Changes",
+    description="Auditoria de alteracoes do DataStore, metadados e arquivos (CKAN 2.9)",
     long_description="""
     """,
     classifiers=[], # Get strings from http://pypi.python.org/pypi?%3Aaction=list_classifiers
@@ -19,8 +19,10 @@ setup(
     namespace_packages=['ckanext'],
     include_package_data=True,
     zip_safe=False,
+    python_requires='>=3.6',
     install_requires=[
-        # -*- Extra requirements: -*-
+        # diff linha a linha de planilhas .xlsx/.xlsm enviadas como recurso
+        'openpyxl>=3.0.10,<4',
     ],
     entry_points=\
     """

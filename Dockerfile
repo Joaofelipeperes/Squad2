@@ -23,7 +23,8 @@ FROM ckan/ckan-base:2.9.5
 # prerun e para o uwsgi. NAO troque o usuario final (USER ckan).
 USER root
 
-# leitura de planilhas .xlsx para o diff linha a linha de arquivos enviados
+# Versao fixada do openpyxl para builds reprodutiveis (a extensao tambem a
+# declara no setup.py, entao o pip abaixo apenas confirma que ja esta instalada).
 RUN pip3 install --no-cache-dir "openpyxl==3.0.10"
 
 # --- extensao dsaudit (codigo local) ---------------------------------------

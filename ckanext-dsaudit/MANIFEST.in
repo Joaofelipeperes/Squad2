@@ -1,0 +1,3 @@
+include COPYING COPYING.fr README-CKAN29.md
+recursive-include ckanext/dsaudit/i18n *.pot *.po *.mo
+global-exclude __pycache__ *.py[co]
