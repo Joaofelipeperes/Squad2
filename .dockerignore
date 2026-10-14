@@ -1,4 +1,6 @@
 # Contexto de build do CKAN: so o que o Dockerfile copia.
 *
-!ckanext-dsaudit-ckan29/
+!ckanext-dsaudit/
 !docker/
+ckanext-dsaudit/**/__pycache__
+ckanext-dsaudit/**/*.egg-info
