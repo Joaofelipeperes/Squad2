@@ -6,8 +6,8 @@
 | **Responsável** | João (base comum) |
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
-| **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 14/10/2026 |
+| **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
+| **Última atualização** | 15/10/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -33,6 +33,7 @@ Usuário ──< papéis >── Papel ──< permissões >── código do ca
 | Login | `/login` | pública | — |
 | Sem acesso | qualquer rota, se o usuário não tem nenhuma tela | autenticado | Sair |
 | Usuários e papéis | `/admin/usuarios` | `acesso.gerenciar_usuarios` | Criar/editar usuário (`acesso.gerenciar_usuarios`); criar/editar/excluir papel (`acesso.gerenciar_papeis` — sem ela, papéis aparecem só para leitura) |
+| Log de acesso | `/admin/logs` | `acesso.ver_logs` | Filtrar por usuário (trecho do e-mail), período (hora de Brasília) e limite; exportar CSV gerado no navegador (`;`, UTF-8 com BOM, só as linhas carregadas) |
 
 Após o login o usuário cai na **primeira tela permitida** (órgão publicador → `/envio`).
 
@@ -155,7 +156,7 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 - Recuperação de senha por e-mail e login institucional (SSO do Estado) não estão no escopo.
 - Trilha de auditoria de quem alterou papéis/usuários: o `acesso_log` mostra quem chamou
   `PUT /usuarios/{id}` e quando, mas não o antes/depois dos campos.
-- Log de acesso: sem tela (só `GET /acesso/logs`) e sem expurgo automático; a tabela cresce
+- Log de acesso: sem expurgo automático; a tabela cresce
   ~1 linha por minuto por aba aberta só com o polling da Topbar. Prazo de retenção a definir (ADR-0016).
 - Log de acesso fora do Backlog v2: pedido da coordenação em 14/10/2026; validar com a Paloma.
 
@@ -167,3 +168,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 07/10/2026 | Catálogo: `pda.gerenciar_planos` (importar PDA, definir o vigente e excluir PDA) para Administrador e Gerência GEDA; nota sobre permissão nova em banco existente | Humberto |
 | 13/10/2026 | Catálogo: descrição de `pda.gerenciar_planos` passa a cobrir o cadastro manual (criar, editar e excluir PDAs e bases previstas); papéis inalterados | Humberto |
 | 14/10/2026 | Log de acesso: tabela `acesso_log`, middleware em `main.py`, rota `GET /logs` e permissão `acesso.ver_logs` (ADR-0016) | Victor |
+| 15/10/2026 | Tela Log de acesso (`/admin/logs`): filtros, tabela em America/Sao_Paulo e exportação CSV no navegador | Victor |

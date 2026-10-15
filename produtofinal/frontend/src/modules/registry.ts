@@ -10,6 +10,7 @@ import { datasetsModule } from "@/modules/datasets";
 import { envioModule } from "@/modules/envio";
 import { iaModule } from "@/modules/ia";
 import { lgpdModule } from "@/modules/lgpd";
+import { logsAcessoModule } from "@/modules/logs-acesso";
 import { organizacoesModule } from "@/modules/organizacoes";
 import { parametrosModule } from "@/modules/parametros";
 import { pdaModule } from "@/modules/pda";
@@ -31,6 +32,7 @@ export const MODULOS: AppModule[] = [
   iaModule,
   parametrosModule,
   usuariosModule,
+  logsAcessoModule,
 ];
 
 export const WIDGETS: AppWidget[] = [assistenteWidget];
