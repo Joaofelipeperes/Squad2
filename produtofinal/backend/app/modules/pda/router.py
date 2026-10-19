@@ -160,6 +160,13 @@ def obter_base(base_id: int, db: DbSession,
         return BaseOut.model_validate(service.obter_base(db, base_id, user))
 
 
+@router.get("/datasets/{dataset_id}/bases", response_model=list[BaseOut])
+def bases_do_dataset(dataset_id: str, db: DbSession,
+                     user: Annotated[UsuarioAtual, Depends(require(P.PDA_ACESSAR))]):
+    """Bases previstas vinculadas a um dataset do portal (vigente primeiro) — tela Datasets."""
+    return [BaseOut.model_validate(b) for b in service.bases_do_dataset(db, dataset_id, user)]
+
+
 @router.get("/formulario", response_model=FormularioOut)
 def opcoes_formulario(db: DbSession,
                       user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):

@@ -5,7 +5,7 @@ from app.core.deps import CurrentUser, DbSession, UsuarioAtual, require
 from app.core.permissoes import P
 from app.modules.inventario import service
 from app.modules.inventario.models import Coleta
-from app.modules.inventario.schemas import ColetaOut
+from app.modules.inventario.schemas import ColetaOut, DatasetDetalheOut, DatasetsOut
 
 router = APIRouter()
 
@@ -33,3 +33,27 @@ def forcar_coleta(bg: BackgroundTasks, db: DbSession,
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
     bg.add_task(service.executar, c.id)
     return c
+
+
+# ------------------------------------------------------------------ tela Datasets (PBI-83)
+def _vazio(valor: str | None) -> str | None:
+    return (valor.strip() or None) if valor is not None else None
+
+
+@router.get("/datasets", response_model=DatasetsOut)
+def listar_datasets(db: DbSession, user: UsuarioAtual = Depends(require(P.INVENTARIO_ACESSAR)),
+                    busca: str | None = None, orgao: str | None = None,
+                    formato: str | None = None, situacao: str | None = None):
+    """Inventário de datasets do portal (tela Datasets) com filtros."""
+    return service.listar_datasets(db, user, busca=_vazio(busca), orgao=_vazio(orgao),
+                                   formato=_vazio(formato), situacao=_vazio(situacao))
+
+
+@router.get("/datasets/{ckan_id}", response_model=DatasetDetalheOut)
+def obter_dataset(ckan_id: str, db: DbSession,
+                  user: UsuarioAtual = Depends(require(P.INVENTARIO_ACESSAR))):
+    """Detalhe do dataset com a lista de recursos atuais."""
+    try:
+        return service.obter_dataset(db, ckan_id, user)
+    except service.DatasetNaoEncontrado as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc

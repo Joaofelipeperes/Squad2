@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 13/10/2026 |
+| **Última atualização** | 18/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -50,6 +50,8 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
   recursos válidos, formatos dos recursos (sem repetição; formato é atributo do recurso), situação, conteúdo sigiloso, políticas públicas, PDA de origem e descrição;
   aviso se o dataset não está mais visível no portal; "Abrir no portal" (`/dataset/<ID>`). Usa os
   dados da própria linha (não chama `GET /bases/{id}`).
+- **Filtro pela URL**: `/pda?orgao=<chave>` abre a tela já filtrada pelo órgão (botão "Ver bases
+  no PDA" da tela Organizações).
 - **Teclado**: os modais (`shared/ui/Modal.tsx`) recebem o foco ao abrir, prendem Tab/Shift+Tab
   e devolvem o foco ao fechar; as linhas da tabela abrem o detalhe com Enter ou Espaço.
 - **Estado vazio** (nenhum PDA): orienta a importar ou criar; botões "Criar PDA manualmente" e
@@ -72,6 +74,7 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 | POST | `/planos/{id}/bases` | `pda.gerenciar_planos` | JSON `BaseIn` → 201 `BaseOut`: inclui uma base prevista. **422** sigla ou nome vazios, endereço do dataset não reconhecido, organização inexistente ou diferente da do dataset; **403** órgão de outro escopo; **404** plano |
 | PUT | `/bases/{id}` | `pda.gerenciar_planos` | JSON `BaseIn` → `BaseOut`: edita a base (inclusive o endereço do dataset). Mesmos erros; **404** |
 | DELETE | `/bases/{id}` | `pda.gerenciar_planos` | Remove a base do PDA → 204 (atualiza `total_bases`); **403**; **404** |
+| GET | `/datasets/{dataset_id}/bases` | `pda.acessar` | `BaseOut[]`: bases previstas vinculadas **pelo ID** a um dataset do portal, em todos os PDAs (vigente primeiro). Sem vínculo → `[]` (nunca casa pelo nome). Usado pelo detalhe da tela Datasets |
 | GET | `/formulario` | `pda.gerenciar_planos` | `FormularioOut`: organizações do portal visíveis ao usuário (`{valor: ckan_id, rotulo}`) e o domínio de periodicidade |
 | POST | `/planos/{id}/vincular` | `pda.editar_vinculos` | Tenta de novo os vínculos pendentes → `VinculosOut` (PBI-12/13); **404** |
 | GET | `/bases` | `pda.acessar` | `?plano_id=&orgao=&situacao=&periodicidade=&ano=&prazo=` → `BasesOut` (PBI-19 a 21). Sem `plano_id` usa o vigente; sem PDA → `plano=null` e listas vazias. **404** plano inexistente; **422** `ano` não numérico ou `prazo` diferente de `vencido`/`proximo` |
@@ -134,7 +137,8 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   `excluir_base(db, base_id, user)` · `opcoes_formulario(db, user) -> FormularioOut`. A validação do
   nome e da vigência (`_validar_plano`) é a mesma da importação.
 - `listar_bases(db, user, *, plano_id, orgao, situacao, periodicidade, ano, prazo) -> BasesOut` — PBI-20/21.
-- `obter_base(db, base_id, user) -> BaseCalculada`.
+- `obter_base(db, base_id, user) -> BaseCalculada` · `bases_do_dataset(db, dataset_id, user=None)
+  -> list[BaseCalculada]` (vigente primeiro; tela Datasets).
 - **Para outros módulos:** `plano_vigente(db) -> PlanoPda | None` e
   `bases_do_plano(db, plano_id, user=None, *, hoje=None, janela_dias=None) -> list[BaseCalculada]`
   — PBI-19; `BaseCalculada` é uma dataclass congelada com os campos de `BaseOut`; `user=None` =
@@ -178,10 +182,11 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | consome | parametros | `obter(db, "janela_alerta_prazo_dias")` (PBI-22) |
 | consome | atualizacoes | `service.ultima_atualizacao_real(recursos)` → `UltimaAtualizacao(data, estimada)` (implementada em `atualizacoes/regras.py`) |
 | consome | acesso | `filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)` nas consultas de bases |
-| é consumido por | painel | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` — bases previstas × publicadas e prazos por órgão (US19); sempre o PDA vigente |
+| é consumido por | painel | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` — bases previstas, vinculadas, publicadas e metas por órgão na tela Organizações (US19); sempre o PDA vigente |
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
 | é consumido por | assistente | idem, só agregados e com `user` para respeitar o escopo de órgão |
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
+| é consumido por | inventario (tela Datasets) | `GET /datasets/{id}/bases` — prazo, periodicidade e situação PDA no detalhe do dataset |
 
 ## Jobs agendados
 Nenhum. A situação é calculada na consulta, sobre o inventário da última coleta. Vínculos
@@ -222,7 +227,8 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   |---|---|---|
   | Publicado | vinculada, dataset ativo e ≥ 1 recurso válido | verde |
   | Sem recurso | vinculada, dataset ativo e 0 recurso válido (não conta como cumprida) | âmbar |
-  | Em atraso | não publicada e prazo < hoje | vermelho |
+  | Em atraso | vinculada, dataset inativo no portal e prazo < hoje (atraso confirmado) | vermelho |
+  | Prazo vencido | sem vínculo (ou vínculo pendente) e prazo < hoje: não há como saber se a base já foi publicada; dica "aguardando vínculo" | cinza |
   | Próximo do prazo | não publicada e hoje ≤ prazo ≤ hoje + janela | âmbar |
   | Em dia | não publicada e prazo > hoje + janela | verde |
   | Não publicado | não publicada e sem prazo | cinza |
@@ -322,3 +328,6 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 08/10/2026 | Revisão (27 achados confirmados): órgão por evidência do vínculo por ID e siglas de várias palavras; recursos apagados do CKAN deixam de contar; contagens de `PlanoOut`/`GET /planos` com escopo de órgão; nome único sem diferenciar maiúsculas no banco (migração `c3f8a2d15e70`) e conflitos concorrentes → 409; tetos na leitura de .xlsx; cabeçalho repetido, rodapé só na coluna Órgão, prazo com hora e pontuação na periodicidade; resumo avisa coluna Prazo ausente; detalhe com data de publicação e formatos; foco de teclado nos modais; descrição de `pda.editar_vinculos` ajustada no catálogo; status passa a Parcial | Humberto |
 | 08/10/2026 | Formato da planilha do PDA 2025-2027: coluna "Meta/Prazo para abertura" com mês/ano (meta até o fim do mês, inclusive célula de data `mmmm/aaaa` no .xlsx), rodapé "Filtros aplicados", aviso `tem_coluna_portal` quando falta "Disponível no Portal" e de-para explícito de 13 siglas de órgão (`SIGLAS_CONHECIDAS`) | Humberto |
 | 13/10/2026 | CRUD manual: criar PDA vazio (sem planilha), editar nome e vigência, excluir (o vigente quando é o único PDA) e incluir/editar/remover bases previstas, com vínculo pelo endereço do dataset (→ ID) e órgão escolhido ou pela sigla; rotas `POST /planos/manual`, `GET`/`PUT /planos/{id}`, `POST /planos/{id}/bases`, `PUT`/`DELETE /bases/{id}`, `GET /formulario`; modais `PlanoFormModal` e `BaseFormModal` | Humberto |
+| 18/10/2026 | `GET /datasets/{dataset_id}/bases` e `bases_do_dataset`: bases vinculadas pelo ID a um dataset, para o detalhe da tela Datasets | Humberto |
+| 18/10/2026 | Tela aceita `?orgao=<chave>` na URL (botão "Ver bases no PDA" da tela Organizações); Interações com o painel atualizadas | Humberto |
+| 18/10/2026 | Situação "Prazo vencido" (`regras.PRAZO_VENCIDO`): base sem vínculo com prazo vencido deixa de aparecer como "Em atraso", que passa a exigir vínculo (dataset conferido e fora do portal); badge cinza com a dica "aguardando vínculo" e opção no filtro | Humberto |

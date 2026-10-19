@@ -7,7 +7,7 @@
 | **User stories** | US8 (PBI-22), US11 (PBI-31, PBI-86), US16 (PBI-48), US17 (PBI-52) |
 | **Backend** | `backend/app/modules/parametros/` |
 | **Frontend** | `frontend/src/modules/parametros/` |
-| **Última atualização** | 07/10/2026 |
+| **Última atualização** | 18/10/2026 |
 
 ## Propósito
 Concentra os valores de negócio que a GEDA precisa ajustar sem depender do time (janelas, listas,
@@ -53,6 +53,7 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | Direção | Módulo | O quê |
 |---|---|---|
 | é consumido por | pda, lgpd, metadados | `obter(db, chave)` |
+| é consumido por | painel | `obter(db, "formatos_abertos")` — tela Organizações |
 
 ## Jobs agendados
 Nenhum.
@@ -72,3 +73,4 @@ Decisões registradas: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 | 30/09/2026 | Implementação inicial | Victor |
 | 30/09/2026 | Separação entre ver (`parametros.acessar`) e editar (`parametros.editar`) | Victor |
 | 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |
+| 18/10/2026 | Interações: o painel (tela Organizações) passa a ler `formatos_abertos`; sem mudança de código neste módulo | Humberto |

@@ -568,6 +568,19 @@ def listar_bases(db: Session, user: UsuarioAtual, *, plano_id: int | None = None
                     bases=[BaseOut.model_validate(b) for b in filtradas])
 
 
+def bases_do_dataset(db: Session, dataset_id: str, user: UsuarioAtual | None = None
+                     ) -> list[BaseCalculada]:
+    """Bases previstas vinculadas (pelo ID) a um dataset do portal, em todos os PDAs: o vigente
+    primeiro, depois os importados mais recentemente. Para a tela Datasets mostrar prazo,
+    periodicidade e situação do PDA. Sem vínculo → lista vazia (nunca casa pelo nome)."""
+    hoje, janela = hoje_local(), janela_alerta_dias(db)
+    bases = db.scalars(_consulta_bases(user).options(selectinload(BasePrevista.plano))
+                       .where(BasePrevista.dataset_id == dataset_id)).all()
+    bases = sorted(bases, key=lambda b: (not b.plano.vigente, -b.plano.importado_em.timestamp(),
+                                         b.id))
+    return [calcular_base(b, b.plano.nome, hoje, janela) for b in bases]
+
+
 def obter_base(db: Session, base_id: int, user: UsuarioAtual) -> BaseCalculada:
     """Detalhe de uma base (modal da tela). Base de outro órgão para usuário restrito → 404."""
     base = db.scalar(_consulta_bases(user).where(BasePrevista.id == base_id)

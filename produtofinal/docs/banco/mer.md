@@ -68,6 +68,7 @@ erDiagram
         varchar ckan_id PK
         varchar name
         varchar titulo
+        text descricao
         varchar organizacao_id FK
         varchar autor
         varchar autor_email
@@ -377,6 +378,7 @@ Conjunto de dados espelhado do CKAN (package), no estado da última coleta.
 | `ckan_id` | varchar(64) | não | PK |  |  |
 | `name` | varchar(200) | não |  |  |  |
 | `titulo` | varchar(500) | não |  |  |  |
+| `descricao` | text | sim |  |  |  |
 | `organizacao_id` | varchar(64) | sim | FK | `organizacao.ckan_id` |  |
 | `autor` | varchar(300) | sim |  |  |  |
 | `autor_email` | varchar(300) | sim |  |  |  |

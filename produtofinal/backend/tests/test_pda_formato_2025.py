@@ -88,6 +88,6 @@ def test_importacao_do_formato_2025(client, gerente):
     assert corpo["sem_vinculo"] == 5
     bases = client.get(f"{API}/bases", headers=gerente,
                        params={"plano_id": corpo["plano"]["id"]}).json()["bases"]
-    # Sem vínculo e com a meta vencida (hoje = 08/10/2026) → Em atraso
-    assert {b["situacao"] for b in bases} == {"Em atraso"}
+    # Sem vínculo e com a meta vencida (hoje = 08/10/2026) → Prazo vencido (atraso não confirmado)
+    assert {b["situacao"] for b in bases} == {"Prazo vencido"}
     assert {b["prazo_abertura"] for b in bases} == {"2025-03-31", "2025-09-30", "2025-12-31"}

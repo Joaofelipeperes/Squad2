@@ -110,7 +110,8 @@ def _sit(vinculada=False, ativo=None, recursos=0, prazo=None):
 def test_situacoes():
     assert _sit(True, True, 2, HOJE - timedelta(days=100)) == "Publicado"
     assert _sit(True, True, 0, HOJE - timedelta(days=100)) == "Sem recurso"
-    assert _sit(prazo=HOJE - timedelta(days=1)) == "Em atraso"
+    # Sem vínculo não há como confirmar o atraso
+    assert _sit(prazo=HOJE - timedelta(days=1)) == "Prazo vencido"
     assert _sit(prazo=HOJE + timedelta(days=10)) == "Próximo do prazo"
     assert _sit(prazo=HOJE + timedelta(days=90)) == "Em dia"
     assert _sit(prazo=None) == "Não publicado"

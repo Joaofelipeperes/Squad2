@@ -29,6 +29,7 @@ const CLASSE_SITUACAO: Record<string, string> = {
   "Publicado": "badge-green",
   "Em dia": "badge-green",
   "Em atraso": "badge-red",
+  "Prazo vencido": "badge-gray", // sem vínculo: atraso não confirmado
   "Próximo do prazo": "badge-amber",
   "Sem recurso": "badge-amber",
   "Não publicado": "badge-gray",

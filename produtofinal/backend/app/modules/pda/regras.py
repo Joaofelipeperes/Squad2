@@ -252,11 +252,12 @@ def orgao_por_evidencia(pares: Iterable[tuple[str, str | None]]) -> dict[str, st
 PUBLICADO = "Publicado"
 SEM_RECURSO = "Sem recurso"
 EM_ATRASO = "Em atraso"
+PRAZO_VENCIDO = "Prazo vencido"
 PROXIMO_DO_PRAZO = "Próximo do prazo"
 EM_DIA = "Em dia"
 NAO_PUBLICADO = "Não publicado"
-SITUACOES: tuple[str, ...] = (PUBLICADO, EM_DIA, EM_ATRASO, PROXIMO_DO_PRAZO, NAO_PUBLICADO,
-                              SEM_RECURSO)
+SITUACOES: tuple[str, ...] = (PUBLICADO, EM_DIA, EM_ATRASO, PRAZO_VENCIDO, PROXIMO_DO_PRAZO,
+                              NAO_PUBLICADO, SEM_RECURSO)
 
 
 def situacao_base(*, vinculada: bool, dataset_ativo: bool | None, recursos_validos: int,
@@ -264,14 +265,16 @@ def situacao_base(*, vinculada: bool, dataset_ativo: bool | None, recursos_valid
     """PBI-19 — situação da base prevista quanto ao PRAZO DE ABERTURA (ressalva CGE-GO 17/09).
 
     `recursos_validos` exclui dicionário de dados. Dataset inativo no portal (excluído/privado,
-    PBI-15) conta como não publicado.
+    PBI-15) conta como não publicado. "Em atraso" só com vínculo (dataset conferido e fora do
+    portal); sem vínculo e com o prazo vencido é "Prazo vencido": não há como saber se a base já
+    foi publicada.
     """
     if vinculada and dataset_ativo:
         return PUBLICADO if recursos_validos >= 1 else SEM_RECURSO
     if prazo is None:
         return NAO_PUBLICADO
     if prazo < hoje:
-        return EM_ATRASO
+        return EM_ATRASO if vinculada else PRAZO_VENCIDO
     if prazo <= hoje + timedelta(days=janela_dias):
         return PROXIMO_DO_PRAZO
     return EM_DIA

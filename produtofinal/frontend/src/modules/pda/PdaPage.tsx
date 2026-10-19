@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { KeyboardEvent } from "react";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { BasePda, BasesPda, FiltrosPda, ImportacaoResumo, Opcao, PlanoPda } from "./api";
 import { FILTROS_VAZIOS, SITUACOES, pdaApi } from "./api";
 import { BaseDetalheModal } from "./BaseDetalheModal";
@@ -24,7 +25,10 @@ export default function PdaPage() {
   const toast = useToast();
   const planos = useQuery({ queryKey: ["pda", "planos"], queryFn: pdaApi.planos });
   const [planoSel, setPlanoSel] = useState<number | null>(null);
-  const [filtros, setFiltros] = useState<FiltrosPda>(FILTROS_VAZIOS);
+  // "?orgao=<chave>" vem do botão "Ver bases no PDA" da tela Organizações
+  const [params] = useSearchParams();
+  const [filtros, setFiltros] = useState<FiltrosPda>(
+    () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "" }));
   const [importarAberto, setImportarAberto] = useState(false);
   const [confirmacao, setConfirmacao] = useState<"vigente" | "excluir" | null>(null);
   const [detalhe, setDetalhe] = useState<BasePda | null>(null);

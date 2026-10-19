@@ -157,7 +157,7 @@ def test_importar_xlsx(client, gerente, inventario):
     assert bases["Escolas estaduais"]["situacao"] == "Publicado"
     assert bases["Escolas estaduais"]["descricao"] == "Escolas\nda rede"
     assert bases["Obras"]["dataset_ativo"] is False  # PBI-15: sumiu do portal
-    assert bases["Obras"]["situacao"] == "Em atraso"
+    assert bases["Obras"]["situacao"] == "Em atraso"  # vinculada e fora do portal: atraso confirmado
     assert bases["Só dicionário"]["situacao"] == "Sem recurso"
     assert bases["Só dicionário"]["recursos_validos"] == 0
     assert bases["Inexistente"]["vinculo"] == "pendente"
@@ -241,7 +241,7 @@ def test_lista_situacoes_opcoes_e_filtros(client, gerente, inventario):
     assert bases["Matrículas"]["situacao"] == "Em dia"
     assert bases["Leitos hospitalares"]["situacao"] == "Próximo do prazo"
     assert bases["Leitos hospitalares"]["flag_prazo"] == "proximo"
-    assert bases["Programas habitacionais"]["situacao"] == "Em atraso"
+    assert bases["Programas habitacionais"]["situacao"] == "Prazo vencido"  # sem vínculo
     assert bases["Programas habitacionais"]["flag_prazo"] == "vencido"
     assert bases["Programas habitacionais"]["orgao_chave"] == "sigla:AGEHAB"
     assert bases["Programas habitacionais"]["orgao_nome"] is None

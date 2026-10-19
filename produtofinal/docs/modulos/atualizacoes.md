@@ -7,7 +7,7 @@
 | **User stories** | US9 (PBI-23 a PBI-26, PBI-78, PBI-79, PBI-81), US10 (PBI-27 a PBI-30) |
 | **Backend** | `backend/app/modules/atualizacoes/` |
 | **Frontend** | `frontend/src/modules/atualizacoes/` |
-| **Última atualização** | 07/10/2026 |
+| **Última atualização** | 18/10/2026 |
 
 ## Propósito
 Indica se cada dataset está de fato sendo atualizado conforme a periodicidade declarada, usando a
@@ -54,6 +54,7 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 | consome | lgpd | `CorrecaoPublicada` — correção por anonimização não conta como atualização (PBI-79) |
 | consome | pda | indicador separado PDA × espontânea (PBI-82) |
 | é consumido por | pda | `service.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da base |
+| é consumido por | inventario | `regras.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da tela Datasets |
 | é consumido por | painel, relatorios, assistente | situação de atualização por dataset e órgão |
 
 ## Jobs agendados
@@ -77,3 +78,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 |---|---|---|
 | 30/09/2026 | Esqueleto: contratos e permissão | Victor |
 | 07/10/2026 | `regras.ultima_atualizacao_real` implementada com `UltimaAtualizacao(data, estimada)` (PBI-23 a PBI-25); `service.py` delega e o módulo pda a consome | Humberto |
+| 18/10/2026 | Interações: a tela Datasets (inventario) passa a consumir `regras.ultima_atualizacao_real`; sem mudança de código neste módulo | Humberto |

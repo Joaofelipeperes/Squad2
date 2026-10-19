@@ -49,6 +49,7 @@ class Dataset(Base):
     ckan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(200), index=True)
     titulo: Mapped[str] = mapped_column(String(500))
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)  # `notes` do CKAN
     organizacao_id: Mapped[str | None] = mapped_column(ForeignKey("organizacao.ckan_id"),
                                                        nullable=True, index=True)
     autor: Mapped[str | None] = mapped_column(String(300), nullable=True)

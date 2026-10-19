@@ -87,3 +87,32 @@ def snapshot_payload(pkg: dict) -> dict:
 
 def hash_payload(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+# ------------------------------------------------------------------ tela Datasets (PBI-83)
+PUBLICADO = "Publicado"
+SEM_RECURSO = "Sem recurso"
+FORA_DO_PORTAL = "Fora do portal"
+SITUACOES_NO_PORTAL: tuple[str, ...] = (PUBLICADO, SEM_RECURSO, FORA_DO_PORTAL)
+
+
+def situacao_no_portal(ativo_no_portal: bool, recursos_validos: int) -> str:
+    """Situação do dataset vista só pelo inventário (não é a situação do PDA, que depende do
+    vínculo com a base prevista): fora do `package_search` (excluído ou privado) → "Fora do
+    portal"; ativo sem recurso válido (só dicionário de dados ou nenhum) → "Sem recurso"; ativo
+    com recurso válido → "Publicado"."""
+    if not ativo_no_portal:
+        return FORA_DO_PORTAL
+    return PUBLICADO if recursos_validos > 0 else SEM_RECURSO
+
+
+def contem_texto(busca: str | None, *campos: str | None) -> bool:
+    """Busca sem diferenciar acento, maiúsculas e separadores ("_", "-", "."): 'saude' acha
+    'Saúde' e 'indicadores-saude'. Busca vazia → True."""
+    alvo = _normalizar_texto(busca or "")
+    return not alvo or any(alvo in _normalizar_texto(c or "") for c in campos)
+
+
+def chave_texto(texto: str | None) -> str:
+    """Chave de ordenação e comparação: sem acento, minúscula, separadores viram espaço."""
+    return _normalizar_texto(texto or "")

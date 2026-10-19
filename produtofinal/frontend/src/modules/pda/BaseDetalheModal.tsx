@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { BasePda } from "./api";
 import { fmtData, fmtDataHora } from "./formato";
-import { SituacaoBadge } from "./SituacaoBadge";
+import { DICA_SITUACAO, SituacaoBadge } from "./SituacaoBadge";
 import { Pode } from "@/shared/acesso/Pode";
 import { Modal } from "@/shared/ui/Modal";
 
@@ -114,7 +114,10 @@ export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props)
         <Item rotulo="Formatos dos recursos">
           {b.formatos.length ? b.formatos.join(", ") : "—"}
         </Item>
-        <Item rotulo="Situação PDA"><SituacaoBadge situacao={b.situacao} /></Item>
+        <Item rotulo="Situação PDA">
+          <SituacaoBadge situacao={b.situacao} />
+          {DICA_SITUACAO[b.situacao] && <Nota>{DICA_SITUACAO[b.situacao]}</Nota>}
+        </Item>
         <Item rotulo="Conteúdo sigiloso">{sigiloso(b.possui_conteudo_sigiloso)}</Item>
         <Item rotulo="Políticas públicas">{b.politicas_publicas || "—"}</Item>
         <Item rotulo="PDA de origem">{b.plano_nome}</Item>

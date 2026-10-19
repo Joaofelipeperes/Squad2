@@ -108,7 +108,7 @@ def test_incluir_bases_com_e_sem_vinculo(client, gerente, inventario):
         nome_previsto="Movimentações", periodicidade="Múltipla",
         prazo_abertura="2025-03-31")).json()
     assert b2["vinculo"] == "sem_vinculo" and b2["orgao_chave"] == "org-adm"
-    assert b2["periodicidade"] == "Múltipla" and b2["situacao"] == "Em atraso"
+    assert b2["periodicidade"] == "Múltipla" and b2["situacao"] == "Prazo vencido"
 
     # Name sem dataset no inventário → vínculo pendente; órgão escolhido no formulário
     b3 = client.post(url, headers=gerente, json=_base(
