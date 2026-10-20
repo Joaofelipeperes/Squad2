@@ -23,6 +23,7 @@ Sobe todo o ambiente com um comando: o CKAN em Docker, o token de API, a carga d
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force   # libera scripts só nesta janela
 .\subir_ambiente.ps1                                                # CKAN + token
 .\subir_ambiente.ps1 -Importar -Testar                              # + 445 datasets + teste da auditoria
+.\subir_ambiente.ps1 -ImportarArquivos -Simular                     # + arquivos físicos + alterações simuladas
 .\subir_ambiente.ps1 -Tudo -AdminEmail voce@cge.go.gov.br           # tudo, inclusive o produto final
 .\subir_ambiente.ps1 -Tudo -Reconstruir -AdminEmail voce@cge.go.gov.br   # 1ª vez ou após mudar a extensão
 ```
@@ -39,6 +40,8 @@ O `-Scope Process` vale só para a janela aberta; nada muda na política do Wind
 | 4. Variáveis | Define `CKAN_URL` e `CKAN_API_KEY` nesta janela e no usuário do Windows (novas janelas já abrem com elas) |
 | Índice de busca | Compara os datasets do banco do CKAN (`package_list`) com os da busca (`package_search`, que é o que o produto final lê) e reconstrói o índice do Solr se faltar algum |
 | `-Importar` | Copia `importar_ckan_goias.py` e `metadados_ckan_goias.json` para o container e importa os datasets do portal com os mesmos IDs e datas; mostra o resumo e a verificação final |
+| `-ImportarArquivos` | Copia `importar_ckan_goias_arquivos.py` para o container, baixa os arquivos dos recursos do portal e os envia ao CKAN (ver [Importação de alta fidelidade](#importação-de-alta-fidelidade-arquivos-físicos)); mostra o progresso e a verificação final |
+| `-Simular` | Roda o `simular_alteracoes.py`: alterações variadas com usuários de teste e conferência do que a auditoria gravou (ver [Simulação de alterações](#simulação-de-alterações-e-auditoria)) |
 | `-Testar` | Roda o `teste_auditoria.ps1` com o token gerado (DataStore com antes → depois) |
 | `-ProdutoFinal` | Descobre a rede Docker do CKAN (`CKAN_NETWORK`); cria `produtofinal/.env` se faltar e gera `GDA_SECRET_KEY` e `GDA_ENCRYPTION_KEY` vazias; sobe o produto final com `docker-compose.ckan-local.yml`; espera a API (`/api/v1/saude`), mostrando o estado do container e o log se ele parar; testa se a API alcança o CKAN |
 | `-AdminEmail` | Cria o administrador do produto final (a senha é pedida na tela) |
@@ -51,7 +54,12 @@ Durante a execução, as chamadas HTTP ignoram o proxy do Windows (que pode inte
 |---|---|
 | `-Reconstruir` | Build sem cache e recria os containers (após mudar o `Dockerfile` ou `ckanext-dsaudit/`) |
 | `-Importar` | Carga dos datasets do portal |
-| `-Substituir` | Com `-Importar`: reimporta datasets da carga antiga (ID diferente do portal) |
+| `-Substituir` | Com `-Importar` ou `-ImportarArquivos`: reimporta datasets da carga antiga (ID diferente do portal) |
+| `-ImportarArquivos` | Carga de alta fidelidade: arquivos físicos dos recursos |
+| `-MaxMb` | Com `-ImportarArquivos`: tamanho máximo por arquivo, em MB (padrão 20, máximo 100) |
+| `-LimiteDatasets` | Com `-ImportarArquivos`: só os N primeiros datasets (padrão 0 = todos) |
+| `-Simular` | Alterações simuladas e conferência da auditoria |
+| `-QuantidadeSimulacao` | Com `-Simular`: quantos datasets alterar (padrão 4) |
 | `-Testar` | Teste da auditoria |
 | `-ProdutoFinal` | Sobe o produto final ligado ao CKAN |
 | `-AdminEmail` / `-AdminNome` | Com `-ProdutoFinal`: cria o administrador do produto final |
@@ -125,12 +133,14 @@ docker compose exec ckan ckan -c /srv/app/ckan.ini search-index rebuild
 
 ### Camada 1b — Metadados campo a campo, inclusive datasets privados (`changed metadata`)
 
-O CKAN 2.9 **não gera atividade para datasets privados** e não guarda diff por campo. A camada `dsaudit` encadeia `package_create`, `package_update` (usado também pela interface, `package_patch`, `resource_create/update/delete`) e `package_delete`, e grava um evento `changed metadata` com **valor anterior → valor novo** de cada campo alterado:
+O CKAN 2.9 **não gera atividade para datasets privados** e não guarda diff por campo. A camada `dsaudit` encadeia `package_create`, `package_update` (usado também pela interface e por `resource_create/update/patch/delete`) e `package_delete`, e grava um evento `changed metadata` com **valor anterior → valor novo** de cada campo alterado:
 
 * dataset: `author`, `author_email`, `maintainer`, `maintainer_email`, `title`, `notes`, `license_id`, `version`, `url`, `private`, `owner_org`, `state`, `tags`, `groups`, `extras.<chave>` e campos personalizados;
 * recursos: recurso adicionado/removido e cada campo alterado (`name`, `description`, `url`, `format`, `size`, `last_modified`...).
 
 O evento é gravado na **mesma transação** da alteração: se um falhar, o outro também é desfeito.
+
+**Limitação conhecida:** no CKAN 2.9 o `package_patch` chama a função `package_update` do core diretamente, sem passar pelas extensões. Alterações de dataset feitas por `package_patch` (pela API) aparecem só no histórico nativo do CKAN, sem antes → depois. Pela interface e pelo `package_update` a auditoria é completa.
 
 ### Camada 1c — Arquivos enviados pela interface ou API, com versões e diff linha a linha (`changed resource file`)
 
@@ -225,6 +235,71 @@ python importar_ckan_goias.py --substituir    # reimporta datasets carregados pe
 ```
 
 `--substituir` apaga (`dataset_purge`) e recria só os datasets que existem com ID diferente do portal. Ao final o script imprime um resumo e uma verificação (`[verificação] OK`).
+
+Nessa carga os recursos ficam **como link** para o arquivo no portal (`url` = endereço original).
+
+### Importação de alta fidelidade (arquivos físicos)
+
+O script `importar_ckan_goias_arquivos.py` **baixa os arquivos dos recursos do portal e os envia ao CKAN local** (recursos do tipo `upload`), como se tivessem sido publicados aqui. Para cada dataset:
+
+1. cria o dataset se ainda não existir (usa o `importar_ckan_goias.py`, mesmos IDs);
+2. baixa os arquivos do portal em paralelo (`--paralelo`, padrão 4), com 3 tentativas cada;
+3. envia cada arquivo ao recurso **de mesmo ID** (`resource_patch` com upload); a URL original fica no campo `url_origem` do recurso;
+4. restaura `created` e `last_modified` do portal (o CKAN troca o `last_modified` para "agora" ao receber um arquivo) e grava `size` e `mimetype`.
+
+```powershell
+.\subir_ambiente.ps1 -ImportarArquivos                       # todos os datasets, arquivos até 20 MB
+.\subir_ambiente.ps1 -ImportarArquivos -MaxMb 50             # até 50 MB por arquivo
+.\subir_ambiente.ps1 -ImportarArquivos -LimiteDatasets 20    # só os 20 primeiros (teste rápido)
+```
+
+Ou manualmente, dentro do container (`--datasets nome-a,nome-b`, `--formatos CSV,XLSX`, `--refazer` e `--help` para as demais opções):
+
+```
+docker compose cp importar_ckan_goias.py ckan:/tmp/ && docker compose cp importar_ckan_goias_arquivos.py ckan:/tmp/ && docker compose cp metadados_ckan_goias.json ckan:/tmp/
+docker compose exec -e CKAN_API_KEY=$env:CKAN_API_KEY -w /tmp ckan python3 importar_ckan_goias_arquivos.py --max-mb 20
+```
+
+| Ponto | Detalhe |
+|---|---|
+| Volume | O portal tem 2.953 recursos (~11 GB). Até 20 MB: 2.817 arquivos, ~1,9 GB. Até 50 MB: 2.882, ~4 GB. Os maiores continuam como link |
+| Disco | O CKAN guarda o arquivo e a auditoria guarda uma cópia de cada versão (`dsaudit_versions`): conte com o **dobro** do volume baixado no volume `ckan_storage` |
+| Limite do CKAN | `CKAN__MAX_RESOURCE_SIZE=100` (MB) no `docker-compose.yml`; `-MaxMb` precisa ser menor ou igual |
+| Retomada | Pode ser interrompido e rodado de novo: recursos já enviados (`url_origem` preenchido) são pulados |
+| Falhas | Arquivos que o portal não entrega (404 etc.) continuam como link e aparecem na lista de falhas do resumo |
+| Auditoria | Cada envio gera registros `changed resource file` (versão nova) e `changed metadata` (URL, tipo e datas do recurso) — é o histórico de como o arquivo chegou ao CKAN local |
+
+### Simulação de alterações e auditoria
+
+O script `simular_alteracoes.py` popula o histórico com **alterações variadas, feitas por usuários diferentes**, e confere se a auditoria registrou cada uma. Ele cria (ou reaproveita) quatro usuários de teste e os vincula à organização de cada dataset escolhido:
+
+| Usuário | Papel |
+|---|---|
+| `aud-editora-ana`, `aud-editor-bruno` | editor |
+| `aud-admin-carla` | admin da organização |
+| `aud-membro-davi` | member (só leitura) |
+
+A simulação usa **somente os datasets e recursos da importação de alta fidelidade** (`-ImportarArquivos`): não cria recursos nem datasets. Cada dataset recebe uma combinação diferente de um catálogo de 29 cenários, com autores alternados, e a auditoria é conferida **campo a campo**:
+
+| Grupo | Cenários |
+|---|---|
+| Dataset | título, descrição, autor, e-mail do autor, mantenedor, e-mail do mantenedor, licença, versão, URL da fonte, inclusão e remoção de tag, alteração/inclusão/remoção de campo extra, inclusão e remoção de grupo, privado e volta, nome na URL (renomeia e volta), organização (move e volta), exclusão e restauração |
+| Recurso | nome, descrição, data de publicação (`created`), data de atualização (`last_modified`), campo extra, formato (muda e volta) |
+| Conteúdo | troca do arquivo CSV importado (diff linha a linha) e carga dele no DataStore do próprio recurso |
+| Acesso | o membro tenta editar e ler a auditoria (recusado, HTTP 403) |
+
+Com 30 datasets ou mais, todos os cenários são aplicados. O catálogo completo: `python3 simular_alteracoes.py --listar` (dentro do container). O passo a passo do teste em escala (100 datasets) e da comprovação de acesso com permissão mínima de edição está em [`TUTORIAL-TESTE-ALTA-FIDELIDADE.md`](TUTORIAL-TESTE-ALTA-FIDELIDADE.md).
+
+Edições linha a linha no DataStore (update/upsert/delete) não fazem parte da simulação: a extensão só as audita em tabelas criadas direto pela API (`url_type = datastore`), e o portal não tem nenhum recurso desse tipo. Nos recursos de arquivo, as mudanças de conteúdo são auditadas pela troca do arquivo.
+
+Ao começar, a simulação remove os recursos de teste criados por versões anteriores dela ("Amostra tabular (DataStore)" e "Nota técnica (teste)").
+
+```powershell
+.\subir_ambiente.ps1 -Simular                            # 4 datasets
+.\subir_ambiente.ps1 -Simular -QuantidadeSimulacao 100   # escala: 100 datasets
+```
+
+Ao final mostra a cobertura por cenário (aplicado / pulado por não se aplicar / erro) e termina com `[simulação] OK` (ou a lista de problemas). **Os datasets escolhidos são alterados de verdade**; para voltar um recurso ao estado do portal: `python3 importar_ckan_goias_arquivos.py --datasets <nome> --refazer` (dentro do container). Rodar a simulação de novo gera novos registros.
 
 ## Comandos e Consultas Úteis
 
