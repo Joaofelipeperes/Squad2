@@ -7,6 +7,7 @@
 #   Set-ExecutionPolicy -Scope Process Bypass        # libera scripts SO nesta janela
 #   .\subir_ambiente.ps1                             # CKAN + token
 #   .\subir_ambiente.ps1 -Importar -Testar           # + 445 datasets + teste de auditoria
+#   .\subir_ambiente.ps1 -ImportarArquivos -Simular  # + arquivos fisicos + alteracoes simuladas
 #   .\subir_ambiente.ps1 -ProdutoFinal -AdminEmail voce@cge.go.gov.br
 #   .\subir_ambiente.ps1 -Tudo -AdminEmail voce@cge.go.gov.br
 #
@@ -26,6 +27,15 @@
 #   -Importar      carrega metadados_ckan_goias.json no CKAN (dentro do container,
 #                  nao precisa de Python na maquina)
 #   -Substituir    junto com -Importar: reimporta datasets da carga antiga (ID errado)
+#   -ImportarArquivos  baixa os arquivos dos recursos do portal e os envia ao CKAN
+#                  (importar_ckan_goias_arquivos.py); cria antes os datasets que
+#                  faltarem. Pode ser interrompido e rodado de novo (retoma).
+#   -MaxMb         junto com -ImportarArquivos: tamanho maximo por arquivo (padrao 20);
+#                  maiores continuam como link. Ate 100 (CKAN__MAX_RESOURCE_SIZE)
+#   -LimiteDatasets junto com -ImportarArquivos: so os N primeiros datasets (0 = todos)
+#   -Simular       alteracoes variadas com usuarios de teste e conferencia da
+#                  auditoria (simular_alteracoes.py)
+#   -QuantidadeSimulacao junto com -Simular: quantos datasets alterar (padrao 4)
 #   -Testar        roda o teste_auditoria.ps1 com o token gerado
 #   -ProdutoFinal  sobe produtofinal/ ligado a rede do CKAN, preenchendo as chaves
 #                  do produtofinal/.env que estiverem vazias
@@ -36,6 +46,11 @@
 param(
     [switch]$Reconstruir,
     [switch]$Importar,
+    [switch]$ImportarArquivos,
+    [int]$MaxMb = 20,
+    [int]$LimiteDatasets = 0,
+    [switch]$Simular,
+    [int]$QuantidadeSimulacao = 4,
     [switch]$Substituir,
     [switch]$Testar,
     [switch]$ProdutoFinal,
@@ -114,6 +129,25 @@ function DefinirVariavel([string]$Nome, [string]$Valor) {
     if (-not $NaoPersistir) {
         [Environment]::SetEnvironmentVariable($Nome, $Valor, "User")
     }
+}
+
+# Copia scripts para o container e roda um deles com o token, mostrando a saida
+# enquanto executa (a importacao de arquivos pode levar horas). Devolve o texto.
+function RodarNoContainer([string[]]$Arquivos, [string[]]$Comando) {
+    foreach ($a in $Arquivos) {
+        Nativo "copia de $a" { docker compose cp $a "ckan:/tmp/$a" 2>&1 | Out-Null }
+    }
+    $argsExec = @("compose", "exec", "-T", "-e", "CKAN_API_KEY=$token", "-e", "CKAN_URL=http://localhost:5000",
+                  "-e", "PYTHONUNBUFFERED=1", "-w", "/tmp", "ckan") + $Comando
+    $linhas = New-Object System.Collections.Generic.List[string]
+    $eap = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try {
+        & docker @argsExec 2>&1 | ForEach-Object {
+            $l = "$_"; $linhas.Add($l)
+            if ($l -notmatch "Warning|^\s*warnings\.warn") { Write-Host "    $l" }
+        }
+    } finally { $ErrorActionPreference = $eap }
+    return ($linhas -join "`n")
 }
 
 # O produto final le o CKAN pelo package_search (indice Solr). Se o indice estiver
@@ -244,6 +278,29 @@ if ($Importar) {
         Aviso "ha datasets da carga antiga com ID errado: rode de novo com -Importar -Substituir"
     }
     ConferirIndice
+}
+
+# ---------------------------------------------------------------------------
+if ($ImportarArquivos) {
+    Etapa "Carga de alta fidelidade: arquivos fisicos (importar_ckan_goias_arquivos.py)"
+    Write-Host "    arquivos de ate $MaxMb MB; os maiores continuam como link. Pode levar horas na"
+    Write-Host "    primeira vez; se for interrompido, rode de novo que ele continua de onde parou."
+    $cmd = @("python3", "importar_ckan_goias_arquivos.py", "--max-mb", "$MaxMb")
+    if ($LimiteDatasets -gt 0) { $cmd += @("--limite", "$LimiteDatasets") }
+    if ($Substituir) { $cmd += "--substituir" }
+    $texto = RodarNoContainer @("importar_ckan_goias.py", "importar_ckan_goias_arquivos.py", "metadados_ckan_goias.json") $cmd
+    if ($texto -match "\[verifica.{1,4}o\] OK") { Ok "arquivos enviados e conferidos" }
+    else { Aviso "a verificacao final da carga de arquivos nao deu OK (veja as mensagens acima)" }
+    ConferirIndice
+}
+
+# ---------------------------------------------------------------------------
+if ($Simular) {
+    Etapa "Alteracoes simuladas e conferencia da auditoria (simular_alteracoes.py)"
+    $texto = RodarNoContainer @("simular_alteracoes.py") @("python3", "simular_alteracoes.py",
+        "--quantidade", "$QuantidadeSimulacao", "--sysadmin", $UsuarioCkan)
+    if ($texto -match "\[simula.{1,4}o\] OK") { Ok "alteracoes registradas pela auditoria" }
+    else { Aviso "a simulacao encontrou problemas (veja as mensagens acima)" }
 }
 
 # ---------------------------------------------------------------------------
