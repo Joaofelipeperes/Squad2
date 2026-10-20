@@ -63,6 +63,10 @@ services:
       - CKANEXT__DSAUDIT__FILE_KEY_COLUMNS=id codigo cod_ibge
       # Timeout por requisicao (segundos) -- cargas grandes precisam de mais tempo
       - UWSGI_HARAKIRI=300
+      # Tamanho maximo de arquivo enviado (MB). O padrao do CKAN e 10; a carga de
+      # alta fidelidade (importar_ckan_goias_arquivos.py, --max-mb) envia arquivos
+      # do portal de ate este tamanho.
+      - CKAN__MAX_RESOURCE_SIZE=100
       # Interface em portugues (opcional):
       # - CKAN__LOCALE_DEFAULT=pt_BR
       - CKAN_SYSADMIN_NAME=admin
