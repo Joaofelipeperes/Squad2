@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   aberto: boolean;
@@ -13,10 +14,15 @@ interface Props {
 const FOCAVEIS =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/** Modais abertos, do mais antigo ao mais recente: só o do topo responde ao teclado. */
+const pilha: object[] = [];
+
 /**
  * Modal com a mesma marcação/classes do protótipo (.modal-overlay/.modal).
+ * Renderizado no fim do <body> (portal): o modal aberto por último fica sempre por cima, mesmo
+ * quando é aberto de dentro de outro (ex.: Editar no detalhe da base).
  * Acessibilidade de teclado: ao abrir, o foco vai para o primeiro campo do modal; Tab e Shift+Tab
- * ficam presos dentro dele; ao fechar, o foco volta ao elemento que o abriu.
+ * ficam presos dentro dele; Esc fecha só o do topo; ao fechar, o foco volta ao elemento que o abriu.
  */
 export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape }: Props) {
   const dialogo = useRef<HTMLDivElement>(null);
@@ -25,6 +31,8 @@ export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape }:
 
   useEffect(() => {
     if (!aberto) return;
+    const eu = {};
+    pilha.push(eu);
     const anterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focaveis = () =>
       Array.from(dialogo.current?.querySelectorAll<HTMLElement>(FOCAVEIS) ?? [])
@@ -34,6 +42,7 @@ export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape }:
     inicial?.focus();
 
     const onKey = (e: KeyboardEvent) => {
+      if (pilha[pilha.length - 1] !== eu) return;
       if (e.key === "Escape") {
         fechar.current();
         return;
@@ -60,12 +69,13 @@ export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape }:
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
+      pilha.splice(pilha.indexOf(eu), 1);
       if (anterior && document.contains(anterior)) anterior.focus();
     };
   }, [aberto]);
 
   if (!aberto) return null;
-  return (
+  return createPortal(
     <div className="modal-overlay open" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={titulo} ref={dialogo} tabIndex={-1}>
         <div className="modal-head">
@@ -80,6 +90,7 @@ export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape }:
         <div className="modal-body">{children}</div>
         {rodape && <div className="modal-foot">{rodape}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

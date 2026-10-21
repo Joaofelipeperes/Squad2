@@ -25,11 +25,13 @@ interface Campos {
   politicas_publicas: string;
   sigiloso: "" | "sim" | "nao";
   dataset_link: string;
+  dataset_id: string;
 }
 
 const VAZIO: Campos = {
   orgao_sigla: "", organizacao_id: "", nome_previsto: "", descricao: "", unidade_responsavel: "",
   periodicidade: "", prazo_abertura: "", politicas_publicas: "", sigiloso: "", dataset_link: "",
+  dataset_id: "",
 };
 
 function camposDaBase(b: BasePda): Campos {
@@ -45,6 +47,7 @@ function camposDaBase(b: BasePda): Campos {
     sigiloso: b.possui_conteudo_sigiloso == null ? "" : b.possui_conteudo_sigiloso ? "sim" : "nao",
     // Endereço atual (vínculo resolvido) ou o informado na planilha (pendente)
     dataset_link: b.dataset_name ?? b.dataset_name_planilha ?? "",
+    dataset_id: b.dataset_id ?? "",
   };
 }
 
@@ -62,6 +65,7 @@ function entrada(c: Campos): BaseEntrada {
     politicas_publicas: ouNulo(c.politicas_publicas),
     possui_conteudo_sigiloso: c.sigiloso === "" ? null : c.sigiloso === "sim",
     dataset_link: ouNulo(c.dataset_link),
+    dataset_id: ouNulo(c.dataset_id),
   };
 }
 
@@ -174,6 +178,16 @@ export function BaseFormModal({ aberto, plano, base, onFechar, onSalva }: Props)
           <span className="help">
             Link do dataset ou só o name. Serve para encontrar o ID do dataset, que é o vínculo gravado; deixe
             vazio se a base ainda não foi publicada.
+          </span>
+        </div>
+        <div className="form-field full">
+          <label htmlFor="pda-base-dataset-id">ID do dataset no CKAN</label>
+          <input id="pda-base-dataset-id" className="text-input mono" value={c.dataset_id} maxLength={100}
+                 placeholder="ex.: 477fa23d-9bd3-4eba-bbf2-6d12376df25f" spellCheck={false}
+                 onChange={set("dataset_id")} />
+          <span className="help">
+            Use quando o nome no PDA é diferente do name no portal. O ID tem prioridade sobre o endereço e
+            precisa existir no inventário; está na tela Datasets (coluna ID CKAN).
           </span>
         </div>
         {opcoes.isError && (
