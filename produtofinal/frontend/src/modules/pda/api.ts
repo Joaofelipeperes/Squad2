@@ -119,6 +119,7 @@ export interface BaseEntrada {
   politicas_publicas: string | null;
   possui_conteudo_sigiloso: boolean | null;
   dataset_link: string | null; // link do portal ou name; serve só para achar o ID
+  dataset_id: string | null; // ID do dataset no CKAN (o vínculo); tem prioridade sobre o link
 }
 
 /** Opções do formulário de base: organizações do portal (valor = ID CKAN) e periodicidades. */

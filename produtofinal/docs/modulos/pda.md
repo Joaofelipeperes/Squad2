@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 18/10/2026 |
+| **Última atualização** | 21/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -71,7 +71,7 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 | PUT | `/planos/{id}` | `pda.gerenciar_planos` | JSON `PlanoIn` → `PlanoOut`: edita nome e vigência (não troca o vigente; `definir_vigente` é ignorado). **409** nome de outro PDA; **422**; **404** |
 | PUT | `/planos/{id}/vigente` | `pda.gerenciar_planos` | Define o PDA vigente → `PlanoOut`; **404** |
 | DELETE | `/planos/{id}` | `pda.gerenciar_planos` | Exclui o PDA e suas bases → 204; **409** se for o vigente e houver outros PDAs; **404** |
-| POST | `/planos/{id}/bases` | `pda.gerenciar_planos` | JSON `BaseIn` → 201 `BaseOut`: inclui uma base prevista. **422** sigla ou nome vazios, endereço do dataset não reconhecido, organização inexistente ou diferente da do dataset; **403** órgão de outro escopo; **404** plano |
+| POST | `/planos/{id}/bases` | `pda.gerenciar_planos` | JSON `BaseIn` → 201 `BaseOut`: inclui uma base prevista. **422** sigla ou nome vazios, endereço do dataset não reconhecido, ID do dataset inexistente ou diferente do achado pelo endereço, organização inexistente ou diferente da do dataset; **403** órgão de outro escopo; **404** plano |
 | PUT | `/bases/{id}` | `pda.gerenciar_planos` | JSON `BaseIn` → `BaseOut`: edita a base (inclusive o endereço do dataset). Mesmos erros; **404** |
 | DELETE | `/bases/{id}` | `pda.gerenciar_planos` | Remove a base do PDA → 204 (atualiza `total_bases`); **403**; **404** |
 | GET | `/datasets/{dataset_id}/bases` | `pda.acessar` | `BaseOut[]`: bases previstas vinculadas **pelo ID** a um dataset do portal, em todos os PDAs (vigente primeiro). Sem vínculo → `[]` (nunca casa pelo nome). Usado pelo detalhe da tela Datasets |
@@ -92,7 +92,9 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
 - `PlanoIn`: nome, vigencia_inicio, vigencia_fim, definir_vigente (só na criação).
 - `BaseIn`: orgao_sigla*, organizacao_id (vazio = pela sigla), nome_previsto*, descricao,
   unidade_responsavel, periodicidade (valor do domínio ou texto livre, normalizado),
-  prazo_abertura, politicas_publicas, possui_conteudo_sigiloso, dataset_link (link do portal ou name).
+  prazo_abertura, politicas_publicas, possui_conteudo_sigiloso, dataset_link (link do portal ou name),
+  dataset_id (ID do dataset no CKAN; tem prioridade sobre o link, precisa existir no inventário e,
+  se o link achar outro dataset, dá 422).
 - `FormularioOut`: organizacoes `[{valor, rotulo}]`, periodicidades.
 - `BaseOut`: dados da planilha + `orgao_chave` (organizacao_id ou `sigla:<SIGLA>`), orgao_nome,
   `vinculo` (resolvido/pendente/sem_vinculo), dataset_id, dataset_name e dataset_titulo **atuais**
@@ -331,3 +333,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 18/10/2026 | `GET /datasets/{dataset_id}/bases` e `bases_do_dataset`: bases vinculadas pelo ID a um dataset, para o detalhe da tela Datasets | Humberto |
 | 18/10/2026 | Tela aceita `?orgao=<chave>` na URL (botão "Ver bases no PDA" da tela Organizações); Interações com o painel atualizadas | Humberto |
 | 18/10/2026 | Situação "Prazo vencido" (`regras.PRAZO_VENCIDO`): base sem vínculo com prazo vencido deixa de aparecer como "Em atraso", que passa a exigir vínculo (dataset conferido e fora do portal); badge cinza com a dica "aguardando vínculo" e opção no filtro | Humberto |
+| 21/10/2026 | Correções no cadastro manual: o modal de edição abria por trás do detalhe da base (modal compartilhado agora em portal, com pilha para Esc/Tab); novo campo "ID do dataset no CKAN" (`BaseIn.dataset_id`, `_vinculo_por_id`) para vincular quando o nome do PDA difere do name no portal | Humberto |

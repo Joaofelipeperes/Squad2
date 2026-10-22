@@ -633,6 +633,25 @@ def _vinculo_informado(db: Session, link: str | None, atual: BasePrevista | None
     return (ds.ckan_id if ds is not None else None), name
 
 
+def _vinculo_por_id(db: Session, dataset_id: str | None, link: str | None,
+                    atual: BasePrevista | None) -> tuple[str | None, str | None]:
+    """ID do dataset digitado (ADR-0006) → (dataset_id, dataset_name_planilha). Tem prioridade
+    sobre o endereço: precisa existir no inventário e, se o endereço também achar um dataset, os
+    dois têm de ser o mesmo. Endereço sem dataset no inventário (nome do PDA diferente do name do
+    portal) não impede: o name fica só para auditoria."""
+    id_link, name = _vinculo_informado(db, link, atual)
+    ident = _limpo(dataset_id)
+    if ident is None:
+        return id_link, name
+    if db.get(Dataset, ident) is None:
+        raise Invalido("ID do dataset não encontrado no inventário do portal: confira o ID ou "
+                       "rode a coleta (Atualizar dados).")
+    if id_link is not None and id_link != ident:
+        raise Invalido("O ID e o endereço informados apontam para datasets diferentes: corrija um "
+                       "deles ou deixe o endereço vazio.")
+    return ident, name
+
+
 def _orgao_informado(db: Session, plano_id: int, sigla: str, escolhido: str | None,
                      dataset_id: str | None) -> str | None:
     """Órgão da base cadastrada à mão: o do dataset vinculado; senão o escolhido no formulário;
@@ -667,7 +686,7 @@ def _valores_da_base(db: Session, plano_id: int, dados: BaseIn,
     periodicidade = regras.periodicidade_informada(original)
     if atual is not None and periodicidade == atual.periodicidade:
         original = atual.periodicidade_original  # mantém o texto da planilha ("Mnsal")
-    dataset_id, name = _vinculo_informado(db, dados.dataset_link, atual)
+    dataset_id, name = _vinculo_por_id(db, dados.dataset_id, dados.dataset_link, atual)
     return {
         "orgao_sigla": sigla,
         "organizacao_id": _orgao_informado(db, plano_id, sigla, _limpo(dados.organizacao_id),
