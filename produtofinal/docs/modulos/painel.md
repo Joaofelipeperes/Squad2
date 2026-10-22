@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 18/10/2026 |
+| **Última atualização** | 21/10/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -30,6 +30,11 @@ evolução temporal abaixo dos cards (PBI-75).
   portal; **aguardando vínculo** quando o órgão não tem base vinculada, porque sem vínculo não há
   como saber se a base já foi publicada; com vínculo parcial, "N de M vinculada(s)") | Atualização,
   Riscos LGPD e Índice de atenção (**a definir**). Os pendentes aparecem como badge cinza, nunca 0.
+- **Filtros** (na própria tela, sobre a lista já carregada): busca por nome ou sigla (sem
+  diferenciar maiúsculas e acentos); **Em atraso** (com bases em atraso, sem atraso entre as
+  vinculadas, com bases próximas do prazo, aguardando vínculo); **Bases no PDA** (com/sem bases
+  previstas); **Organização no portal** (com/sem). "Limpar filtros" volta a mostrar todos; o
+  contador passa a "N de M órgão(s)".
 - **Detalhe**: cartões do protótipo (previstas; publicadas e não publicadas, aguardando vínculo;
   atualizações atrasadas e possíveis dados pessoais, a definir; **recursos sem formato aberto** com
   o total de recursos e datasets), bases em atraso (mesma regra da tabela) e próximas do prazo,
@@ -98,3 +103,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 07/10/2026 | Interações: consumo do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Humberto |
 | 18/10/2026 | Tela Organizações (US19): `GET /painel/organizacoes` e `service.organizacoes`; tabela e detalhe do protótipo com bases do PDA vigente, recursos em formato fechado (parâmetro `formatos_abertos`) e indicadores pendentes como "aguardando vínculo" / "a definir" | Humberto |
 | 18/10/2026 | Organizações: coluna "Em atraso" (nome do protótipo) conta só bases vinculadas; sem vínculo mostra "aguardando vínculo" em vez de contar toda base com prazo vencido (`bases_em_atraso`, `bases_proximas_do_prazo`) | Humberto |
+| 21/10/2026 | Organizações: filtros na tela (busca por nome/sigla, Em atraso, Bases no PDA, Organização no portal), sem mudança na API | Victor |
