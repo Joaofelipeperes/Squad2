@@ -7,7 +7,7 @@
 | **User stories** | US11, US28 (PBI-96) |
 | **Backend** | `backend/app/modules/ia/` · adaptadores em `backend/app/integrations/ai/` |
 | **Frontend** | `frontend/src/modules/ia/` |
-| **Última atualização** | 07/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Permite trocar entre modelos locais e comerciais sem alterar código e garante que dados pessoais
@@ -39,7 +39,12 @@ Todas as rotas exigem `ia.configurar` (dependência no nível do router).
   vínculo, aplica a política, chama o adaptador, tenta a contingência, registra o uso.
 
 `service.py`: `listar_tipos`, `salvar_perfil`, `config_do_perfil`, `testar`, `testar_resposta`,
-`listar_tarefas`, `vincular`.
+`listar_tarefas`, `vincular`, `listar_perfis`, `excluir_perfil` (exclusão lógica; vinculado → erro),
+`listar_usos`.
+
+`dao.py` — `IaDao(Dao)` (ADR-0019): todas as consultas e gravações (perfis, vínculos, uso). O
+gateway grava o uso pelo DAO; `excluir_perfil` limpa vínculos que apontassem para o perfil (como o
+antigo ON DELETE SET NULL).
 
 `integrations/ai/`: contrato `AIProvider` (`chat`, `list_models`, `fields`), `registry`
 (`@register_provider`, `build_provider`), `policy` (`TarefaIA`, `TAREFAS`, `verificar`) e
@@ -50,9 +55,11 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 | Tabela | Colunas relevantes |
 |---|---|
-| `ia_perfil_provedor` | nome, tipo, modelo, base_url, api_key_cifrada (Fernet), api_key_dica, execucao_local, temperatura, max_tokens, timeout_s, ativo |
-| `ia_vinculo_tarefa` | tarefa (PK), perfil_id, perfil_fallback_id, alterado_por |
+| `ia_perfil_provedor` | nome (único entre ativos), tipo, modelo, base_url, api_key_cifrada (Fernet), api_key_dica, execucao_local, temperatura, max_tokens, timeout_s, ativo |
+| `ia_vinculo_tarefa` | id (PK), tarefa (única entre ativos; antes era a PK), perfil_id, perfil_fallback_id, alterado_por |
 | `ia_uso` | momento, tarefa, perfil, modelo, sucesso, usou_fallback, latência, tokens, erro |
+
+Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`/`changed_id` (ADR-0019); únicos valem só entre registros ativos.
 
 ## Permissões
 | Permissão | Papéis padrão | Sensível |
@@ -87,3 +94,4 @@ Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-001
 | 30/09/2026 | Implementação: perfis, tarefas, gateway com política LGPD e tela | Victor |
 | 30/09/2026 | Acesso passa a exigir `ia.configurar` do catálogo central | Victor |
 | 07/10/2026 | Link para o MER e as convenções do banco | Victor |
+| 22/10/2026 | Banco só pelo `IaDao` (ADR-0019): exclusão lógica de perfis (o nome fica livre), `ia_vinculo_tarefa` com `id` próprio, auditoria com quem configurou; `atualizado_em` vem de `changed` | Victor |

@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 21/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -60,15 +60,24 @@ Portão (`app/core/deps.py`) — usado por **todos** os módulos:
 - `UsuarioAtual.pode(p)`, `.restrito_a_orgao`.
 - `filtrar_por_orgao(stmt, coluna_orgao, user)` · `exigir_mesmo_orgao(user, orgao_id)`.
 
+DAO (`modules/acesso/dao.py`, `AcessoDao(Dao)` — ADR-0019): **toda** leitura e gravação do módulo (usuários, papéis,
+vínculos, órgãos para o formulário, log). `definir_papeis(usuario, papeis)` e
+`definir_permissoes(papel, codigos)` excluem logicamente os vínculos que saíram e criam vínculos
+novos (nunca reativam os antigos); `excluir_papel` exclui o papel e seus vínculos.
+
 Serviço (`modules/acesso/service.py`):
 - `permissoes_de(usuario) -> frozenset[str]` — une as permissões dos papéis; papel com `todas`
   recebe o catálogo inteiro; códigos fora do catálogo são ignorados.
 - `carregar_usuario_atual(db, id) -> UsuarioAtual | None` — chamado pelo portão em cada requisição.
-- `autenticar(db, email, senha)` — valida e registra `ultimo_acesso`.
-- `sincronizar_papeis_padrao(db)` — cria papéis do catálogo que faltam e remove permissões órfãs;
+- `autenticar(db, email, senha)` — valida e registra `ultimo_acesso` (auditoria: o próprio usuário).
+  Usuário excluído não autentica e o token dele deixa de valer.
+- `sincronizar_papeis_padrao(db)` — cria papéis do catálogo que faltam e exclui (logicamente) permissões órfãs;
   não sobrescreve ajustes feitos na tela. Roda na subida da API.
-- `salvar_usuario(db, dados, usuario=None, editor=None)` · `criar_usuario(...)` (CLI/testes).
-- `salvar_papel(db, dados, papel=None)` · `excluir_papel(db, papel)`.
+- `salvar_usuario(db, dados, usuario=None, editor=None)` · `excluir_usuario(db, usuario, editor=None)`
+  (exclusão lógica; sem rota na API por ora; bloqueada se for o último administrador ativo) ·
+  `criar_usuario(...)` (CLI/testes) · `orgao_por_referencia(db, id_ckan_ou_name)` (CLI).
+- `salvar_papel(db, dados, papel=None, editor=None)` · `excluir_papel(db, papel, editor=None)`.
+  `editor` vai para `created_id`/`changed_id`.
 - `registrar_acesso(**campos)` — grava uma linha em `acesso_log` em sessão própria; erro no log
   vai para o log da aplicação e não derruba a requisição. Chamado pelo middleware `log_de_acesso`
   (`main.py`), que roda em **toda** requisição exceto `OPTIONS` e `/saude`; o e-mail vem de
@@ -86,11 +95,13 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 | Tabela | Colunas relevantes |
 |---|---|
-| `usuario` | email (único), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao.id` (inteiro, ADR-0018), ultimo_acesso |
-| `acesso_papel` | codigo (único), nome, descricao, sistema, exige_orgao, todas |
-| `acesso_papel_permissao` | papel_id, permissao (código do catálogo) |
-| `acesso_usuario_papel` | usuario_id, papel_id |
+| `usuario` | email (único entre ativos), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao.id` (inteiro, ADR-0018), ultimo_acesso |
+| `acesso_papel` | codigo (único entre ativos), nome, descricao, sistema, exige_orgao, todas |
+| `acesso_papel_permissao` | papel_id, permissao (código do catálogo); par único entre ativos |
+| `acesso_usuario_papel` | usuario_id, papel_id; par único entre ativos (antes PK composta) |
 | `acesso_log` | ocorrido_em, usuario (e-mail, sem FK), metodo, caminho (com query), rota (modelo, ex.: `/api/v1/acesso/papeis/{papel_id}`), acao (função), status_http, ip, user_agent — somente inserção |
+
+Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`/`changed_id` (ADR-0019); únicos valem só entre registros ativos.
 
 ## Permissões
 Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
@@ -176,3 +187,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 15/10/2026 | Tela Log de acesso (`/admin/logs`): filtros, tabela em America/Sao_Paulo e exportação CSV no navegador | Victor |
 | 15/10/2026 | Pendência registrada: avaliar login com a conta de e-mail institucional da CGE; sem mudança de código | Victor |
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `usuario.orgao_id` passa a inteiro → `organizacao.id`; `OrgaoResumo` com `id` e `id_ckan`; `UsuarioIn.orgao_id` inteiro; CLI `criar-usuario --orgao` aceita `id_ckan` ou `name` da organização | Victor |
+| 22/10/2026 | Banco só pelo `AcessoDao` (ADR-0019): exclusão lógica de papéis (com vínculos) e de usuários (`excluir_usuario`); vínculos usuário–papel e papel–permissão viram tabelas com `id` e são trocados por exclusão lógica + criação; auditoria `created_id`/`changed_id` com o editor; e-mail e código únicos só entre ativos | Victor |

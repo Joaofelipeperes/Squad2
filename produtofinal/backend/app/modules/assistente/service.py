@@ -3,16 +3,14 @@
 Sem banco vetorial: o contexto é um resumo determinístico do inventário da última coleta
 (contagens e situação por órgão). Achados LGPD entram apenas como contagem — nunca conteúdo.
 """
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.deps import UsuarioAtual, filtrar_por_orgao
-
+from app.core.deps import UsuarioAtual
 from app.integrations.ai.base import ChatMessage, ChatRequest
 from app.integrations.ai.policy import TarefaIA
+from app.modules.assistente.dao import AssistenteDao
 from app.modules.ia.gateway import AIGateway
-from app.modules.inventario.models import Dataset, Organizacao, Recurso
-from app.modules.inventario.service import condicao_recurso_atual, ultima_coleta
+from app.modules.inventario.service import ultima_coleta
 
 SYSTEM = (
     "Você é o Assistente GEDA da Controladoria-Geral do Estado de Goiás. Responda em português, "
@@ -34,17 +32,13 @@ def montar_contexto(db: Session, pergunta: str, user: UsuarioAtual) -> str:
                       f"{c.total_recursos} recursos.")
     # Recorte simples por órgão citado na pergunta (a ser enriquecido pelos módulos pda/atualizacoes)
     p = pergunta.lower()
-    orgaos = db.scalars(filtrar_por_orgao(select(Organizacao), Organizacao.id, user)).all()
+    dao = AssistenteDao.de(db, user)
+    orgaos = dao.organizacoes_visiveis(user)
     for org in orgaos:
         citado = org.name.lower() in p or org.titulo.lower() in p or (org.sigla or "#").lower() in p
         if citado or user.restrito_a_orgao:
-            n_ds = db.scalar(select(func.count()).select_from(Dataset)
-                             .where(Dataset.organizacao_id == org.id, Dataset.ativo_no_portal))
-            # Recursos dos datasets ativos que ainda estão no portal; dicionário de dados não conta
-            n_rec = db.scalar(select(func.count()).select_from(Recurso).join(Dataset)
-                              .where(Dataset.organizacao_id == org.id, Dataset.ativo_no_portal,
-                                     condicao_recurso_atual(),
-                                     Recurso.eh_dicionario_dados.is_(False)))
+            n_ds = dao.datasets_ativos(org.id)
+            n_rec = dao.recursos_validos(org.id)
             linhas.append(f"Órgão {org.titulo}: {n_ds} datasets ativos, {n_rec} recursos.")
     return "\n".join(linhas)
 

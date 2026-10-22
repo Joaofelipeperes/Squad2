@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 21/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -73,10 +73,10 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 | GET | `/planos/{id}` | `pda.acessar` | `PlanoOut` (totais no escopo de órgão); **404** |
 | PUT | `/planos/{id}` | `pda.gerenciar_planos` | JSON `PlanoIn` → `PlanoOut`: edita nome e vigência (não troca o vigente; `definir_vigente` é ignorado). **409** nome de outro PDA; **422**; **404** |
 | PUT | `/planos/{id}/vigente` | `pda.gerenciar_planos` | Define o PDA vigente → `PlanoOut`; **404** |
-| DELETE | `/planos/{id}` | `pda.gerenciar_planos` | Exclui o PDA e suas bases → 204; **409** se for o vigente e houver outros PDAs; **404** |
+| DELETE | `/planos/{id}` | `pda.gerenciar_planos` | Exclui (exclusão lógica) o PDA e suas bases → 204; o nome fica livre para outro PDA; **409** se for o vigente e houver outros PDAs; **404** |
 | POST | `/planos/{id}/bases` | `pda.gerenciar_planos` | JSON `BaseIn` → 201 `BaseOut`: inclui uma base prevista. **422** sigla ou nome vazios, endereço do dataset não reconhecido, organização inexistente ou diferente da do dataset; **403** órgão de outro escopo; **404** plano |
 | PUT | `/bases/{id}` | `pda.gerenciar_planos` | JSON `BaseIn` → `BaseOut`: edita a base (inclusive o endereço do dataset). Mesmos erros; **404** |
-| DELETE | `/bases/{id}` | `pda.gerenciar_planos` | Remove a base do PDA → 204 (atualiza `total_bases`); **403**; **404** |
+| DELETE | `/bases/{id}` | `pda.gerenciar_planos` | Remove (exclusão lógica) a base do PDA → 204 (atualiza `total_bases` com as bases ativas); **403**; **404** |
 | GET | `/datasets/{dataset_id}/bases` | `pda.acessar` | `BaseOut[]`: bases previstas vinculadas **pelo ID** a um dataset do portal, em todos os PDAs (vigente primeiro). Sem vínculo → `[]` (nunca casa pelo nome). Usado pelo detalhe da tela Datasets |
 | GET | `/formulario` | `pda.gerenciar_planos` | `FormularioOut`: organizações do portal visíveis ao usuário (`{valor: id, rotulo}`) e o domínio de periodicidade |
 | GET | `/formulario/datasets` | `pda.gerenciar_planos` | `?busca=` → `DatasetOpcaoOut[]` (até 20, ativos no portal primeiro): datasets do inventário por título ou name (contém, sem diferenciar maiúsculas), ID exato ou link do portal (name exato), no escopo de órgão do usuário. Menos de 2 caracteres → `[]` |
@@ -109,6 +109,15 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   opcoes `{orgaos: [{valor, rotulo}], periodicidades, anos}`, bases (por órgão e nome).
 
 ## Serviços e métodos
+`dao.py` — `PdaDao(Dao)` (ADR-0019): ÚNICO ponto de acesso ao banco do módulo (planos, bases e as
+leituras de `Dataset`/`Organizacao` que o PDA usa). Consultas: `plano`, `plano_vigente`, `planos`,
+`total_de_planos`, `nomes_de_planos`, `contagens`, `bases_do_plano`, `bases_do_dataset`,
+`base_visivel`, `bases_pendentes`, `bases_sem_organizacao`, `siglas_vinculadas`, `dataset`,
+`organizacao`, `organizacao_do_dataset`, `organizacoes`, `datasets_por_name`, `buscar_datasets`;
+gravações: `desmarcar_vigentes`, `atualizar_total`, `excluir_plano` (exclusão lógica do plano e
+de todas as bases). As funções genéricas do `Dao` ignoram registros excluídos e gravam
+`created_id`/`changed_id` com o usuário que agiu (`PdaDao.de(db, user)`).
+
 `regras.py` (funções puras, reaproveitáveis numa extensão CKAN — ADR 0004):
 - `ler_planilha(conteudo: bytes, nome_arquivo: str) -> PlanilhaLida` — PBI-12; `linhas:
   list[LinhaPda]`, `ignoradas: list[(linha, motivo)]`, `tem_coluna_prazo`, `tem_coluna_portal`,
@@ -134,13 +143,14 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
 `service.py` (lança `NaoEncontrado` 404, `Conflito` 409 e `Invalido` 422; o router só converte em HTTP):
 - `importar_plano(db, *, nome, vigencia_inicio, vigencia_fim, definir_vigente, arquivo_nome,
   conteudo, importado_por) -> ImportacaoResumoOut` — PBI-12/13, atômico.
-- `resolver_vinculos_pendentes(db, plano_id) -> {"vinculos_resolvidos", "vinculos_pendentes"}` — PBI-12/13.
+- `resolver_vinculos_pendentes(db, plano_id, user=None) -> {"vinculos_resolvidos", "vinculos_pendentes"}` — PBI-12/13.
 - `listar_planos(db, user=None) -> list[PlanoOut]` · `obter_plano(db, plano_id, user=None)` ·
-  `definir_vigente(db, plano_id) -> PlanoOut` · `excluir_plano(db, plano_id) -> None`.
-- CRUD manual: `criar_plano(db, PlanoIn, criado_por) -> PlanoOut` (PDA vazio) ·
-  `atualizar_plano(db, plano_id, PlanoIn) -> PlanoOut` · `criar_base(db, plano_id, BaseIn, user)` ·
+  `definir_vigente(db, plano_id, user=None) -> PlanoOut` · `excluir_plano(db, plano_id, user=None) -> None`
+  (exclusão lógica do plano e das bases). As gravações recebem o `user` que agiu (auditoria).
+- CRUD manual: `criar_plano(db, PlanoIn, criado_por, user=None) -> PlanoOut` (PDA vazio) ·
+  `atualizar_plano(db, plano_id, PlanoIn, user=None) -> PlanoOut` · `criar_base(db, plano_id, BaseIn, user)` ·
   `atualizar_base(db, base_id, BaseIn, user)` (ambas `-> BaseCalculada`) ·
-  `excluir_base(db, base_id, user)` · `opcoes_formulario(db, user) -> FormularioOut` ·
+  `excluir_base(db, base_id, user)` (exclusão lógica) · `opcoes_formulario(db, user) -> FormularioOut` ·
   `buscar_datasets(db, user, busca) -> list[DatasetOpcaoOut]`. A validação do
   nome e da vigência (`_validar_plano`) é a mesma da importação.
 - `listar_bases(db, user, *, plano_id, orgao, situacao, periodicidade, ano, prazo) -> BasesOut` — PBI-20/21.
@@ -163,14 +173,14 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 | Tabela | Colunas relevantes |
 |---|---|
-| `pda_plano` | id, **nome** (200, único; também único sem diferenciar maiúsculas pelo índice `uq_pda_plano_nome_ci` em `lower(nome)`), vigencia_inicio, vigencia_fim, **vigente**, arquivo_nome (300), importado_por (200), importado_em (tz), total_bases, created_at, updated_at. Índice único parcial `uq_pda_plano_vigente` (`vigente` WHERE `vigente`): no máximo um vigente |
-| `pda_base_prevista` | id, **plano_id** → `pda_plano.id` (ON DELETE CASCADE, NOT NULL, indexado), orgao_sigla (100, como na planilha), organizacao_id → `organizacao.id` (indexado), nome_previsto (500), descricao (text), unidade_responsavel (500), prazo_abertura, periodicidade (40, normalizada, NOT NULL, padrão "Sem informação"), periodicidade_original (100), politicas_publicas (500), possui_conteudo_sigiloso, **dataset_id** → `dataset.id` (indexado; o dataset guarda o ID do CKAN em `id_ckan`), dataset_name_planilha (200: name extraído da URL da planilha; usado só para encontrar o ID — vínculo pendente / Atualizar vínculos — e para auditoria; nunca para recalcular vínculo resolvido), linha_planilha, classificacao (pda/espontanea, padrão "pda"), created_at, updated_at |
+| `pda_plano` | id, **nome** (200, único entre os ativos — `uq_pda_plano_nome` — e também sem diferenciar maiúsculas — `uq_pda_plano_nome_ci` em `lower(nome)`; ambos `WHERE NOT deleted`), vigencia_inicio, vigencia_fim, **vigente**, arquivo_nome (300), importado_por (200), importado_em (tz), total_bases (bases ativas), deleted, created/created_id, changed/changed_id. Índice único parcial `uq_pda_plano_vigente` (`vigente` WHERE `vigente AND NOT deleted`): no máximo um vigente entre os ativos |
+| `pda_base_prevista` | id, **plano_id** → `pda_plano.id` (NOT NULL, indexado; excluir o plano marca as bases como excluídas), orgao_sigla (100, como na planilha), organizacao_id → `organizacao.id` (indexado), nome_previsto (500), descricao (text), unidade_responsavel (500), prazo_abertura, periodicidade (40, normalizada, NOT NULL, padrão "Sem informação"), periodicidade_original (100), politicas_publicas (500), possui_conteudo_sigiloso, **dataset_id** → `dataset.id` (indexado; o dataset guarda o ID do CKAN em `id_ckan`), dataset_name_planilha (200: name extraído da URL da planilha; usado só para encontrar o ID — vínculo pendente / Atualizar vínculos — e para auditoria; nunca para recalcular vínculo resolvido), linha_planilha, classificacao (pda/espontanea, padrão "pda"), created_at, updated_at |
 
 Migração `b7e2c41d9a63` (sobre `9da707016405`): cria `pda_plano` e acrescenta as colunas; apaga
 linhas órfãs de `pda_base_prevista` antes do NOT NULL (a tabela estava vazia em todos os
-ambientes); o downgrade apaga as bases previstas. `PlanoPda.bases` usa `cascade="all,
-delete-orphan", passive_deletes=True`, e `excluir_plano` apaga as bases explicitamente porque o
-SQLite só aplica ON DELETE CASCADE com `PRAGMA foreign_keys`. Migração `c3f8a2d15e70` (sobre
+ambientes); o downgrade apaga as bases previstas. Desde a ADR-0019 nada é apagado fisicamente:
+`PlanoPda.bases` não tem cascata e `PdaDao.excluir_plano` marca o plano e as bases como
+excluídos (`deleted`), registrando quem e quando (`changed`/`changed_id`). Migração `c3f8a2d15e70` (sobre
 `b7e2c41d9a63`): índice único `uq_pda_plano_nome_ci` em `lower(nome)`; não altera dados.
 
 ## Permissões
@@ -203,7 +213,8 @@ pendentes só são refeitos pelo botão Atualizar vínculos (não automaticament
 Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
 
 - **Vários PDAs, um vigente** (decisão de 07/10/2026, Humberto/Eixo 1 — pendente de validação da
-  GEDA). Nome obrigatório e único (espaços colapsados, sem diferenciar maiúsculas). O primeiro PDA
+  GEDA). Nome obrigatório e único (espaços colapsados, sem diferenciar maiúsculas). A unicidade vale
+  só entre os PDAs não excluídos: o nome de um PDA excluído pode ser reaproveitado (ADR-0019). O primeiro PDA
   cadastrado vira vigente mesmo sem `definir_vigente`. Garantia dupla: índice único parcial e
   transação (desmarca todos, marca o escolhido, flush). O vigente só pode ser excluído quando é o
   único PDA cadastrado (havendo outros, defina outro como vigente antes; 13/10/2026). Outros
@@ -340,3 +351,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 18/10/2026 | Situação "Prazo vencido" (`regras.PRAZO_VENCIDO`): base sem vínculo com prazo vencido deixa de aparecer como "Em atraso", que passa a exigir vínculo (dataset conferido e fora do portal); badge cinza com a dica "aguardando vínculo" e opção no filtro | Humberto |
 | 21/10/2026 | Vínculo base → dataset pela busca no inventário: `GET /formulario/datasets` (`buscar_datasets`), `BaseIn.dataset_id` (precede `dataset_link`; mesmo dataset mantém o name da planilha) e campo de busca `DatasetBusca` no `BaseFormModal` no lugar do link digitado; o órgão acompanha o do dataset escolhido. Sem mudança de tabela (FKs `dataset_id` → `dataset` e `dataset.organizacao_id` → `organizacao` já existiam) | Victor |
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `pda_base_prevista.organizacao_id` e `.dataset_id` passam a inteiros (`organizacao.id`, `dataset.id`); `BaseIn`, `BaseOut`, `DatasetOpcaoOut` e as opções de organização usam o `id`; `BaseOut.dataset_id_ckan` para o link do portal; `orgao_chave` = `id` em texto | Victor |
+| 22/10/2026 | DAO (ADR-0019): `PdaDao` em `dao.py` concentra todo acesso ao banco do módulo; exclusão de PDA e de base passa a ser lógica (`deleted`), com as bases do PDA excluídas junto; `total_bases` conta só as ativas; únicos do nome e do vigente só entre ativos (nome de PDA excluído pode ser reaproveitado); gravações registram o usuário em `created_id`/`changed_id` (rotas de editar, vigente, excluir e vincular passam a receber o usuário) | Victor |

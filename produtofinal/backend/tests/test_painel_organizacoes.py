@@ -115,3 +115,14 @@ def test_parametro_formatos_abertos_editavel(client, admin, gerente, inventario)
 
 def test_permissao(client, orgao):
     assert client.get(API, headers=orgao).status_code == 403  # papel de órgão não tem painel
+
+
+def test_excluidos_nao_contam_no_painel(client, gerente, inventario):
+    """Exclusão lógica (ADR-0019): dataset e recurso excluídos saem das contagens."""
+    with SessionLocal() as db:
+        db.get(Dataset, DS_B).deleted = True  # leva PDF e sem formato
+        db.get(Recurso, 2).deleted = True     # ZIP do DS_A
+        db.commit()
+    ses = _org(client.get(API, headers=gerente).json(), str(SES))
+    assert ses["datasets_no_portal"] == 1 and ses["recursos_validos"] == 1
+    assert ses["recursos_formato_fechado"] == 0 and ses["formatos_fechados"] == {}

@@ -44,7 +44,7 @@ def inventario():
             Recurso(id=1, id_ckan="r-csv", dataset_id=SAUDE, nome="dados.csv", formato="CSV",
                     ultima_coleta_id=2, last_modified=dt(2026, 9, 5)),
             Recurso(id=2, id_ckan="r-xlsx", dataset_id=SAUDE, nome="dados.xlsx", formato="XLSX",
-                    ultima_coleta_id=2, created=dt(2026, 9, 1)),
+                    ultima_coleta_id=2, created_ckan=dt(2026, 9, 1)),
             Recurso(id=3, id_ckan="r-dic", dataset_id=SAUDE, nome="Dicionário de dados",
                     formato="PDF", eh_dicionario_dados=True, ultima_coleta_id=2,
                     last_modified=dt(2026, 10, 2)),
@@ -151,3 +151,20 @@ def test_bases_do_pda_vinculadas_ao_dataset(client, gerente, analista, inventari
     assert b["periodicidade"] == "Mensal" and b["situacao"] == "Publicado"
     # Sem vínculo pelo ID → nenhuma base (nunca casa pelo nome "Leitos")
     assert client.get(f"/api/v1/pda/datasets/{VAZIO}/bases", headers=analista).json() == []
+
+
+def test_dataset_e_recurso_excluidos_nao_aparecem(client, gerente, inventario):
+    """Exclusão lógica (ADR-0019): dataset excluído some da lista e do detalhe; recurso excluído
+    não conta nem aparece."""
+    with SessionLocal() as db:
+        db.get(Dataset, VAZIO).deleted = True
+        db.get(Recurso, 2).deleted = True  # r-xlsx
+        db.commit()
+    corpo = _lista(client, gerente)
+    assert corpo["total"] == 2 and [d["id_ckan"] for d in corpo["datasets"]] == [
+        "ds-saude", "ds-antigo"]
+    saude = corpo["datasets"][0]
+    assert saude["recursos_validos"] == 1 and saude["formatos"] == ["CSV"]
+    assert client.get(f"{API}/datasets/{VAZIO}", headers=gerente).status_code == 404
+    d = client.get(f"{API}/datasets/{SAUDE}", headers=gerente).json()
+    assert [x["id_ckan"] for x in d["recursos"]] == ["r-csv", "r-dic"]

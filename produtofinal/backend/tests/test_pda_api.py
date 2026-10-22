@@ -219,10 +219,13 @@ def test_segundo_pda_vigente_e_exclusao(client, gerente):
     assert client.delete(f"{API}/planos/{p1['id']}", headers=gerente).status_code == 409
     assert client.delete(f"{API}/planos/{p2['id']}", headers=gerente).status_code == 204
     assert client.delete(f"{API}/planos/{p2['id']}", headers=gerente).status_code == 404
-    with SessionLocal() as db:
+    with SessionLocal() as db:  # exclusão lógica: as bases do PDA excluído ficam, marcadas
+        ativas = BasePrevista.deleted.is_(False)
         assert db.scalar(select(func.count()).select_from(BasePrevista)
-                         .where(BasePrevista.plano_id == p2["id"])) == 0
-        assert db.scalar(select(func.count()).select_from(BasePrevista)) == 8
+                         .where(BasePrevista.plano_id == p2["id"], ativas)) == 0
+        assert db.scalar(select(func.count()).select_from(BasePrevista)
+                         .where(BasePrevista.plano_id == p2["id"])) > 0
+        assert db.scalar(select(func.count()).select_from(BasePrevista).where(ativas)) == 8
 
 
 def test_sem_nenhum_pda(client, gerente):
@@ -303,7 +306,7 @@ def test_vincular_resolve_pendente_sem_recalcular_resolvido(client, gerente, inv
         db.add(Dataset(id=MATRICULAS, id_ckan="c0ffee-matriculas", name="matriculas-2026",
                        titulo="Matrículas 2026", organizacao_id=SEDUC))
         db.add(Recurso(id=5, id_ckan="r-mat", dataset_id=MATRICULAS, nome="mat.csv",
-                       created=datetime(2026, 9, 20, tzinfo=UTC)))
+                       created_ckan=datetime(2026, 9, 20, tzinfo=UTC)))
         db.commit()
     r = client.post(f"{API}/planos/{plano['id']}/vincular", headers=gerente)
     assert r.status_code == 200, r.text

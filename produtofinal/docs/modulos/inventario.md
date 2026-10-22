@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 21/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -46,8 +46,10 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 | GET | `/datasets/{id}` | `inventario.acessar` | `DatasetDetalheOut`: linha + descrição, `metadata_created`, `periodicidade_declarada`, licença, recursos atuais (`RecursoOut`) e `recursos_removidos`; **404** se não existe ou é de outro órgão |
 
 ## Serviços e métodos
+`dao.py` — `InventarioDao(Dao)` (ADR-0019) concentra todo acesso ao banco: coletas (`coleta_em_andamento`, `ultima_coleta`, `historico_coletas`, `criar_coleta`), espelho do CKAN (`organizacoes_por_id_ckan`, `dataset_por_id_ckan`, `recursos_por_id_ckan`, `salvar_recurso`, `marcar_fora_do_portal`, `gravar_fotografia`) e tela Datasets (`datasets_visiveis`, `dataset_visivel`, `organizacoes`). Registros excluídos (`deleted`) nunca aparecem; a coleta casa pelo `id_ckan` entre os ativos e grava pela auditoria do DAO (sistema: sem usuário; coleta manual: `created_id` = quem pediu).
+
 `service.py`:
-- `iniciar(db, origem, solicitante=None) -> Coleta` — registra a coleta; `ColetaEmAndamento` se já houver uma.
+- `iniciar(db, origem, solicitante=None, usuario_id=None) -> Coleta` — registra a coleta; `ColetaEmAndamento` se já houver uma.
 - `executar(coleta_id, client=None)` — percorre `organization_list` e `package_search` paginado,
   faz upsert casando organização, dataset e recurso pelo `id_ckan` (a PK `id` é própria — ADR-0018), grava `dataset_snapshot` e marca como inativos os datasets que sumiram. Abre sessão própria.
 - `ultima_coleta(db)` · `coleta_em_andamento(db)` · `job_coleta_diaria()`.
@@ -87,7 +89,7 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | `coleta` | iniciada_em, finalizada_em, status (executando/ok/erro), origem (agendada/manual), solicitada_por, totais, erro |
 | `organizacao` | **id** (PK própria), **id_ckan** (ID do CKAN, único, opcional), name, titulo, sigla |
 | `dataset` | **id** (PK própria), **id_ckan** (único, opcional), name, titulo, descricao (`notes` do CKAN; migração `e5b2c7a9d1f4`), organizacao_id → `organizacao.id`, autor, autor_email, licenca, periodicidade_declarada, metadata_modified (só informativo), extras (JSON), ativo_no_portal |
-| `recurso` | **id** (PK própria), **id_ckan** (único, opcional), dataset_id → `dataset.id`, formato, url, url_type (upload/link), created, **last_modified**, datastore_active, eh_dicionario_dados |
+| `recurso` | **id** (PK própria), **id_ckan** (único, opcional), dataset_id → `dataset.id`, formato, url, url_type (upload/link), created_ckan (`created` do CKAN; o `created` da tabela é a auditoria), **last_modified**, datastore_active, eh_dicionario_dados |
 | `dataset_snapshot` | coleta_id, dataset_id (`dataset.id`, referência lógica sem FK), hash_conteudo, payload (recorte estável do dataset) |
 
 ## Permissões
@@ -159,3 +161,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 18/10/2026 | Tela Datasets (PBI-83): `GET /datasets` e `GET /datasets/{id}`, busca e filtros, Status = situação no portal, detalhe com recursos atuais, data de metadado separada da última atualização real e dados do PDA da base vinculada pelo ID; coluna `dataset.descricao` (`notes`, migração `e5b2c7a9d1f4`) | Humberto |
 | 18/10/2026 | Interações: painel (tela Organizações) e metadados (formato fechado) passam a consumir `condicao_recurso_atual()` | Humberto |
 | 21/10/2026 | Chave primária própria (ADR-0018): `organizacao`, `dataset` e `recurso` ganham `id` inteiro e o ID do CKAN vai para `id_ckan` (único, opcional); FKs e `dataset_snapshot.dataset_id` apontam para o `id` (migração `f6c3a8d2b1e7`, dados preservados); coleta casa pelo `id_ckan`; `GET /datasets/{id}` e `?orgao=<id>`; saídas com `id` e `id_ckan` | Victor |
+| 22/10/2026 | Banco só pelo `InventarioDao` (ADR-0019): service e router sem acesso direto à sessão; coleta grava com auditoria (`iniciar(..., usuario_id=)` registra quem pediu a coleta manual); excluídos somem da tela Datasets; data de criação do recurso no CKAN em `recurso.created_ckan` (JSON `created` mantido) | Victor |

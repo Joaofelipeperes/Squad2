@@ -109,3 +109,47 @@ def test_periodicidade_usa_extra_atualizacao_do_portal():
     # sem extra: usa o campo do pacote; sem nada: None
     assert regras.periodicidade_declarada({}, {"periodicidade": "Semestral"}) == "Semestral"
     assert regras.periodicidade_declarada({"Fonte": "DGPC"}) is None
+
+
+def test_coleta_preenche_auditoria_e_nao_duplica():
+    """Coleta é ação do sistema: created/changed preenchidos, sem usuário; a segunda coleta só
+    atualiza `changed` (o `created` e o `id` ficam)."""
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler))
+    with SessionLocal() as db:
+        c = service.iniciar(db, origem="manual", solicitante="paloma@cge.go.gov.br", usuario_id=7)
+    assert c.created_id == 7 and c.changed_id == 7  # coleta manual: quem pediu
+    service.executar(c.id, client=client)
+    with SessionLocal() as db:
+        ds = _por_id_ckan(db, Dataset, "d1")
+        rec = _por_id_ckan(db, Recurso, "r1a")
+        criado, alterado = ds.created, ds.changed
+        assert criado is not None and alterado is not None and ds.created_id is None
+        assert rec.created is not None and rec.changed_id is None and rec.deleted is False
+    with SessionLocal() as db:
+        c2 = service.iniciar(db, origem="agendada")
+    service.executar(c2.id, client=client)
+    with SessionLocal() as db:
+        ds2 = _por_id_ckan(db, Dataset, "d1")
+        assert ds2.id == ds.id and ds2.created == criado and ds2.changed >= alterado
+        assert db.query(Dataset).count() == 3 and db.query(Recurso).count() == 6
+
+
+def test_coleta_ignora_registro_excluido_logicamente():
+    """Dataset excluído no nosso sistema não é reaproveitado: a coleta cria um registro ativo
+    novo para o mesmo id_ckan (único só entre os ativos)."""
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler))
+    with SessionLocal() as db:
+        c = service.iniciar(db, origem="manual")
+    service.executar(c.id, client=client)
+    with SessionLocal() as db:
+        antigo = _por_id_ckan(db, Dataset, "d1")
+        antigo.deleted = True
+        db.commit()
+        antigo_id = antigo.id
+    with SessionLocal() as db:
+        c2 = service.iniciar(db, origem="manual")
+    service.executar(c2.id, client=client)
+    with SessionLocal() as db:
+        assert service.ultima_coleta(db).status == "ok"
+        d1 = db.query(Dataset).filter_by(id_ckan="d1").order_by(Dataset.id).all()
+        assert [(d.id == antigo_id, d.deleted) for d in d1] == [(True, True), (False, False)]

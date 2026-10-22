@@ -38,16 +38,12 @@ def main() -> None:
     if args.cmd == "gerar-chave":
         print(generate_key())
     elif args.cmd == "criar-usuario":
-        from sqlalchemy import or_, select
-
-        from app.modules.acesso.service import criar_usuario
-        from app.modules.inventario.models import Organizacao
+        from app.modules.acesso.service import criar_usuario, orgao_por_referencia
         senha = getpass.getpass("Senha (mín. 8 caracteres): ")
         with SessionLocal() as db:
             orgao_id = None
             if args.orgao:
-                orgao_id = db.scalar(select(Organizacao.id).where(or_(
-                    Organizacao.id_ckan == args.orgao, Organizacao.name == args.orgao)))
+                orgao_id = orgao_por_referencia(db, args.orgao)
                 if orgao_id is None:
                     raise SystemExit(f"Organização {args.orgao!r} não encontrada (rode a coleta).")
             user = criar_usuario(db, args.email, args.nome, senha, args.papel, orgao_id)

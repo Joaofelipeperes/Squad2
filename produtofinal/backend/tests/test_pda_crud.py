@@ -252,3 +252,76 @@ def test_vincular_base_pelo_id_escolhido(client, gerente, inventario):
     assert b["dataset_id"] == ESCOLAS and b["orgao_chave"] == str(SEDUC)
     assert client.put(url, headers=gerente,
                       json=_base(dataset_id=9999)).status_code == 422
+
+
+# ---------------------------------------------------------- exclusão lógica e auditoria (ADR-0019)
+def _linha(modelo, id_):
+    """Lê o registro direto do banco, inclusive se excluído (o teste não passa pelo DAO)."""
+    from sqlalchemy import select
+    with SessionLocal() as db:
+        return db.scalars(select(modelo).where(modelo.id == id_)).one()
+
+
+def _id_usuario(email):
+    from sqlalchemy import select
+
+    from app.modules.acesso.models import Usuario
+    with SessionLocal() as db:
+        return db.scalars(select(Usuario.id).where(Usuario.email == email)).one()
+
+
+def test_excluir_pda_e_logico_e_libera_o_nome(client, gerente):
+    from app.modules.pda.models import BasePrevista, PlanoPda
+
+    _criar_plano(client, gerente, nome="PDA vigente")
+    p = _criar_plano(client, gerente, nome="PDA 2").json()
+    b = client.post(f"{API}/planos/{p['id']}/bases", headers=gerente, json=_base()).json()
+    assert client.delete(f"{API}/planos/{p['id']}", headers=gerente).status_code == 204
+
+    # Continua no banco, marcado como excluído, com as bases; a API não o enxerga mais
+    plano, base = _linha(PlanoPda, p["id"]), _linha(BasePrevista, b["id"])
+    assert plano.deleted and base.deleted
+    assert plano.changed_id == _id_usuario("paloma@cge.go.gov.br")
+    assert [x["nome"] for x in client.get(f"{API}/planos", headers=gerente).json()] == [
+        "PDA vigente"]
+    assert client.get(f"{API}/planos/{p['id']}", headers=gerente).status_code == 404
+    assert client.get(f"{API}/bases/{b['id']}", headers=gerente).status_code == 404
+    assert client.get(f"{API}/bases", headers=gerente,
+                      params={"plano_id": p["id"]}).status_code == 404
+    # O nome do PDA excluído pode ser reaproveitado (único só entre os ativos)
+    assert _criar_plano(client, gerente, nome="pda 2").status_code == 201
+
+
+def test_excluir_base_e_logico_e_atualiza_o_total(client, gerente):
+    from app.modules.pda.models import BasePrevista
+
+    p = _criar_plano(client, gerente).json()
+    url = f"{API}/planos/{p['id']}/bases"
+    b1 = client.post(url, headers=gerente, json=_base()).json()
+    client.post(url, headers=gerente, json=_base(nome_previsto="Outra"))
+    assert _plano(client, gerente, p["id"])["total_bases"] == 2
+    assert client.delete(f"{API}/bases/{b1['id']}", headers=gerente).status_code == 204
+    assert _linha(BasePrevista, b1["id"]).deleted
+    assert _plano(client, gerente, p["id"])["total_bases"] == 1
+    assert [x["nome_previsto"] for x in client.get(
+        f"{API}/bases", headers=gerente, params={"plano_id": p["id"]}).json()["bases"]] == ["Outra"]
+
+
+def test_auditoria_de_criacao_e_alteracao(client, gerente, admin):
+    from app.modules.pda.models import BasePrevista, PlanoPda
+
+    paloma, administrador = _id_usuario("paloma@cge.go.gov.br"), _id_usuario("admin@cge.go.gov.br")
+    p = _criar_plano(client, gerente).json()
+    b = client.post(f"{API}/planos/{p['id']}/bases", headers=gerente, json=_base()).json()
+    plano, base = _linha(PlanoPda, p["id"]), _linha(BasePrevista, b["id"])
+    assert (plano.created_id, plano.changed_id) == (paloma, paloma)
+    assert (base.created_id, base.changed_id) == (paloma, paloma)
+    assert plano.created is not None and plano.changed is not None
+
+    # Edição por outro usuário: muda só quem/quando alterou; a criação fica como estava
+    client.put(f"{API}/planos/{p['id']}", headers=admin, json={"nome": "PDA renomeado"})
+    client.put(f"{API}/bases/{b['id']}", headers=admin, json=_base(descricao="nova"))
+    plano2, base2 = _linha(PlanoPda, p["id"]), _linha(BasePrevista, b["id"])
+    assert (plano2.created_id, plano2.changed_id) == (paloma, administrador)
+    assert (base2.created_id, base2.changed_id) == (paloma, administrador)
+    assert plano2.created == plano.created and plano2.changed >= plano.changed

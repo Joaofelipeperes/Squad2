@@ -76,7 +76,7 @@ def importar_plano(
         return service.importar_plano(
             db, nome=nome, vigencia_inicio=inicio, vigencia_fim=fim,
             definir_vigente=definir_vigente, arquivo_nome=arquivo.filename or "",
-            conteudo=conteudo, importado_por=user.nome)
+            conteudo=conteudo, importado_por=user.nome, user=user)
 
 
 @router.post("/planos/manual", response_model=PlanoOut, status_code=status.HTTP_201_CREATED)
@@ -84,7 +84,7 @@ def criar_plano(dados: PlanoIn, db: DbSession,
                 user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Cria um PDA vazio, sem planilha (as bases são incluídas uma a uma). JSON."""
     with _erros_http():
-        return service.criar_plano(db, dados, criado_por=user.nome)
+        return service.criar_plano(db, dados, criado_por=user.nome, user=user)
 
 
 @router.get("/planos/{plano_id}", response_model=PlanoOut)
@@ -95,37 +95,38 @@ def obter_plano(plano_id: int, db: DbSession,
         return service.obter_plano(db, plano_id, user)
 
 
-@router.put("/planos/{plano_id}", response_model=PlanoOut,
-            dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def atualizar_plano(plano_id: int, dados: PlanoIn, db: DbSession):
+@router.put("/planos/{plano_id}", response_model=PlanoOut)
+def atualizar_plano(plano_id: int, dados: PlanoIn, db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Edita nome e vigência do PDA (o vigente é trocado em /vigente)."""
     with _erros_http():
-        return service.atualizar_plano(db, plano_id, dados)
+        return service.atualizar_plano(db, plano_id, dados, user)
 
 
-@router.put("/planos/{plano_id}/vigente", response_model=PlanoOut,
-            dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def definir_vigente(plano_id: int, db: DbSession):
+@router.put("/planos/{plano_id}/vigente", response_model=PlanoOut)
+def definir_vigente(plano_id: int, db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Define o PDA vigente (rege a tela e os indicadores de gestão)."""
     with _erros_http():
-        return service.definir_vigente(db, plano_id)
+        return service.definir_vigente(db, plano_id, user)
 
 
 @router.delete("/planos/{plano_id}", status_code=status.HTTP_204_NO_CONTENT,
-               response_class=Response, dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def excluir_plano(plano_id: int, db: DbSession):
-    """Exclui um PDA e suas bases (o vigente só quando é o único PDA)."""
+               response_class=Response)
+def excluir_plano(plano_id: int, db: DbSession,
+                  user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Exclui (exclusão lógica) um PDA e suas bases (o vigente só quando é o único PDA)."""
     with _erros_http():
-        service.excluir_plano(db, plano_id)
+        service.excluir_plano(db, plano_id, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/planos/{plano_id}/vincular", response_model=VinculosOut,
-             dependencies=[Depends(require(P.PDA_EDITAR_VINCULOS))])
-def vincular(plano_id: int, db: DbSession):
+@router.post("/planos/{plano_id}/vincular", response_model=VinculosOut)
+def vincular(plano_id: int, db: DbSession,
+             user: Annotated[UsuarioAtual, Depends(require(P.PDA_EDITAR_VINCULOS))]):
     """PBI-12/13 — tenta resolver de novo os vínculos pendentes do PDA."""
     with _erros_http():
-        return service.resolver_vinculos_pendentes(db, plano_id)
+        return service.resolver_vinculos_pendentes(db, plano_id, user)
 
 
 # ------------------------------------------------------------------ bases previstas

@@ -15,7 +15,8 @@ from app.core.config import get_settings
 from app.integrations.ai.base import AIProviderError, ChatRequest, ChatResponse
 from app.integrations.ai.policy import TAREFAS, TarefaIA, verificar
 from app.integrations.ai.registry import build_provider
-from app.modules.ia.models import PerfilProvedorIA, UsoIA, VinculoTarefaIA
+from app.modules.ia.dao import IaDao
+from app.modules.ia.models import PerfilProvedorIA, UsoIA
 from app.modules.ia.service import config_do_perfil
 
 log = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class IANaoConfigurada(RuntimeError):
 
 class AIGateway:
     def __init__(self, db: Session) -> None:
-        self.db = db
+        self.dao = IaDao(db)
         self._permitir_externo = get_settings().ia_permitir_externo_para_sensivel
 
     def chat(self, tarefa: TarefaIA, request: ChatRequest) -> tuple[ChatResponse, PerfilProvedorIA, bool]:
@@ -52,18 +53,17 @@ class AIGateway:
         ) from ultimo_erro
 
     def _perfis(self, tarefa: TarefaIA):
-        v = self.db.get(VinculoTarefaIA, tarefa.value)
-        principal = self.db.get(PerfilProvedorIA, v.perfil_id) if v and v.perfil_id else None
+        v = self.dao.vinculo(tarefa.value)
+        principal = self.dao.perfil(v.perfil_id) if v and v.perfil_id else None
         if principal is None or not principal.ativo:
             raise IANaoConfigurada(
                 f"Nenhum modelo ativo vinculado à tarefa '{TAREFAS[tarefa].rotulo}'. "
                 "Configure em Administração › Modelos de IA.")
-        reserva = (self.db.get(PerfilProvedorIA, v.perfil_fallback_id)
-                   if v.perfil_fallback_id else None)
+        reserva = self.dao.perfil(v.perfil_fallback_id) if v.perfil_fallback_id else None
         return principal, reserva if reserva and reserva.ativo else None
 
     def _registrar(self, tarefa, perfil, fallback, resp: ChatResponse | None = None, erro=None):
-        self.db.add(UsoIA(
+        self.dao.registrar_uso(UsoIA(
             tarefa=tarefa.value, perfil_id=perfil.id, perfil_nome=perfil.nome,
             modelo=resp.model if resp else perfil.modelo, sucesso=resp is not None,
             usou_fallback=fallback, latencia_ms=resp.latency_ms if resp else None,
@@ -71,4 +71,3 @@ class AIGateway:
             tokens_saida=resp.output_tokens if resp else None,
             erro=(erro or "")[:500] or None,
         ))
-        self.db.commit()

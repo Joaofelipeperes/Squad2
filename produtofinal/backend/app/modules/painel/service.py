@@ -1,14 +1,13 @@
 """Contratos do módulo painel — responsável: João. Implementar conforme os PBIs citados."""
 from collections import Counter, defaultdict
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.deps import UsuarioAtual, filtrar_por_orgao
-from app.modules.inventario.models import Dataset, Organizacao, Recurso
-from app.modules.inventario.service import condicao_recurso_atual
+from app.core.deps import UsuarioAtual
+from app.modules.inventario.models import Organizacao
 from app.modules.metadados import regras as regras_metadados
 from app.modules.metadados.service import recursos_formato_fechado
+from app.modules.painel.dao import PainelDao
 from app.modules.painel.schemas import OrganizacaoOut, OrganizacoesOut, PlanoResumoOut
 from app.modules.parametros.router import obter as obter_parametro
 from app.modules.pda import service as pda
@@ -37,22 +36,13 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     em atraso entre as vinculadas e próximas do prazo). Respeita o escopo de órgão do usuário.
     Indicadores que dependem de vínculo, de regra ainda não definida ou de outro módulo vêm como
     None."""
-    orgs = {o.id: o for o in db.scalars(
-        filtrar_por_orgao(select(Organizacao), Organizacao.id, user))}
-
-    datasets = dict(db.execute(
-        select(Dataset.organizacao_id, func.count())
-        .where(Dataset.ativo_no_portal.is_(True), Dataset.organizacao_id.in_(orgs))
-        .group_by(Dataset.organizacao_id)).all())
-    recursos = dict(db.execute(
-        select(Dataset.organizacao_id, func.count(Recurso.id))
-        .join(Dataset, Dataset.id == Recurso.dataset_id)
-        .where(Dataset.ativo_no_portal.is_(True), Dataset.organizacao_id.in_(orgs),
-               Recurso.eh_dicionario_dados.is_(False), condicao_recurso_atual())
-        .group_by(Dataset.organizacao_id)).all())
+    dao = PainelDao.de(db, user)
+    orgs = dao.organizacoes_visiveis(user)
+    datasets = dao.datasets_ativos_por_orgao(orgs)
+    recursos = dao.recursos_validos_por_orgao(orgs)
 
     abertos = list(obter_parametro(db, "formatos_abertos"))
-    org_do_dataset = dict(db.execute(select(Dataset.id, Dataset.organizacao_id)).all())
+    org_do_dataset = dao.orgao_de_cada_dataset()
     fechados: dict[int, Counter] = defaultdict(Counter)
     for r in recursos_formato_fechado(db, abertos):
         org = org_do_dataset.get(r.dataset_id)

@@ -169,3 +169,90 @@ def test_log_de_acesso_registra_cada_requisicao(client, admin, analista):
     assert [x["usuario"] for x in client.get(f"{API}/logs?usuario=paloma", headers=admin)
             .json()] == ["paloma@cge.go.gov.br"]
     assert client.get(f"{API}/logs", headers=analista).status_code == 403
+
+
+# ---------------------------------------------------------- exclusão lógica e auditoria (ADR-0019)
+def _usuario(db, email):
+    from app.modules.acesso.dao import AcessoDao
+    return AcessoDao(db).usuario_por_email(email)
+
+
+def test_auditoria_registra_quem_criou_e_quem_alterou(client, admin, gerente):
+    from app.core.db import SessionLocal
+    from app.modules.acesso.models import UsuarioPapel
+
+    pid = _papel_id(client, admin, "analista_geda")
+    u = client.post(f"{API}/usuarios", headers=admin, json={
+        "email": "novo@cge.go.gov.br", "nome": "Novo", "senha": SENHA, "papel_ids": [pid]}).json()
+    client.put(f"{API}/usuarios/{u['id']}", headers=gerente, json={
+        "email": u["email"], "nome": "Novo Nome", "papel_ids": [pid]})
+    ids = {e: client.get(f"{API}/me", headers=h).json()["usuario"]["id"]
+           for e, h in (("admin", admin), ("gerente", gerente))}
+    with SessionLocal() as db:
+        novo = _usuario(db, "novo@cge.go.gov.br")
+        assert (novo.created_id, novo.changed_id) == (ids["admin"], ids["gerente"])
+        assert novo.changed >= novo.created
+        vinculo = db.query(UsuarioPapel).filter_by(usuario_id=novo.id).one()
+        assert vinculo.created_id == ids["admin"]
+
+
+def test_usuario_excluido_some_e_libera_o_email(client, admin):
+    from app.core.db import SessionLocal
+    from app.modules.acesso import service
+    from app.modules.acesso.models import Usuario, UsuarioPapel
+
+    pid = _papel_id(client, admin, "analista_geda")
+    corpo = {"email": "temp@cge.go.gov.br", "nome": "Temp", "senha": SENHA, "papel_ids": [pid]}
+    u = client.post(f"{API}/usuarios", headers=admin, json=corpo).json()
+    h = login(client, "temp@cge.go.gov.br")
+    with SessionLocal() as db:
+        alvo = _usuario(db, "temp@cge.go.gov.br")
+        service.excluir_usuario(db, alvo)
+    assert u["id"] not in [x["id"] for x in client.get(f"{API}/usuarios", headers=admin).json()]
+    assert client.get(f"{API}/me", headers=h).status_code == 401  # token antigo deixa de valer
+    r = client.post(f"{API}/login", json={"email": "temp@cge.go.gov.br", "senha": SENHA})
+    assert r.status_code == 401
+    assert client.put(f"{API}/usuarios/{u['id']}", headers=admin, json=corpo).status_code == 404
+    # o e-mail volta a ficar disponível; o registro antigo continua no banco, marcado
+    r = client.post(f"{API}/usuarios", headers=admin, json=corpo)
+    assert r.status_code == 201 and r.json()["id"] != u["id"]
+    with SessionLocal() as db:
+        antigo = db.get(Usuario, u["id"])
+        assert antigo.deleted and antigo.changed >= antigo.created
+        assert all(v.deleted for v in db.query(UsuarioPapel).filter_by(usuario_id=u["id"]))
+
+
+def test_trocar_papeis_exclui_vinculo_antigo_e_cria_novo(client, admin):
+    from app.core.db import SessionLocal
+    from app.modules.acesso.models import UsuarioPapel
+
+    analista, gerencia = (_papel_id(client, admin, c) for c in ("analista_geda", "gerente_geda"))
+    u = client.post(f"{API}/usuarios", headers=admin, json={
+        "email": "troca@cge.go.gov.br", "nome": "Troca", "senha": SENHA,
+        "papel_ids": [analista]}).json()
+    for papeis in ([gerencia], [analista]):
+        r = client.put(f"{API}/usuarios/{u['id']}", headers=admin, json={
+            "email": u["email"], "nome": u["nome"], "papel_ids": papeis})
+        assert [p["id"] for p in r.json()["papeis"]] == papeis
+    with SessionLocal() as db:
+        vinculos = db.query(UsuarioPapel).filter_by(usuario_id=u["id"]).order_by(UsuarioPapel.id)
+        # analista (excluído) → gerência (excluído) → analista de novo (vínculo NOVO, ativo)
+        assert [(v.papel_id, v.deleted) for v in vinculos] == [
+            (analista, True), (gerencia, True), (analista, False)]
+
+
+def test_excluir_papel_exclui_logicamente_os_vinculos(client, admin):
+    from app.core.db import SessionLocal
+    from app.modules.acesso.models import Papel, PapelPermissao
+
+    p = client.post(f"{API}/papeis", headers=admin, json={
+        "codigo": "temporario", "nome": "Temporário", "permissoes": ["painel.acessar"]}).json()
+    assert client.delete(f"{API}/papeis/{p['id']}", headers=admin).status_code == 204
+    assert p["id"] not in [x["id"] for x in client.get(f"{API}/papeis", headers=admin).json()]
+    assert client.delete(f"{API}/papeis/{p['id']}", headers=admin).status_code == 404
+    with SessionLocal() as db:
+        assert db.get(Papel, p["id"]).deleted
+        assert [pp.deleted for pp in db.query(PapelPermissao).filter_by(papel_id=p["id"])] == [True]
+    # o código fica livre para um papel novo
+    assert client.post(f"{API}/papeis", headers=admin, json={
+        "codigo": "temporario", "nome": "De novo", "permissoes": []}).status_code == 201

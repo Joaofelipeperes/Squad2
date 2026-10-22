@@ -9,15 +9,14 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.db import Base, TimestampMixin
+from app.core.db import Base
 
 
-class Achado(TimestampMixin, Base):
+class Achado(Base):
     """Possível dado pessoal localizado num recurso (local e tipo, nunca o valor)."""
 
     __tablename__ = "lgpd_achado"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     recurso_id: Mapped[int] = mapped_column(ForeignKey("recurso.id"), index=True)
     coluna: Mapped[str] = mapped_column(String(300))
     linha: Mapped[int | None] = mapped_column(Integer, nullable=True)  # primeira ocorrência
@@ -35,7 +34,6 @@ class DecisaoTriagem(Base):
 
     __tablename__ = "lgpd_decisao"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     achado_id: Mapped[int] = mapped_column(ForeignKey("lgpd_achado.id"), index=True)
     decisao: Mapped[str] = mapped_column(String(20))
     justificativa: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -43,12 +41,11 @@ class DecisaoTriagem(Base):
     momento: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class CorrecaoPublicada(TimestampMixin, Base):
+class CorrecaoPublicada(Base):
     """Trilha da anonimização publicada no CKAN (PBI-92 a PBI-94)."""
 
     __tablename__ = "lgpd_correcao"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     recurso_id: Mapped[int] = mapped_column(ForeignKey("recurso.id"), index=True)
     aprovado_por: Mapped[str] = mapped_column(String(200))
     aprovado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
