@@ -1,9 +1,10 @@
 import httpx
+from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.integrations.ckan.client import CkanClient
 from app.modules.inventario import regras, service
-from app.modules.inventario.models import Dataset, DatasetSnapshot, Recurso
+from app.modules.inventario.models import Dataset, DatasetSnapshot, Organizacao, Recurso
 
 ORGS = [{"id": "o1", "name": "ses", "title": "Secretaria da Saúde"},
         {"id": "o2", "name": "seduc", "title": "Secretaria da Educação"}]
@@ -23,6 +24,10 @@ def _pkg(i, org):
 
 
 PKGS = [_pkg(1, "o1"), _pkg(2, "o1"), _pkg(3, "o2")]
+
+
+def _por_id_ckan(db, modelo, id_ckan):
+    return db.scalar(select(modelo).where(modelo.id_ckan == id_ckan))
 
 
 def _handler(request: httpx.Request):
@@ -47,11 +52,32 @@ def test_coleta_completa_com_paginacao():
         coleta = service.ultima_coleta(db)
         assert coleta.status == "ok", coleta.erro
         assert (coleta.total_organizacoes, coleta.total_datasets, coleta.total_recursos) == (2, 3, 6)
-        ds = db.get(Dataset, "d1")
+        ds = _por_id_ckan(db, Dataset, "d1")
         assert ds.periodicidade_declarada == "Mensal"
-        assert db.get(Recurso, "r1b").eh_dicionario_dados is True
-        assert db.get(Recurso, "r1a").formato == "CSV"
+        assert ds.organizacao_id == _por_id_ckan(db, Organizacao, "o1").id
+        assert _por_id_ckan(db, Recurso, "r1b").eh_dicionario_dados is True
+        assert _por_id_ckan(db, Recurso, "r1a").formato == "CSV"
+        assert _por_id_ckan(db, Recurso, "r1a").dataset_id == ds.id
         assert db.query(DatasetSnapshot).count() == 3
+        assert db.query(DatasetSnapshot).filter_by(dataset_id=ds.id).count() == 1
+
+
+def test_segunda_coleta_atualiza_pelo_id_ckan():
+    """A coleta casa os registros pelo `id_ckan`: a segunda não duplica nem troca o `id`."""
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler))
+    ids = []
+    for _ in range(2):
+        with SessionLocal() as db:
+            c = service.iniciar(db, origem="manual")
+        service.executar(c.id, client=client)
+        with SessionLocal() as db:
+            ids.append({d.id_ckan: d.id for d in db.query(Dataset)})
+    assert ids[0] == ids[1]
+    with SessionLocal() as db:
+        assert service.ultima_coleta(db).status == "ok"
+        assert db.query(Dataset).count() == 3 and db.query(Recurso).count() == 6
+        assert db.query(Organizacao).filter(Organizacao.id_ckan.in_(["o1", "o2"])).count() == 2
+        assert db.query(DatasetSnapshot).count() == 6
 
 
 def test_organizacoes_paginadas_alem_do_limite_do_ckan():

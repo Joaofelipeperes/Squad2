@@ -49,7 +49,7 @@ def catalogo():
 def orgaos(db: DbSession):
     from app.modules.inventario.models import Organizacao
 
-    return [OrgaoResumo(ckan_id=o.ckan_id, titulo=o.titulo)
+    return [OrgaoResumo(id=o.id, id_ckan=o.id_ckan, titulo=o.titulo)
             for o in db.scalars(select(Organizacao).order_by(Organizacao.titulo)).all()]
 
 

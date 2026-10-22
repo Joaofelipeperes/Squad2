@@ -54,7 +54,7 @@ class Usuario(TimestampMixin, Base):
     senha_hash: Mapped[str] = mapped_column(String(200))
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
     # Preenchido = usuário restrito aos dados deste órgão (ex.: órgão publicador)
-    orgao_id: Mapped[str | None] = mapped_column(ForeignKey("organizacao.ckan_id"), nullable=True)
+    orgao_id: Mapped[int | None] = mapped_column(ForeignKey("organizacao.id"), nullable=True)
     ultimo_acesso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     papeis: Mapped[list[Papel]] = relationship(secondary=usuario_papel, lazy="selectin")

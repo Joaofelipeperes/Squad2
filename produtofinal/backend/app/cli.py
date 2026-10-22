@@ -3,7 +3,7 @@
     python -m app.cli gerar-chave
     python -m app.cli criar-usuario --email a@b.gov.br --nome "Fulana" --papel administrador
     python -m app.cli criar-usuario --email x@seduc.go.gov.br --nome "Servidor" \
-        --papel orgao_publicador --orgao <ckan_id_da_organizacao>
+        --papel orgao_publicador --orgao <id_ckan ou name da organizacao>
     python -m app.cli papeis                  # lista papéis e permissões
     python -m app.cli coletar                 # roda uma coleta agora, em primeiro plano
     python -m app.cli semear-ia               # cria perfis de IA de exemplo (mock + ollama)
@@ -29,7 +29,7 @@ def main() -> None:
     u.add_argument("--nome", required=True)
     u.add_argument("--papel", action="append", required=True,
                    choices=[p.codigo for p in PAPEIS_PADRAO], help="pode repetir")
-    u.add_argument("--orgao", default=None, help="ckan_id da organização (escopo de órgão)")
+    u.add_argument("--orgao", default=None, help="id_ckan ou name da organização (escopo de órgão)")
     sub.add_parser("papeis")
     sub.add_parser("coletar")
     sub.add_parser("semear-ia")
@@ -38,10 +38,19 @@ def main() -> None:
     if args.cmd == "gerar-chave":
         print(generate_key())
     elif args.cmd == "criar-usuario":
+        from sqlalchemy import or_, select
+
         from app.modules.acesso.service import criar_usuario
+        from app.modules.inventario.models import Organizacao
         senha = getpass.getpass("Senha (mín. 8 caracteres): ")
         with SessionLocal() as db:
-            user = criar_usuario(db, args.email, args.nome, senha, args.papel, args.orgao)
+            orgao_id = None
+            if args.orgao:
+                orgao_id = db.scalar(select(Organizacao.id).where(or_(
+                    Organizacao.id_ckan == args.orgao, Organizacao.name == args.orgao)))
+                if orgao_id is None:
+                    raise SystemExit(f"Organização {args.orgao!r} não encontrada (rode a coleta).")
+            user = criar_usuario(db, args.email, args.nome, senha, args.papel, orgao_id)
             print(f"Usuário {user.email} criado com papéis {[p.codigo for p in user.papeis]}.")
     elif args.cmd == "papeis":
         for p in PAPEIS_PADRAO:

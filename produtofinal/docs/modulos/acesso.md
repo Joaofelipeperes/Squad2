@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 15/10/2026 |
+| **Última atualização** | 21/10/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -43,7 +43,7 @@ Após o login o usuário cai na **primeira tela permitida** (órgão publicador 
 | POST | `/login` | pública | E-mail + senha → token JWT + sessão (usuário e permissões) |
 | GET | `/me` | autenticado | Sessão atual; o frontend monta menu e botões a partir dela |
 | GET | `/catalogo` | `gerenciar_usuarios` **ou** `gerenciar_papeis` | Permissões agrupadas por módulo |
-| GET | `/orgaos` | `acesso.gerenciar_usuarios` | Órgãos para o vínculo do usuário (lê `inventario`) |
+| GET | `/orgaos` | `acesso.gerenciar_usuarios` | Órgãos para o vínculo do usuário (`OrgaoResumo`: `id`, `id_ckan`, `titulo`; lê `inventario`) |
 | GET | `/usuarios` | `acesso.gerenciar_usuarios` | Lista usuários |
 | POST | `/usuarios` | `acesso.gerenciar_usuarios` | Cria usuário |
 | PUT | `/usuarios/{id}` | `acesso.gerenciar_usuarios` | Edita nome, senha, ativo, órgão e papéis |
@@ -86,7 +86,7 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 | Tabela | Colunas relevantes |
 |---|---|
-| `usuario` | email (único), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao`, ultimo_acesso |
+| `usuario` | email (único), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao.id` (inteiro, ADR-0018), ultimo_acesso |
 | `acesso_papel` | codigo (único), nome, descricao, sistema, exige_orgao, todas |
 | `acesso_papel_permissao` | papel_id, permissao (código do catálogo) |
 | `acesso_usuario_papel` | usuario_id, papel_id |
@@ -159,6 +159,11 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 - Log de acesso: sem expurgo automático; a tabela cresce
   ~1 linha por minuto por aba aberta só com o polling da Topbar. Prazo de retenção a definir (ADR-0016).
 - Log de acesso fora do Backlog v2: pedido da coordenação em 14/10/2026; validar com a Paloma.
+- **Avaliar login com a conta de e-mail institucional da CGE** (a mesma senha do e-mail, sem senha
+  própria do sistema), como o SIGAA/UFG aceita o Google institucional. Só avaliar a viabilidade
+  (provedor do e-mail da CGE — Google Workspace, Microsoft 365 ou outro —, OAuth/OIDC, restrição ao
+  domínio e como casar com o cadastro e os papéis do usuário). Depende de autorização da CGE/SECTI e
+  teria de virar ADR (ADR-0015); não implementar antes disso. Complementa o item de SSO acima.
 
 ## Histórico de alterações
 | Data | Alteração | Autor |
@@ -169,3 +174,5 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 13/10/2026 | Catálogo: descrição de `pda.gerenciar_planos` passa a cobrir o cadastro manual (criar, editar e excluir PDAs e bases previstas); papéis inalterados | Humberto |
 | 14/10/2026 | Log de acesso: tabela `acesso_log`, middleware em `main.py`, rota `GET /logs` e permissão `acesso.ver_logs` (ADR-0016) | Victor |
 | 15/10/2026 | Tela Log de acesso (`/admin/logs`): filtros, tabela em America/Sao_Paulo e exportação CSV no navegador | Victor |
+| 15/10/2026 | Pendência registrada: avaliar login com a conta de e-mail institucional da CGE; sem mudança de código | Victor |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): `usuario.orgao_id` passa a inteiro → `organizacao.id`; `OrgaoResumo` com `id` e `id_ckan`; `UsuarioIn.orgao_id` inteiro; CLI `criar-usuario --orgao` aceita `id_ckan` ou `name` da organização | Victor |

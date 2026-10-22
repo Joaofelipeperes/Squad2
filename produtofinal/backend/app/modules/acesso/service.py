@@ -54,7 +54,7 @@ def usuario_out(db: Session, u: Usuario) -> UsuarioOut:
     org = db.get(Organizacao, u.orgao_id) if u.orgao_id else None
     return UsuarioOut(
         id=u.id, email=u.email, nome=u.nome, ativo=u.ativo, ultimo_acesso=u.ultimo_acesso,
-        orgao=OrgaoResumo(ckan_id=org.ckan_id, titulo=org.titulo) if org else None,
+        orgao=OrgaoResumo(id=org.id, id_ckan=org.id_ckan, titulo=org.titulo) if org else None,
         papeis=[PapelResumo(id=p.id, codigo=p.codigo, nome=p.nome) for p in u.papeis],
     )
 
@@ -168,7 +168,7 @@ def salvar_usuario(db: Session, dados: UsuarioIn, usuario: Usuario | None = None
 
 
 def criar_usuario(db: Session, email: str, nome: str, senha: str, papel_codigos: list[str],
-                  orgao_id: str | None = None) -> Usuario:
+                  orgao_id: int | None = None) -> Usuario:
     """Atalho usado pela CLI e pelos testes."""
     sincronizar_papeis_padrao(db)
     ids = list(db.scalars(select(Papel.id).where(Papel.codigo.in_(papel_codigos))).all())

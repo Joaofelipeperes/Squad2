@@ -15,7 +15,8 @@ class PapelResumo(BaseModel):
 
 
 class OrgaoResumo(BaseModel):
-    ckan_id: str
+    id: int
+    id_ckan: str | None
     titulo: str
 
 
@@ -47,7 +48,7 @@ class UsuarioIn(BaseModel):
     nome: str = Field(min_length=2, max_length=200)
     senha: str | None = Field(None, min_length=8)  # obrigatória na criação; opcional na edição
     ativo: bool = True
-    orgao_id: str | None = None
+    orgao_id: int | None = None  # organizacao.id
     papel_ids: list[int] = Field(default_factory=list)
 
 

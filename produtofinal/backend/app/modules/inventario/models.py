@@ -2,7 +2,8 @@
 
 Tabelas de "estado atual" (organizacao, dataset, recurso) + histórico de coletas (coleta) e
 fotografia por coleta (dataset_snapshot), que alimenta o diff da rastreabilidade (US14/US29).
-Chave primária = ID do CKAN, nunca o `name` (editável pelos órgãos).
+Chave primária própria (`id`, ADR-0018); o ID do CKAN fica em `id_ckan` (único) e é por ele que a
+coleta casa os registros — nunca pelo `name` (editável pelos órgãos).
 """
 from datetime import datetime
 
@@ -34,7 +35,8 @@ class Organizacao(Base):
 
     __tablename__ = "organizacao"
 
-    ckan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    id_ckan: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String(200), index=True)
     titulo: Mapped[str] = mapped_column(String(300))
     sigla: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -46,11 +48,12 @@ class Dataset(Base):
 
     __tablename__ = "dataset"
 
-    ckan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    id_ckan: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String(200), index=True)
     titulo: Mapped[str] = mapped_column(String(500))
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)  # `notes` do CKAN
-    organizacao_id: Mapped[str | None] = mapped_column(ForeignKey("organizacao.ckan_id"),
+    organizacao_id: Mapped[int | None] = mapped_column(ForeignKey("organizacao.id"),
                                                        nullable=True, index=True)
     autor: Mapped[str | None] = mapped_column(String(300), nullable=True)
     autor_email: Mapped[str | None] = mapped_column(String(300), nullable=True)
@@ -72,8 +75,9 @@ class Recurso(Base):
 
     __tablename__ = "recurso"
 
-    ckan_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    dataset_id: Mapped[str] = mapped_column(ForeignKey("dataset.ckan_id"), index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    id_ckan: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    dataset_id: Mapped[int] = mapped_column(ForeignKey("dataset.id"), index=True)
     nome: Mapped[str | None] = mapped_column(String(500), nullable=True)
     formato: Mapped[str | None] = mapped_column(String(40), nullable=True)
     url: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -94,6 +98,6 @@ class DatasetSnapshot(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     coleta_id: Mapped[int] = mapped_column(ForeignKey("coleta.id"), index=True)
-    dataset_id: Mapped[str] = mapped_column(String(64), index=True)
+    dataset_id: Mapped[int] = mapped_column(Integer, index=True)  # dataset.id (sem FK: histórico)
     hash_conteudo: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSON)

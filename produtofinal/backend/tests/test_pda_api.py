@@ -10,13 +10,15 @@ from app.core.db import SessionLocal
 from app.modules.inventario.models import Dataset, Recurso
 from app.modules.pda import service
 from app.modules.pda.models import BasePrevista, PlanoPda
-from tests.conftest import SENHA, login
+from tests.conftest import SEDUC, SENHA, SES, login
 
 API = "/api/v1/pda"
 HOJE = date(2026, 10, 7)
 CABECALHO = ["Orgão", "Base de Dados", "Descrição", "Unidade Responsável", "Atualização",
              "Políticas Públicas", "Possui Conteúdo Sigiloso?", "Disponível no Portal", "Prazo"]
 URL = "https://dadosabertos.go.gov.br/dataset/"
+# `id` próprio dos datasets usados nos testes (o ID do CKAN fica em `id_ckan`)
+ESCOLAS, OBRAS, SO_DICIONARIO, IMPOSTOR, MATRICULAS = 1, 2, 3, 4, 5
 
 # Linhas 2..7 da planilha (linha 1 = cabeçalho)
 LINHAS_CSV = [
@@ -41,12 +43,12 @@ def _hoje(monkeypatch):
 def inventario():
     """Dataset publicado com um recurso normal e um dicionário de dados (que nunca conta)."""
     with SessionLocal() as db:
-        db.add(Dataset(ckan_id="7f3e9a10-escolas", name="escolas-estaduais",
-                       titulo="Escolas Estaduais", organizacao_id="org-seduc"))
+        db.add(Dataset(id=ESCOLAS, id_ckan="7f3e9a10-escolas", name="escolas-estaduais",
+                       titulo="Escolas Estaduais", organizacao_id=SEDUC))
         db.add_all([
-            Recurso(ckan_id="r-escolas-csv", dataset_id="7f3e9a10-escolas", nome="escolas.csv",
+            Recurso(id=1, id_ckan="r-escolas-csv", dataset_id=ESCOLAS, nome="escolas.csv",
                     last_modified=datetime(2026, 9, 1, 8, 0, tzinfo=UTC)),
-            Recurso(ckan_id="r-escolas-dic", dataset_id="7f3e9a10-escolas",
+            Recurso(id=2, id_ckan="r-escolas-dic", dataset_id=ESCOLAS,
                     nome="Dicionário de dados", eh_dicionario_dados=True,
                     last_modified=datetime(2026, 10, 1, 8, 0, tzinfo=UTC)),
         ])
@@ -110,27 +112,27 @@ def test_importar_csv_resumo_e_vinculo_pelo_id(client, gerente, inventario):
     with SessionLocal() as db:
         escolas = db.scalar(select(BasePrevista).where(
             BasePrevista.nome_previsto == "Escolas estaduais"))
-        assert escolas.dataset_id == "7f3e9a10-escolas"  # ID do CKAN, nunca o name
+        assert escolas.dataset_id == ESCOLAS  # pelo ID do dataset, nunca o name
         assert escolas.dataset_name_planilha == "escolas-estaduais"
-        assert escolas.organizacao_id == "org-seduc" and escolas.linha_planilha == 2
+        assert escolas.organizacao_id == SEDUC and escolas.linha_planilha == 2
         matriculas = db.scalar(select(BasePrevista).where(
             BasePrevista.nome_previsto == "Matrículas"))
         assert matriculas.dataset_id is None
         assert matriculas.dataset_name_planilha == "matriculas-2026"
         assert (matriculas.periodicidade, matriculas.periodicidade_original) == ("Mensal", "Mnsal")
         assert matriculas.prazo_abertura == date(2026, 12, 31)
-        assert matriculas.organizacao_id == "org-seduc"  # casada pela sigla
+        assert matriculas.organizacao_id == SEDUC  # casada pela sigla
 
 
 def test_importar_xlsx(client, gerente, inventario):
     with SessionLocal() as db:  # dataset inativo no portal e dataset só com dicionário
         db.add_all([
-            Dataset(ckan_id="9b1c-removido", name="obras-removidas", titulo="Obras",
-                    organizacao_id="org-ses", ativo_no_portal=False),
-            Recurso(ckan_id="r-obras", dataset_id="9b1c-removido", nome="obras.csv"),
-            Dataset(ckan_id="5d2e-so-dicionario", name="so-dicionario", titulo="Só dicionário",
-                    organizacao_id="org-ses"),
-            Recurso(ckan_id="r-dic", dataset_id="5d2e-so-dicionario",
+            Dataset(id=OBRAS, id_ckan="9b1c-removido", name="obras-removidas", titulo="Obras",
+                    organizacao_id=SES, ativo_no_portal=False),
+            Recurso(id=3, id_ckan="r-obras", dataset_id=OBRAS, nome="obras.csv"),
+            Dataset(id=SO_DICIONARIO, id_ckan="5d2e-so-dicionario", name="so-dicionario",
+                    titulo="Só dicionário", organizacao_id=SES),
+            Recurso(id=4, id_ckan="r-dic", dataset_id=SO_DICIONARIO,
                     nome="Dicionário de dados", eh_dicionario_dados=True),
         ])
         db.commit()
@@ -249,8 +251,8 @@ def test_lista_situacoes_opcoes_e_filtros(client, gerente, inventario):
     assert bases["Escolas estaduais"]["orgao_nome"] == "Secretaria da Educação"
     assert corpo["opcoes"]["orgaos"] == [
         {"valor": "sigla:AGEHAB", "rotulo": "AGEHAB"},
-        {"valor": "org-seduc", "rotulo": "SEDUC — Secretaria da Educação"},
-        {"valor": "org-ses", "rotulo": "SES — Secretaria da Saúde"},
+        {"valor": str(SEDUC), "rotulo": "SEDUC — Secretaria da Educação"},
+        {"valor": str(SES), "rotulo": "SES — Secretaria da Saúde"},
     ]
     assert corpo["opcoes"]["periodicidades"] == ["Mensal", "Semestral", "Bienal"]
     assert corpo["opcoes"]["anos"] == [2026]
@@ -261,12 +263,12 @@ def test_lista_situacoes_opcoes_e_filtros(client, gerente, inventario):
         return sorted(b["nome_previsto"] for b in c["bases"])
 
     assert nomes(situacao="Publicado") == ["Escolas estaduais"]
-    assert nomes(orgao="org-seduc") == ["Escolas estaduais", "Matrículas"]
+    assert nomes(orgao=str(SEDUC)) == ["Escolas estaduais", "Matrículas"]
     assert nomes(orgao="sigla:AGEHAB") == ["Programas habitacionais"]
     assert nomes(periodicidade="Mensal") == ["Escolas estaduais", "Matrículas"]
     assert nomes(prazo="vencido") == ["Programas habitacionais"]
     assert nomes(prazo="proximo") == ["Leitos hospitalares"]
-    assert nomes(ano=2026, orgao="org-seduc") == ["Matrículas"]
+    assert nomes(ano=2026, orgao=str(SEDUC)) == ["Matrículas"]
     assert nomes(orgao="", situacao="") == sorted(bases)  # vazio = sem filtro
     assert client.get(f"{API}/bases", headers=gerente,
                       params={"prazo": "amanha"}).status_code == 422
@@ -278,7 +280,8 @@ def test_detalhe_da_base(client, gerente, inventario):
     r = client.get(f"{API}/bases/{escolas['id']}", headers=gerente)
     assert r.status_code == 200, r.text
     b = r.json()
-    assert b["vinculo"] == "resolvido" and b["dataset_id"] == "7f3e9a10-escolas"
+    assert b["vinculo"] == "resolvido" and b["dataset_id"] == ESCOLAS
+    assert b["dataset_id_ckan"] == "7f3e9a10-escolas"
     assert (b["dataset_name"], b["dataset_titulo"]) == ("escolas-estaduais", "Escolas Estaduais")
     assert b["dataset_ativo"] is True and b["recursos_validos"] == 1  # dicionário não conta
     assert b["ultima_atualizacao"].startswith("2026-09-01T08:00:00")  # não a do dicionário
@@ -293,12 +296,13 @@ def test_vincular_resolve_pendente_sem_recalcular_resolvido(client, gerente, inv
     with SessionLocal() as db:
         # o dataset vinculado muda de name e outro dataset passa a usar o name antigo:
         # o vínculo resolvido continua no ID original
-        db.get(Dataset, "7f3e9a10-escolas").name = "escolas-renomeado"
-        db.add(Dataset(ckan_id="aaaa-impostor", name="escolas-estaduais", titulo="Outro"))
+        db.get(Dataset, ESCOLAS).name = "escolas-renomeado"
+        db.add(Dataset(id=IMPOSTOR, id_ckan="aaaa-impostor", name="escolas-estaduais",
+                       titulo="Outro"))
         # o dataset pendente foi publicado depois da importação
-        db.add(Dataset(ckan_id="c0ffee-matriculas", name="matriculas-2026",
-                       titulo="Matrículas 2026", organizacao_id="org-seduc"))
-        db.add(Recurso(ckan_id="r-mat", dataset_id="c0ffee-matriculas", nome="mat.csv",
+        db.add(Dataset(id=MATRICULAS, id_ckan="c0ffee-matriculas", name="matriculas-2026",
+                       titulo="Matrículas 2026", organizacao_id=SEDUC))
+        db.add(Recurso(id=5, id_ckan="r-mat", dataset_id=MATRICULAS, nome="mat.csv",
                        created=datetime(2026, 9, 20, tzinfo=UTC)))
         db.commit()
     r = client.post(f"{API}/planos/{plano['id']}/vincular", headers=gerente)
@@ -307,10 +311,10 @@ def test_vincular_resolve_pendente_sem_recalcular_resolvido(client, gerente, inv
     assert client.post(f"{API}/planos/9999/vincular", headers=gerente).status_code == 404
 
     bases = _por_nome(_bases(client, gerente))
-    assert bases["Escolas estaduais"]["dataset_id"] == "7f3e9a10-escolas"
+    assert bases["Escolas estaduais"]["dataset_id"] == ESCOLAS
     assert bases["Escolas estaduais"]["dataset_name"] == "escolas-renomeado"  # name atual
     mat = bases["Matrículas"]
-    assert mat["vinculo"] == "resolvido" and mat["dataset_id"] == "c0ffee-matriculas"
+    assert mat["vinculo"] == "resolvido" and mat["dataset_id"] == MATRICULAS
     assert mat["situacao"] == "Publicado"
     assert mat["ultima_atualizacao_estimada"] is True  # sem last_modified → created
     planos = client.get(f"{API}/planos", headers=gerente).json()
@@ -337,11 +341,11 @@ def test_usuario_restrito_ve_so_o_proprio_orgao(client, admin, gerente):
         "codigo": "pda_orgao", "nome": "PDA do órgão", "permissoes": ["pda.acessar"]}).json()
     r = client.post("/api/v1/acesso/usuarios", headers=admin, json={
         "email": "pda@seduc.go.gov.br", "nome": "PDA SEDUC", "senha": SENHA,
-        "papel_ids": [papel["id"]], "orgao_id": "org-seduc"})
+        "papel_ids": [papel["id"]], "orgao_id": SEDUC})
     assert r.status_code == 201, r.text
     h = login(client, "pda@seduc.go.gov.br")
     corpo = _bases(client, h)
-    assert {b["orgao_chave"] for b in corpo["bases"]} == {"org-seduc"}  # nem AGEHAB (sem órgão)
+    assert {b["orgao_chave"] for b in corpo["bases"]} == {str(SEDUC)}  # nem AGEHAB (sem órgão)
     assert corpo["total_previstas"] == 2
     leitos = _por_nome(_bases(client, gerente))["Leitos hospitalares"]
     assert client.get(f"{API}/bases/{leitos['id']}", headers=h).status_code == 404

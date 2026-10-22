@@ -13,6 +13,7 @@ from app.modules.pda.schemas import (
     BaseIn,
     BaseOut,
     BasesOut,
+    DatasetOpcaoOut,
     FormularioOut,
     ImportacaoResumoOut,
     PlanoIn,
@@ -161,7 +162,7 @@ def obter_base(base_id: int, db: DbSession,
 
 
 @router.get("/datasets/{dataset_id}/bases", response_model=list[BaseOut])
-def bases_do_dataset(dataset_id: str, db: DbSession,
+def bases_do_dataset(dataset_id: int, db: DbSession,
                      user: Annotated[UsuarioAtual, Depends(require(P.PDA_ACESSAR))]):
     """Bases previstas vinculadas a um dataset do portal (vigente primeiro) — tela Datasets."""
     return [BaseOut.model_validate(b) for b in service.bases_do_dataset(db, dataset_id, user)]
@@ -172,6 +173,14 @@ def opcoes_formulario(db: DbSession,
                       user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Opções do formulário de base: organizações do portal e periodicidades."""
     return service.opcoes_formulario(db, user)
+
+
+@router.get("/formulario/datasets", response_model=list[DatasetOpcaoOut])
+def buscar_datasets(db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))],
+                    busca: str | None = None):
+    """Busca de datasets do inventário para vincular à base (título, name, ID do CKAN ou link)."""
+    return service.buscar_datasets(db, user, busca)
 
 
 @router.post("/planos/{plano_id}/bases", response_model=BaseOut,

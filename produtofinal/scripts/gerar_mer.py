@@ -34,7 +34,7 @@ import_all_models()
 # Referências sem chave estrangeira, mantidas de propósito (ver docs/banco/convencoes.md).
 # O gerador valida que tabela e coluna existem: renomear sem atualizar aqui quebra o --check.
 REFERENCIAS_LOGICAS = [
-    ("dataset_snapshot", "dataset_id", "dataset", "ckan_id", True,
+    ("dataset_snapshot", "dataset_id", "dataset", "id", True,
      "Fotografia histórica: sem FK para não depender do estado atual do dataset."),
     ("ia_uso", "perfil_id", "ia_perfil_provedor", "id", True,
      "Registro de uso sobrevive à exclusão do perfil (o nome fica em perfil_nome)."),

@@ -5,7 +5,7 @@ from app.core.deps import require
 from app.core.module import BackendModule
 from app.core.permissoes import META, PAPEIS_PADRAO, P
 from app.main import RotaSemControleDeAcesso, verificar_controle_de_acesso
-from tests.conftest import SENHA, login
+from tests.conftest import SEDUC, SENHA, SES, login
 
 API = "/api/v1/acesso"
 
@@ -41,7 +41,8 @@ def test_senha_errada_e_sem_token(client):
 
 def test_orgao_publicador_tem_escopo(client, orgao):
     me = client.get(f"{API}/me", headers=orgao).json()
-    assert me["usuario"]["orgao"]["ckan_id"] == "org-seduc"
+    assert me["usuario"]["orgao"]["id"] == SEDUC
+    assert me["usuario"]["orgao"]["id_ckan"] == "org-seduc"
     assert set(me["permissoes"]) == {"envio.acessar", "envio.enviar_recurso"}
 
 
@@ -105,7 +106,7 @@ def test_papel_que_exige_orgao(client, gerente):
     assert r.status_code == 422 and "órgão" in r.json()["detail"]
     r = client.post(f"{API}/usuarios", headers=gerente, json={
         "email": "novo@ses.go.gov.br", "nome": "Novo", "senha": SENHA, "papel_ids": [pid],
-        "orgao_id": "org-ses"})
+        "orgao_id": SES})
     assert r.status_code == 201 and r.json()["orgao"]["titulo"] == "Secretaria da Saúde"
 
 

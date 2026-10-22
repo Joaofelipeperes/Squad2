@@ -10,7 +10,8 @@ Decisão e alternativas: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md) 
 |---|---|---|
 | Idioma | Português, `snake_case`, sem acento. Termos do CKAN ficam em inglês. | `prazo_abertura`, `last_modified`, `url_type` |
 | Tabela | Singular. **Tabela nova leva o prefixo do módulo dono.** | `lgpd_achado`, `ia_uso`, `pda_base_prevista` |
-| Chave primária | `id` (inteiro) para entidades próprias; `ckan_id` para entidades espelhadas do CKAN. | `usuario.id`, `dataset.ckan_id` |
+| Chave primária | `id` (inteiro) em **todas** as tabelas, inclusive as espelhadas do CKAN (ADR-0018). | `usuario.id`, `dataset.id` |
+| ID no CKAN | `id_ckan` (`varchar(64)`, único, opcional) nas entidades espelhadas. | `dataset.id_ckan` |
 | Chave estrangeira | `<entidade>_id`; quando houver duas para a mesma tabela, qualificar. | `recurso_id`, `perfil_fallback_id` |
 | Booleano | Estado ou adjetivo; `eh_` quando for classificação. | `ativo`, `execucao_local`, `eh_dicionario_dados` |
 | Data de evento | `<evento>_em`. | `iniciada_em`, `aprovado_em` |
@@ -23,9 +24,10 @@ colunas `created_at`/`updated_at` do `TimestampMixin` estão em inglês. Não cr
 
 ## 2. Chaves e relacionamentos
 
-- Entidade espelhada do CKAN usa o **ID do CKAN como PK** (`varchar(64)`), nunca o `name`, que os
-  órgãos podem editar.
-- Entidade própria usa `int` autoincremento.
+- Toda tabela usa `id` `int` autoincremento como PK, inclusive as espelhadas do CKAN (ADR-0018).
+- Entidade espelhada do CKAN guarda o ID do CKAN em `id_ckan` (`varchar(64)`, único, opcional para
+  registros que ainda não existem no portal). A coleta casa os registros por ele, **nunca pelo
+  `name`**, que os órgãos podem editar. FKs apontam sempre para o `id` próprio.
 - Relação N:N usa tabela de associação com PK composta pelas duas FKs (`acesso_usuario_papel`).
 - **Toda referência ao estado atual tem chave estrangeira.**
 - Referência **sem FK** só é permitida em tabela de histórico ou auditoria, para o registro

@@ -40,8 +40,9 @@ class PlanoPda(TimestampMixin, Base):
 
 
 class BasePrevista(TimestampMixin, Base):
-    """Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13); o `name` lido da
-    planilha fica em `dataset_name_planilha` apenas para auditoria e para resolver vínculos."""
+    """Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para
+    `dataset.id`, que guarda o `id_ckan`. O `name` lido da planilha fica em
+    `dataset_name_planilha` apenas para auditoria e para resolver vínculos."""
 
     __tablename__ = "pda_base_prevista"
 
@@ -49,7 +50,7 @@ class BasePrevista(TimestampMixin, Base):
     plano_id: Mapped[int] = mapped_column(ForeignKey("pda_plano.id", ondelete="CASCADE"),
                                           index=True)
     orgao_sigla: Mapped[str] = mapped_column(String(100), index=True)  # como veio da planilha
-    organizacao_id: Mapped[str | None] = mapped_column(ForeignKey("organizacao.ckan_id"),
+    organizacao_id: Mapped[int | None] = mapped_column(ForeignKey("organizacao.id"),
                                                        nullable=True, index=True)
     nome_previsto: Mapped[str] = mapped_column(String(500))
     descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -59,7 +60,7 @@ class BasePrevista(TimestampMixin, Base):
     periodicidade_original: Mapped[str | None] = mapped_column(String(100), nullable=True)
     politicas_publicas: Mapped[str | None] = mapped_column(String(500), nullable=True)
     possui_conteudo_sigiloso: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    dataset_id: Mapped[str | None] = mapped_column(ForeignKey("dataset.ckan_id"), nullable=True,
+    dataset_id: Mapped[int | None] = mapped_column(ForeignKey("dataset.id"), nullable=True,
                                                    index=True)
     dataset_name_planilha: Mapped[str | None] = mapped_column(String(200), nullable=True)
     linha_planilha: Mapped[int | None] = mapped_column(Integer, nullable=True)

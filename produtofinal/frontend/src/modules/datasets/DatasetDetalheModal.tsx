@@ -29,23 +29,23 @@ const Nota = ({ children }: { children: ReactNode }) => (
  * periodicidade e situação do PDA só aparecem quando alguma base prevista está vinculada a este
  * dataset pelo ID (nunca pelo nome).
  */
-export function DatasetDetalheModal({ ckanId, onFechar }: { ckanId: string | null; onFechar: () => void }) {
+export function DatasetDetalheModal({ datasetId, onFechar }: { datasetId: number | null; onFechar: () => void }) {
   const { pode } = useAuth();
   const detalhe = useQuery({
-    queryKey: ["inventario", "dataset", ckanId],
-    queryFn: () => datasetsApi.detalhe(ckanId as string),
-    enabled: ckanId != null,
+    queryKey: ["inventario", "dataset", datasetId],
+    queryFn: () => datasetsApi.detalhe(datasetId as number),
+    enabled: datasetId != null,
   });
   const verPda = pode("pda.acessar");
   const bases = useQuery({
-    queryKey: ["pda", "dataset", ckanId],
-    queryFn: () => datasetsApi.basesPda(ckanId as string),
-    enabled: ckanId != null && verPda,
+    queryKey: ["pda", "dataset", datasetId],
+    queryFn: () => datasetsApi.basesPda(datasetId as number),
+    enabled: datasetId != null && verPda,
   });
 
-  if (ckanId == null) return null;
+  if (datasetId == null) return null;
   const d = detalhe.data;
-  const linkPortal = d && d.situacao !== "Fora do portal" ? `${PORTAL}${encodeURIComponent(d.ckan_id)}` : null;
+  const linkPortal = d?.id_ckan && d.situacao !== "Fora do portal" ? `${PORTAL}${encodeURIComponent(d.id_ckan)}` : null;
 
   return (
     <Modal aberto titulo={d?.titulo ?? "Dataset"} onFechar={onFechar}
@@ -86,7 +86,7 @@ function Conteudo({ d, verPda, bases, carregandoBases }: {
         <Item rotulo="Nome da base">{d.titulo}</Item>
         <Item rotulo="Órgão responsável">{d.orgao_nome ?? "—"}</Item>
         <Item rotulo="ID do dataset (CKAN)" mono>
-          <span style={{ wordBreak: "break-all" }}>{d.ckan_id}</span>
+          <span style={{ wordBreak: "break-all" }}>{d.id_ckan ?? "—"}</span>
         </Item>
         <Item rotulo="Name no portal" mono>
           <span style={{ wordBreak: "break-all" }}>{d.name}</span>
@@ -160,7 +160,7 @@ function TabelaRecursos({ recursos, removidos }: { recursos: Recurso[]; removido
             <thead><tr><th>Recurso</th><th>Formato</th><th>Última atualização</th><th /></tr></thead>
             <tbody>
               {recursos.map((r) => (
-                <tr key={r.ckan_id}>
+                <tr key={r.id}>
                   <td>
                     {r.nome || <span className="cell-muted">(sem nome)</span>}
                     {r.eh_dicionario_dados && <>{" "}<span className="badge badge-gray">dicionário de dados</span></>}

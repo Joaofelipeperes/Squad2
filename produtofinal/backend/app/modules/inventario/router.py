@@ -44,16 +44,21 @@ def _vazio(valor: str | None) -> str | None:
 def listar_datasets(db: DbSession, user: UsuarioAtual = Depends(require(P.INVENTARIO_ACESSAR)),
                     busca: str | None = None, orgao: str | None = None,
                     formato: str | None = None, situacao: str | None = None):
-    """Inventário de datasets do portal (tela Datasets) com filtros."""
-    return service.listar_datasets(db, user, busca=_vazio(busca), orgao=_vazio(orgao),
+    """Inventário de datasets do portal (tela Datasets) com filtros. `orgao` = id da organização
+    (vazio = sem filtro)."""
+    orgao_txt = _vazio(orgao)
+    if orgao_txt is not None and not orgao_txt.isdigit():
+        raise HTTPException(422, "orgao: informe o id (número inteiro) da organização.")
+    return service.listar_datasets(db, user, busca=_vazio(busca),
+                                   orgao=int(orgao_txt) if orgao_txt else None,
                                    formato=_vazio(formato), situacao=_vazio(situacao))
 
 
-@router.get("/datasets/{ckan_id}", response_model=DatasetDetalheOut)
-def obter_dataset(ckan_id: str, db: DbSession,
+@router.get("/datasets/{dataset_id}", response_model=DatasetDetalheOut)
+def obter_dataset(dataset_id: int, db: DbSession,
                   user: UsuarioAtual = Depends(require(P.INVENTARIO_ACESSAR))):
     """Detalhe do dataset com a lista de recursos atuais."""
     try:
-        return service.obter_dataset(db, ckan_id, user)
+        return service.obter_dataset(db, dataset_id, user)
     except service.DatasetNaoEncontrado as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc

@@ -52,6 +52,19 @@ a.btn { text-decoration: none; }
 .help-texto { font-size: 12.5px; color: var(--gray-500); line-height: 1.5; }
 .confirmar-texto { font-size: 13.5px; line-height: 1.55; color: var(--gray-700); }
 .confirmar-texto p + p { margin-top: 10px; }
+/* Busca de dataset no formulário de base (DatasetBusca.tsx) */
+.busca-lista { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto;
+  border: 1px solid var(--gray-200); border-radius: var(--radius-sm); }
+.busca-lista[hidden] { display: none; }
+.busca-lista li { display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; font-size: 13px;
+  cursor: pointer; }
+.busca-lista li + li { border-top: 1px solid var(--gray-100); }
+.busca-lista li:hover, .busca-lista li[aria-selected="true"] { background: var(--blue-100); }
+.busca-lista .meta { font-size: 11.5px; color: var(--gray-500); }
+.dataset-escolhido { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+  padding: 8px 10px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); font-size: 13px; }
+.link-btn { background: none; border: none; padding: 0; color: var(--blue-500); text-decoration: underline;
+  font: inherit; cursor: pointer; }
 
 /* Diálogo recebe foco programático (Modal.tsx) — sem contorno no contêiner */
 .modal:focus { outline: none; }

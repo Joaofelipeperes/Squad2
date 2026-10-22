@@ -47,7 +47,7 @@ erDiagram
         varchar nome
         varchar senha_hash
         bool ativo
-        varchar orgao_id FK
+        int orgao_id FK
         datetime ultimo_acesso
         datetime created_at
         datetime updated_at
@@ -65,11 +65,12 @@ erDiagram
         text erro
     }
     dataset {
-        varchar ckan_id PK
+        int id PK
+        varchar id_ckan UK
         varchar name
         varchar titulo
         text descricao
-        varchar organizacao_id FK
+        int organizacao_id FK
         varchar autor
         varchar autor_email
         varchar licenca
@@ -83,20 +84,22 @@ erDiagram
     dataset_snapshot {
         int id PK
         int coleta_id FK
-        varchar dataset_id
+        int dataset_id
         varchar hash_conteudo
         json payload
     }
     organizacao {
-        varchar ckan_id PK
+        int id PK
+        varchar id_ckan UK
         varchar name
         varchar titulo
         varchar sigla
         int ultima_coleta_id FK
     }
     recurso {
-        varchar ckan_id PK
-        varchar dataset_id FK
+        int id PK
+        varchar id_ckan UK
+        int dataset_id FK
         varchar nome
         varchar formato
         text url
@@ -111,7 +114,7 @@ erDiagram
         int id PK
         int plano_id FK
         varchar orgao_sigla
-        varchar organizacao_id FK
+        int organizacao_id FK
         varchar nome_previsto
         text descricao
         varchar unidade_responsavel
@@ -120,7 +123,7 @@ erDiagram
         varchar periodicidade_original
         varchar politicas_publicas
         bool possui_conteudo_sigiloso
-        varchar dataset_id FK
+        int dataset_id FK
         varchar dataset_name_planilha
         int linha_planilha
         varchar classificacao
@@ -142,7 +145,7 @@ erDiagram
     }
     lgpd_achado {
         int id PK
-        varchar recurso_id FK
+        int recurso_id FK
         varchar coluna
         int linha
         int ocorrencias
@@ -157,7 +160,7 @@ erDiagram
     }
     lgpd_correcao {
         int id PK
-        varchar recurso_id FK
+        int recurso_id FK
         varchar aprovado_por
         datetime aprovado_em
         varchar caminho_backup
@@ -249,22 +252,22 @@ erDiagram
 | `acesso_papel_permissao.papel_id` | `acesso_papel.id` | 1 : N | FK |  |
 | `acesso_usuario_papel.usuario_id` | `usuario.id` | 1 : N | FK |  |
 | `acesso_usuario_papel.papel_id` | `acesso_papel.id` | 1 : N | FK |  |
-| `usuario.orgao_id` | `organizacao.ckan_id` | 0..1 : N | FK |  |
-| `dataset.organizacao_id` | `organizacao.ckan_id` | 0..1 : N | FK |  |
+| `usuario.orgao_id` | `organizacao.id` | 0..1 : N | FK |  |
+| `dataset.organizacao_id` | `organizacao.id` | 0..1 : N | FK |  |
 | `dataset.ultima_coleta_id` | `coleta.id` | 0..1 : N | FK |  |
 | `dataset_snapshot.coleta_id` | `coleta.id` | 1 : N | FK |  |
 | `organizacao.ultima_coleta_id` | `coleta.id` | 0..1 : N | FK |  |
-| `recurso.dataset_id` | `dataset.ckan_id` | 1 : N | FK |  |
+| `recurso.dataset_id` | `dataset.id` | 1 : N | FK |  |
 | `recurso.ultima_coleta_id` | `coleta.id` | 0..1 : N | FK |  |
 | `pda_base_prevista.plano_id` | `pda_plano.id` | 1 : N | FK |  |
-| `pda_base_prevista.organizacao_id` | `organizacao.ckan_id` | 0..1 : N | FK |  |
-| `pda_base_prevista.dataset_id` | `dataset.ckan_id` | 0..1 : N | FK |  |
-| `lgpd_achado.recurso_id` | `recurso.ckan_id` | 1 : N | FK |  |
-| `lgpd_correcao.recurso_id` | `recurso.ckan_id` | 1 : N | FK |  |
+| `pda_base_prevista.organizacao_id` | `organizacao.id` | 0..1 : N | FK |  |
+| `pda_base_prevista.dataset_id` | `dataset.id` | 0..1 : N | FK |  |
+| `lgpd_achado.recurso_id` | `recurso.id` | 1 : N | FK |  |
+| `lgpd_correcao.recurso_id` | `recurso.id` | 1 : N | FK |  |
 | `lgpd_decisao.achado_id` | `lgpd_achado.id` | 1 : N | FK |  |
 | `ia_vinculo_tarefa.perfil_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
 | `ia_vinculo_tarefa.perfil_fallback_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
-| `dataset_snapshot.dataset_id` | `dataset.ckan_id` | — | referência lógica | Fotografia histórica: sem FK para não depender do estado atual do dataset. |
+| `dataset_snapshot.dataset_id` | `dataset.id` | — | referência lógica | Fotografia histórica: sem FK para não depender do estado atual do dataset. |
 | `ia_uso.perfil_id` | `ia_perfil_provedor.id` | — | referência lógica | Registro de uso sobrevive à exclusão do perfil (o nome fica em perfil_nome). |
 | `coleta.solicitada_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `lgpd_decisao.usuario` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
@@ -342,7 +345,7 @@ Pessoa com acesso à solução; com órgão vinculado, fica restrita aos dados d
 | `nome` | varchar(200) | não |  |  |  |
 | `senha_hash` | varchar(200) | não |  |  |  |
 | `ativo` | bool | não |  |  | `True` |
-| `orgao_id` | varchar(64) | sim | FK | `organizacao.ckan_id` |  |
+| `orgao_id` | int | sim | FK | `organizacao.id` |  |
 | `ultimo_acesso` | datetime | sim |  |  |  |
 | `created_at` | datetime | não |  |  | função |
 | `updated_at` | datetime | não |  |  | função |
@@ -375,11 +378,12 @@ Conjunto de dados espelhado do CKAN (package), no estado da última coleta.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `ckan_id` | varchar(64) | não | PK |  |  |
+| `id` | int | não | PK |  |  |
+| `id_ckan` | varchar(64) | sim | UK |  |  |
 | `name` | varchar(200) | não |  |  |  |
 | `titulo` | varchar(500) | não |  |  |  |
 | `descricao` | text | sim |  |  |  |
-| `organizacao_id` | varchar(64) | sim | FK | `organizacao.ckan_id` |  |
+| `organizacao_id` | int | sim | FK | `organizacao.id` |  |
 | `autor` | varchar(300) | sim |  |  |  |
 | `autor_email` | varchar(300) | sim |  |  |  |
 | `licenca` | varchar(100) | sim |  |  |  |
@@ -400,7 +404,7 @@ Fotografia compacta de um dataset em uma coleta — insumo do diff entre coletas
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
 | `coleta_id` | int | não | FK | `coleta.id` |  |
-| `dataset_id` | varchar(64) | não |  |  |  |
+| `dataset_id` | int | não |  |  |  |
 | `hash_conteudo` | varchar(64) | não |  |  |  |
 | `payload` | json | não |  |  |  |
 
@@ -412,7 +416,8 @@ Fotografia compacta de um dataset em uma coleta — insumo do diff entre coletas
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `ckan_id` | varchar(64) | não | PK |  |  |
+| `id` | int | não | PK |  |  |
+| `id_ckan` | varchar(64) | sim | UK |  |  |
 | `name` | varchar(200) | não |  |  |  |
 | `titulo` | varchar(300) | não |  |  |  |
 | `sigla` | varchar(40) | sim |  |  |  |
@@ -426,8 +431,9 @@ Arquivo ou link de um dataset (resource); last_modified é o indicador de atuali
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `ckan_id` | varchar(64) | não | PK |  |  |
-| `dataset_id` | varchar(64) | não | FK | `dataset.ckan_id` |  |
+| `id` | int | não | PK |  |  |
+| `id_ckan` | varchar(64) | sim | UK |  |  |
+| `dataset_id` | int | não | FK | `dataset.id` |  |
 | `nome` | varchar(500) | sim |  |  |  |
 | `formato` | varchar(40) | sim |  |  |  |
 | `url` | text | sim |  |  |  |
@@ -445,14 +451,14 @@ Documentação do módulo: [docs/modulos/pda.md](../modulos/pda.md)
 
 #### `pda_base_prevista`
 
-Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13); o `name` lido da planilha fica em `dataset_name_planilha` apenas para auditoria e para resolver vínculos.
+Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para `dataset.id`, que guarda o `id_ckan`. O `name` lido da planilha fica em `dataset_name_planilha` apenas para auditoria e para resolver vínculos.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
 | `plano_id` | int | não | FK | `pda_plano.id` |  |
 | `orgao_sigla` | varchar(100) | não |  |  |  |
-| `organizacao_id` | varchar(64) | sim | FK | `organizacao.ckan_id` |  |
+| `organizacao_id` | int | sim | FK | `organizacao.id` |  |
 | `nome_previsto` | varchar(500) | não |  |  |  |
 | `descricao` | text | sim |  |  |  |
 | `unidade_responsavel` | varchar(500) | sim |  |  |  |
@@ -461,7 +467,7 @@ Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13); o `na
 | `periodicidade_original` | varchar(100) | sim |  |  |  |
 | `politicas_publicas` | varchar(500) | sim |  |  |  |
 | `possui_conteudo_sigiloso` | bool | sim |  |  |  |
-| `dataset_id` | varchar(64) | sim | FK | `dataset.ckan_id` |  |
+| `dataset_id` | int | sim | FK | `dataset.id` |  |
 | `dataset_name_planilha` | varchar(200) | sim |  |  |  |
 | `linha_planilha` | int | sim |  |  |  |
 | `classificacao` | varchar(20) | não |  |  | `'pda'` |
@@ -500,7 +506,7 @@ Possível dado pessoal localizado num recurso (local e tipo, nunca o valor).
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
-| `recurso_id` | varchar(64) | não | FK | `recurso.ckan_id` |  |
+| `recurso_id` | int | não | FK | `recurso.id` |  |
 | `coluna` | varchar(300) | não |  |  |  |
 | `linha` | int | sim |  |  |  |
 | `ocorrencias` | int | não |  |  | `1` |
@@ -522,7 +528,7 @@ Trilha da anonimização publicada no CKAN (PBI-92 a PBI-94).
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
-| `recurso_id` | varchar(64) | não | FK | `recurso.ckan_id` |  |
+| `recurso_id` | int | não | FK | `recurso.id` |  |
 | `aprovado_por` | varchar(200) | não |  |  |  |
 | `aprovado_em` | datetime | não |  |  |  |
 | `caminho_backup` | varchar(500) | não |  |  |  |

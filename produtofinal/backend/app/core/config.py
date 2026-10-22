@@ -1,8 +1,23 @@
-"""Configuração central, lida de variáveis de ambiente com prefixo GDA_ (ver .env.example)."""
+"""Configuração central, lida de variáveis de ambiente com prefixo GDA_ (ver .env.example).
+
+Fora de dev, a aplicação NÃO inicia com chave JWT padrão, de exemplo ou curta, nem sem
+GDA_ENCRYPTION_KEY: com a chave padrão (pública no repositório) qualquer um forjaria um token
+de administrador.
+"""
+import logging
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+log = logging.getLogger(__name__)
+
+SECRET_KEY_MIN_BYTES = 32
+
+
+def chave_fraca(chave: str) -> bool:
+    """Chave padrão ou de exemplo (ambas começam com "troque") ou com menos de 32 bytes."""
+    return "troque" in chave.lower() or len(chave.encode()) < SECRET_KEY_MIN_BYTES
 
 
 class Settings(BaseSettings):
@@ -17,7 +32,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./dev.db"
 
     # Segurança
-    secret_key: SecretStr = SecretStr("troque-esta-chave-em-producao-dev-0000")
+    secret_key: SecretStr = SecretStr("troque-esta-chave-em-producao-dev-0000")  # só vale em dev
     encryption_key: SecretStr | None = None  # chave Fernet para cifrar segredos (chaves de IA)
     jwt_expire_minutes: int = 480
 
@@ -40,6 +55,24 @@ class Settings(BaseSettings):
     # IA — política de dados sensíveis
     # False (padrão): tarefas que tocam dado pessoal só podem usar provedor marcado como LOCAL.
     ia_permitir_externo_para_sensivel: bool = False
+
+    @model_validator(mode="after")
+    def _exigir_segredos_fora_de_dev(self) -> "Settings":
+        fraca = chave_fraca(self.secret_key.get_secret_value())
+        if self.environment == "dev":
+            if fraca:
+                log.warning("GDA_SECRET_KEY padrão ou fraca: aceita só porque GDA_ENVIRONMENT=dev.")
+            return self
+        if fraca:
+            raise ValueError(
+                f"GDA_SECRET_KEY padrão, de exemplo ou com menos de {SECRET_KEY_MIN_BYTES} bytes "
+                f"(GDA_ENVIRONMENT={self.environment}). Gere uma com: "
+                "python -c \"import secrets; print(secrets.token_urlsafe(48))\"")
+        if not self.encryption_key or not self.encryption_key.get_secret_value():
+            raise ValueError(
+                f"GDA_ENCRYPTION_KEY é obrigatória fora de dev (GDA_ENVIRONMENT={self.environment})."
+                " Gere com: python -m app.cli gerar-chave")
+        return self
 
 
 @lru_cache

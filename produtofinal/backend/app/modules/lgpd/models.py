@@ -18,7 +18,7 @@ class Achado(TimestampMixin, Base):
     __tablename__ = "lgpd_achado"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    recurso_id: Mapped[str] = mapped_column(ForeignKey("recurso.ckan_id"), index=True)
+    recurso_id: Mapped[int] = mapped_column(ForeignKey("recurso.id"), index=True)
     coluna: Mapped[str] = mapped_column(String(300))
     linha: Mapped[int | None] = mapped_column(Integer, nullable=True)  # primeira ocorrência
     ocorrencias: Mapped[int] = mapped_column(Integer, default=1)
@@ -49,7 +49,7 @@ class CorrecaoPublicada(TimestampMixin, Base):
     __tablename__ = "lgpd_correcao"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    recurso_id: Mapped[str] = mapped_column(ForeignKey("recurso.ckan_id"), index=True)
+    recurso_id: Mapped[int] = mapped_column(ForeignKey("recurso.id"), index=True)
     aprovado_por: Mapped[str] = mapped_column(String(200))
     aprovado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     caminho_backup: Mapped[str] = mapped_column(String(500))

@@ -34,6 +34,7 @@ from app.modules.pda.schemas import (
     BaseIn,
     BaseOut,
     BasesOut,
+    DatasetOpcaoOut,
     FormularioOut,
     ImportacaoResumoOut,
     LinhaIgnoradaOut,
@@ -288,7 +289,7 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
                    conteudo: bytes, importado_por: str | None) -> ImportacaoResumoOut:
     """PBI-12/13 — importa a planilha de um PDA (atômico: qualquer erro → nada gravado).
 
-    Vínculo: name extraído da URL "Disponível no Portal" → `Dataset.ckan_id` do inventário
+    Vínculo: name extraído da URL "Disponível no Portal" → `Dataset.id` do inventário
     ("resolvido"); name sem dataset no inventário → "pendente" (resolver depois com
     `resolver_vinculos_pendentes`); sem URL → "sem_vinculo". Órgão da base: o do dataset
     vinculado; sem vínculo, o das bases da MESMA sigla vinculadas por ID neste PDA (se todas
@@ -311,9 +312,9 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
         org_por_evidencia = regras.orgao_por_evidencia(
             (ln.orgao_sigla, ds.organizacao_id)
             for ln, ds in zip(lida.linhas, vinculados, strict=True) if ds is not None)
-        orgaos = [(o.ckan_id, o.name, o.titulo, o.sigla)
+        orgaos = [(o.id, o.name, o.titulo, o.sigla)
                   for o in db.scalars(select(Organizacao)).all()]
-        orgao_por_sigla: dict[str, str | None] = {}
+        orgao_por_sigla: dict[str, int | None] = {}
         sem_correspondencia: set[str] = set()
         resolvidos = pendentes = sem_vinculo = 0
 
@@ -350,7 +351,7 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
                 periodicidade_original=_corte(ln.periodicidade_original, 100),
                 politicas_publicas=_corte(ln.politicas_publicas, 500),
                 possui_conteudo_sigiloso=ln.possui_conteudo_sigiloso,
-                dataset_id=ds.ckan_id if ds is not None else None,
+                dataset_id=ds.id if ds is not None else None,
                 dataset_name_planilha=_corte(name, 200), linha_planilha=ln.linha,
                 classificacao="pda"))
 
@@ -370,11 +371,11 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
         colunas_opcionais_ausentes=lida.colunas_opcionais_ausentes)
 
 
-def _evidencia_do_plano(db: Session, plano_id: int) -> dict[str, str]:
+def _evidencia_do_plano(db: Session, plano_id: int) -> dict[str, int]:
     """{chave_sigla: organização} das bases do plano vinculadas por ID (organização única)."""
     vinculadas = db.execute(
         select(BasePrevista.orgao_sigla, Dataset.organizacao_id)
-        .join(Dataset, Dataset.ckan_id == BasePrevista.dataset_id)
+        .join(Dataset, Dataset.id == BasePrevista.dataset_id)
         .where(BasePrevista.plano_id == plano_id)).all()
     return regras.orgao_por_evidencia((sigla, org) for sigla, org in vinculadas)
 
@@ -412,7 +413,7 @@ def resolver_vinculos_pendentes(db: Session, plano_id: int) -> dict[str, int]:
         ds = datasets.get(base.dataset_name_planilha)
         if ds is None:
             continue
-        base.dataset_id = ds.ckan_id
+        base.dataset_id = ds.id
         if ds.organizacao_id:
             base.organizacao_id = ds.organizacao_id
         resolvidos += 1
@@ -442,7 +443,8 @@ class BaseCalculada:
     possui_conteudo_sigiloso: bool | None
     prazo_abertura: date | None
     vinculo: str  # resolvido | pendente | sem_vinculo
-    dataset_id: str | None
+    dataset_id: int | None
+    dataset_id_ckan: str | None
     dataset_name: str | None
     dataset_titulo: str | None
     dataset_name_planilha: str | None
@@ -457,10 +459,11 @@ class BaseCalculada:
     classificacao: str
 
 
-def orgao_chave(organizacao_id: str | None, orgao_sigla: str) -> str:
-    """Chave do filtro de órgão: ID da organização ou 'sigla:<SIGLA>' sem correspondência."""
-    if organizacao_id:
-        return organizacao_id
+def orgao_chave(organizacao_id: int | None, orgao_sigla: str) -> str:
+    """Chave do filtro de órgão: `id` da organização (texto) ou 'sigla:<SIGLA>' sem
+    correspondência."""
+    if organizacao_id is not None:
+        return str(organizacao_id)
     return "sigla:" + regras.chave_sigla(orgao_sigla)
 
 
@@ -485,6 +488,7 @@ def calcular_base(base: BasePrevista, plano_nome: str, hoje: date, janela_dias: 
         vinculo=("resolvido" if base.dataset_id else
                  "pendente" if base.dataset_name_planilha else "sem_vinculo"),
         dataset_id=base.dataset_id,
+        dataset_id_ckan=ds.id_ckan if ds is not None else None,
         dataset_name=ds.name if ds is not None else None,
         dataset_titulo=ds.titulo if ds is not None else None,
         dataset_name_planilha=base.dataset_name_planilha, dataset_ativo=ativo,
@@ -568,7 +572,7 @@ def listar_bases(db: Session, user: UsuarioAtual, *, plano_id: int | None = None
                     bases=[BaseOut.model_validate(b) for b in filtradas])
 
 
-def bases_do_dataset(db: Session, dataset_id: str, user: UsuarioAtual | None = None
+def bases_do_dataset(db: Session, dataset_id: int, user: UsuarioAtual | None = None
                      ) -> list[BaseCalculada]:
     """Bases previstas vinculadas (pelo ID) a um dataset do portal, em todos os PDAs: o vigente
     primeiro, depois os importados mais recentemente. Para a tela Datasets mostrar prazo,
@@ -594,12 +598,37 @@ def obter_base(db: Session, base_id: int, user: UsuarioAtual) -> BaseCalculada:
 def opcoes_formulario(db: Session, user: UsuarioAtual) -> FormularioOut:
     """Opções do formulário de base: organizações do portal visíveis ao usuário e o domínio de
     periodicidade."""
-    orgs = db.scalars(filtrar_por_orgao(select(Organizacao), Organizacao.ckan_id, user)).all()
-    opcoes = [OpcaoOut(valor=o.ckan_id, rotulo=(o.titulo or o.name).strip()
+    orgs = db.scalars(filtrar_por_orgao(select(Organizacao), Organizacao.id, user)).all()
+    opcoes = [OpcaoOut(valor=str(o.id), rotulo=(o.titulo or o.name).strip()
                        + (f" ({o.sigla})" if o.sigla else "")) for o in orgs]
     return FormularioOut(
         organizacoes=sorted(opcoes, key=lambda o: regras.normalizar_texto(o.rotulo)),
         periodicidades=list(regras.DOMINIO_PERIODICIDADE))
+
+
+_LIMITE_BUSCA = 20
+
+
+def buscar_datasets(db: Session, user: UsuarioAtual, busca: str | None) -> list[DatasetOpcaoOut]:
+    """Busca do formulário de base: datasets do inventário pelo título, name, ID ou link do portal
+    (ativos primeiro, no máximo 20), no escopo de órgão do usuário. O vínculo gravado é o ID."""
+    texto = _limpo(busca)
+    if texto is None or len(texto) < 2:
+        return []
+    name = regras.extrair_name_da_url(texto)
+    condicao = (Dataset.name == name if name else
+                Dataset.titulo.icontains(texto, autoescape=True)
+                | Dataset.name.icontains(texto, autoescape=True)
+                | (Dataset.id_ckan == texto))
+    stmt = (select(Dataset, Organizacao.titulo)
+            .outerjoin(Organizacao, Organizacao.id == Dataset.organizacao_id)
+            .where(condicao)
+            .order_by(Dataset.ativo_no_portal.desc(), Dataset.titulo)
+            .limit(_LIMITE_BUSCA))
+    return [DatasetOpcaoOut(id=ds.id, id_ckan=ds.id_ckan, name=ds.name, titulo=ds.titulo,
+                            organizacao_id=ds.organizacao_id, orgao_nome=orgao_nome,
+                            ativo_no_portal=ds.ativo_no_portal)
+            for ds, orgao_nome in db.execute(filtrar_por_orgao(stmt, Dataset.organizacao_id, user))]
 
 
 def _limpo(valor: str | None) -> str | None:
@@ -614,7 +643,7 @@ def _base_ou_404(db: Session, base_id: int) -> BasePrevista:
 
 
 def _vinculo_informado(db: Session, link: str | None, atual: BasePrevista | None
-                       ) -> tuple[str | None, str | None]:
+                       ) -> tuple[int | None, str | None]:
     """Endereço do dataset digitado → (dataset_id, dataset_name_planilha). O name serve só para
     achar o ID (PBI-13); name sem dataset no inventário → vínculo pendente. Na edição, endereço
     igual ao atual mantém o vínculo resolvido (nunca é recalculado pelo nome)."""
@@ -630,28 +659,40 @@ def _vinculo_informado(db: Session, link: str | None, atual: BasePrevista | None
         if name in {atual.dataset_name_planilha, nome_atual}:
             return atual.dataset_id, atual.dataset_name_planilha or name
     ds = _datasets_por_name(db, {name}).get(name)
-    return (ds.ckan_id if ds is not None else None), name
+    return (ds.id if ds is not None else None), name
 
 
-def _orgao_informado(db: Session, plano_id: int, sigla: str, escolhido: str | None,
-                     dataset_id: str | None) -> str | None:
+def _vinculo_escolhido(db: Session, dataset_id: int, atual: BasePrevista | None
+                       ) -> tuple[int, str]:
+    """Dataset escolhido na busca → (dataset_id, dataset_name_planilha). Mesmo dataset da base
+    mantém o name lido da planilha (auditoria); outro dataset grava o name atual dele."""
+    ds = db.get(Dataset, dataset_id)
+    if ds is None:
+        raise Invalido("Dataset não encontrado no inventário do portal.")
+    if atual is not None and atual.dataset_id == ds.id:
+        return ds.id, atual.dataset_name_planilha or ds.name
+    return ds.id, ds.name
+
+
+def _orgao_informado(db: Session, plano_id: int, sigla: str, escolhido: int | None,
+                     dataset_id: int | None) -> int | None:
     """Órgão da base cadastrada à mão: o do dataset vinculado; senão o escolhido no formulário;
     senão, como na importação, a evidência do vínculo por ID e `casar_orgao` (nunca chuta)."""
-    if escolhido and db.get(Organizacao, escolhido) is None:
+    if escolhido is not None and db.get(Organizacao, escolhido) is None:
         raise Invalido("Organização não encontrada no inventário do portal.")
-    org_dataset = (db.scalar(select(Dataset.organizacao_id).where(Dataset.ckan_id == dataset_id))
-                   if dataset_id else None)
+    org_dataset = (db.scalar(select(Dataset.organizacao_id).where(Dataset.id == dataset_id))
+                   if dataset_id is not None else None)
     if org_dataset:
-        if escolhido and escolhido != org_dataset:
+        if escolhido is not None and escolhido != org_dataset:
             raise Invalido("O dataset informado pertence a outra organização do portal: ajuste o "
                            "órgão ou o endereço do dataset.")
         return org_dataset
-    if escolhido:
+    if escolhido is not None:
         return escolhido
     evidencia = _evidencia_do_plano(db, plano_id).get(regras.chave_sigla(sigla))
     if evidencia:
         return evidencia
-    orgaos = [(o.ckan_id, o.name, o.titulo, o.sigla) for o in db.scalars(select(Organizacao))]
+    orgaos = [(o.id, o.name, o.titulo, o.sigla) for o in db.scalars(select(Organizacao))]
     return regras.casar_orgao(sigla, orgaos)
 
 
@@ -667,10 +708,12 @@ def _valores_da_base(db: Session, plano_id: int, dados: BaseIn,
     periodicidade = regras.periodicidade_informada(original)
     if atual is not None and periodicidade == atual.periodicidade:
         original = atual.periodicidade_original  # mantém o texto da planilha ("Mnsal")
-    dataset_id, name = _vinculo_informado(db, dados.dataset_link, atual)
+    escolhido = dados.dataset_id
+    dataset_id, name = (_vinculo_escolhido(db, escolhido, atual) if escolhido is not None
+                        else _vinculo_informado(db, dados.dataset_link, atual))
     return {
         "orgao_sigla": sigla,
-        "organizacao_id": _orgao_informado(db, plano_id, sigla, _limpo(dados.organizacao_id),
+        "organizacao_id": _orgao_informado(db, plano_id, sigla, dados.organizacao_id,
                                            dataset_id),
         "nome_previsto": nome,
         "descricao": _limpo(dados.descricao),
