@@ -15,7 +15,7 @@ import { PageLede } from "@/shared/ui/PageLede";
 export default function DatasetsPage() {
   const [filtros, setFiltros] = useState<FiltrosDatasets>(FILTROS_VAZIOS);
   const [busca, setBusca] = useState("");
-  const [detalhe, setDetalhe] = useState<string | null>(null);
+  const [detalhe, setDetalhe] = useState<number | null>(null);
 
   // A busca é enviada ao backend com uma pequena espera, para não consultar a cada tecla.
   useEffect(() => {
@@ -87,14 +87,14 @@ export default function DatasetsPage() {
               ) : dados.datasets.length === 0 ? (
                 <tr><td colSpan={7} className="table-empty">Nenhum dataset encontrado.</td></tr>
               ) : (
-                dados.datasets.map((d) => <Linha key={d.ckan_id} d={d} onAbrir={setDetalhe} />)
+                dados.datasets.map((d) => <Linha key={d.id} d={d} onAbrir={setDetalhe} />)
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      <DatasetDetalheModal ckanId={detalhe} onFechar={() => setDetalhe(null)} />
+      <DatasetDetalheModal datasetId={detalhe} onFechar={() => setDetalhe(null)} />
     </section>
   );
 }
@@ -114,15 +114,15 @@ function Filtro({ id, rotulo, valor, opcoes, onMudar, classe }: {
   );
 }
 
-function Linha({ d, onAbrir }: { d: DatasetLinha; onAbrir: (id: string) => void }) {
+function Linha({ d, onAbrir }: { d: DatasetLinha; onAbrir: (id: number) => void }) {
   const teclado = (e: KeyboardEvent<HTMLTableRowElement>) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onAbrir(d.ckan_id); }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onAbrir(d.id); }
   };
   return (
-    <tr tabIndex={0} onClick={() => onAbrir(d.ckan_id)} onKeyDown={teclado}>
+    <tr tabIndex={0} onClick={() => onAbrir(d.id)} onKeyDown={teclado}>
       <td className="cell-strong" title={d.name}>{d.titulo}</td>
       <td title={d.orgao_nome ?? undefined}>{d.orgao_nome ?? "—"}</td>
-      <td className="mono cell-muted" title={d.ckan_id}>{abreviarId(d.ckan_id)}</td>
+      <td className="mono cell-muted" title={d.id_ckan ?? undefined}>{d.id_ckan ? abreviarId(d.id_ckan) : "—"}</td>
       <td>{d.recursos_validos}</td>
       <td className="cell-muted">
         {fmtDataHora(d.ultima_atualizacao)}

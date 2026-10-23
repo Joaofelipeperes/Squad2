@@ -40,7 +40,7 @@ export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props)
   const orgao = b.orgao_nome ?? b.orgao_sigla;
   const periodicidadeDiferente =
     !!b.periodicidade_original && b.periodicidade_original.trim() !== b.periodicidade;
-  const linkPortal = b.dataset_id && b.dataset_ativo !== false ? `${PORTAL}${encodeURIComponent(b.dataset_id)}` : null;
+  const linkPortal = b.dataset_id_ckan && b.dataset_ativo !== false ? `${PORTAL}${encodeURIComponent(b.dataset_id_ckan)}` : null;
 
   return (
     <Modal aberto titulo={b.nome_previsto} onFechar={onFechar}
@@ -75,7 +75,7 @@ export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props)
         </Item>
         <Item rotulo="Unidade responsável">{b.unidade_responsavel || "—"}</Item>
         <Item rotulo="ID do dataset (CKAN)" mono>
-          <span style={{ wordBreak: "break-all" }}>{b.dataset_id ?? "—"}</span>
+          <span style={{ wordBreak: "break-all" }}>{b.dataset_id_ckan ?? "—"}</span>
         </Item>
         <Item rotulo="Dataset no portal">
           {b.vinculo === "resolvido" && (
@@ -108,8 +108,8 @@ export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props)
           {b.ultima_atualizacao && b.ultima_atualizacao_estimada && " (estimada pela criação)"}
         </Item>
         <Item rotulo="Recursos válidos">
-          {b.dataset_id ? b.recursos_validos : "—"}
-          {b.dataset_id && <Nota>Dicionário de dados não entra na contagem</Nota>}
+          {b.dataset_id != null ? b.recursos_validos : "—"}
+          {b.dataset_id != null && <Nota>Dicionário de dados não entra na contagem</Nota>}
         </Item>
         <Item rotulo="Formatos dos recursos">
           {b.formatos.length ? b.formatos.join(", ") : "—"}

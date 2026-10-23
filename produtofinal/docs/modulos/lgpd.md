@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 07/10/2026 |
+| **Última atualização** | 21/10/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -48,9 +48,9 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 | Tabela | Colunas relevantes |
 |---|---|
-| `lgpd_achado` | recurso_id, coluna, linha, ocorrencias, tipo, metodo (regra/ia), confianca, prioridade, status, impressao_digital |
+| `lgpd_achado` | recurso_id (→ `recurso.id`, inteiro), coluna, linha, ocorrencias, tipo, metodo (regra/ia), confianca, prioridade, status, impressao_digital |
 | `lgpd_decisao` | achado_id, decisao, justificativa, usuario, momento (histórico imutável — PBI-42) |
-| `lgpd_correcao` | recurso_id, aprovado_por, aprovado_em, caminho_backup, status, erro |
+| `lgpd_correcao` | recurso_id (→ `recurso.id`, inteiro), aprovado_por, aprovado_em, caminho_backup, status, erro |
 
 ## Permissões
 | Permissão | Papéis padrão | Sensível |
@@ -97,3 +97,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 30/09/2026 | Tabelas, pipeline e etapa de classificação por IA (`classificar_colunas_ambiguas`) | Victor |
 | 30/09/2026 | Permissões granulares `lgpd.acessar`, `lgpd.triar`, `lgpd.aprovar_correcao` | Victor |
 | 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): `lgpd_achado.recurso_id` e `lgpd_correcao.recurso_id` passam a inteiros → `recurso.id` (migração `f6c3a8d2b1e7`) | Victor |

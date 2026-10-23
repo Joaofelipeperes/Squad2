@@ -1,7 +1,6 @@
 """Regras da página de configuração de IA: CRUD de perfis, vínculos e teste de conexão."""
 import time
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import crypto
@@ -9,6 +8,7 @@ from app.core.config import get_settings
 from app.integrations.ai.base import AIProviderError, ChatMessage, ChatRequest, ProviderConfig
 from app.integrations.ai.policy import TAREFAS, PoliticaIAViolada, TarefaIA, verificar
 from app.integrations.ai.registry import available_kinds, build_provider, provider_class
+from app.modules.ia.dao import IaDao
 from app.modules.ia.models import PerfilProvedorIA, VinculoTarefaIA
 from app.modules.ia.schemas import (
     PerfilIn, PerfilOut, TarefaOut, TesteConexaoIn, TesteConexaoOut, TipoProvedorOut, VinculoIn,
@@ -37,7 +37,7 @@ def to_out(p: PerfilProvedorIA) -> PerfilOut:
         id=p.id, nome=p.nome, tipo=p.tipo, modelo=p.modelo, base_url=p.base_url,
         tem_chave=bool(p.api_key_cifrada), api_key_dica=p.api_key_dica,
         execucao_local=p.execucao_local, temperatura=p.temperatura, max_tokens=p.max_tokens,
-        timeout_s=p.timeout_s, ativo=p.ativo, atualizado_em=p.updated_at,
+        timeout_s=p.timeout_s, ativo=p.ativo, atualizado_em=p.changed,
     )
 
 
@@ -49,7 +49,18 @@ def config_do_perfil(p: PerfilProvedorIA) -> ProviderConfig:
     )
 
 
-def salvar_perfil(db: Session, dados: PerfilIn, perfil: PerfilProvedorIA | None = None):
+def salvar_perfil(db: Session, dados: PerfilIn, perfil: PerfilProvedorIA | None = None,
+                  usuario_id: int | None = None):
+    """Cria ou edita um perfil. Erro de validação → nada gravado (rollback)."""
+    dao = IaDao(db, usuario_id)
+    try:
+        return _salvar_perfil(dao, dados, perfil)
+    except Exception:
+        dao.rollback()
+        raise
+
+
+def _salvar_perfil(dao: IaDao, dados: PerfilIn, perfil: PerfilProvedorIA | None):
     cls = provider_class(dados.tipo)  # valida o tipo
     perfil = perfil or PerfilProvedorIA()
     perfil.nome, perfil.tipo, perfil.modelo = dados.nome.strip(), dados.tipo, dados.modelo.strip()
@@ -63,22 +74,19 @@ def salvar_perfil(db: Session, dados: PerfilIn, perfil: PerfilProvedorIA | None 
         perfil.api_key_dica = crypto.hint(chave) if chave else None
     if cls.requires_api_key and not perfil.api_key_cifrada:
         raise ErroConfiguracaoIA(f"O provedor {cls.label} exige chave de API.")
-    _validar_vinculos_do_perfil(db, perfil)
-    db.add(perfil)
-    db.commit()
-    db.refresh(perfil)
+    _validar_vinculos_do_perfil(dao, perfil)
+    dao.save_generic(perfil)
+    dao.commit()
+    dao.recarregar(perfil)
     return perfil
 
 
-def _validar_vinculos_do_perfil(db: Session, perfil: PerfilProvedorIA) -> None:
+def _validar_vinculos_do_perfil(dao: IaDao, perfil: PerfilProvedorIA) -> None:
     """Impede que editar um perfil (ex.: desmarcar 'local') quebre a política de uma tarefa."""
     if perfil.id is None:
         return
     permitir = get_settings().ia_permitir_externo_para_sensivel
-    vinculos = db.scalars(select(VinculoTarefaIA).where(
-        (VinculoTarefaIA.perfil_id == perfil.id) |
-        (VinculoTarefaIA.perfil_fallback_id == perfil.id))).all()
-    for v in vinculos:
+    for v in dao.vinculos_do_perfil(perfil.id):
         try:
             verificar(TarefaIA(v.tarefa), perfil.execucao_local, permitir)
         except PoliticaIAViolada as exc:
@@ -89,7 +97,7 @@ def _validar_vinculos_do_perfil(db: Session, perfil: PerfilProvedorIA) -> None:
 def testar(db: Session, dados: TesteConexaoIn) -> TesteConexaoOut:
     api_key = dados.api_key
     if not api_key and dados.perfil_id:
-        salvo = db.get(PerfilProvedorIA, dados.perfil_id)
+        salvo = IaDao(db).perfil(dados.perfil_id)
         if salvo and salvo.api_key_cifrada:
             api_key = crypto.decrypt(salvo.api_key_cifrada)
     cfg = ProviderConfig(kind=dados.tipo, model=dados.modelo, base_url=dados.base_url or None,
@@ -120,9 +128,10 @@ def testar_resposta(db: Session, perfil: PerfilProvedorIA) -> TesteConexaoOut:
 # ------------------------------------------------------------------ tarefas / vínculos
 def listar_tarefas(db: Session) -> list[TarefaOut]:
     permitir = get_settings().ia_permitir_externo_para_sensivel
+    dao = IaDao(db)
     saida = []
     for tarefa, meta in TAREFAS.items():
-        v = db.get(VinculoTarefaIA, tarefa.value)
+        v = dao.vinculo(tarefa.value)
         saida.append(TarefaOut(
             tarefa=tarefa, rotulo=meta.rotulo, descricao=meta.descricao, sensivel=meta.sensivel,
             user_story=meta.user_story, perfil_id=v.perfil_id if v else None,
@@ -132,12 +141,14 @@ def listar_tarefas(db: Session) -> list[TarefaOut]:
     return saida
 
 
-def vincular(db: Session, tarefa: TarefaIA, dados: VinculoIn, usuario: str) -> None:
+def vincular(db: Session, tarefa: TarefaIA, dados: VinculoIn, usuario: str,
+             usuario_id: int | None = None) -> None:
     permitir = get_settings().ia_permitir_externo_para_sensivel
+    dao = IaDao(db, usuario_id)
     for pid in (dados.perfil_id, dados.perfil_fallback_id):
         if pid is None:
             continue
-        p = db.get(PerfilProvedorIA, pid)
+        p = dao.perfil(pid)
         if p is None or not p.ativo:
             raise ErroConfiguracaoIA(f"Perfil {pid} inexistente ou inativo.")
         try:
@@ -146,8 +157,35 @@ def vincular(db: Session, tarefa: TarefaIA, dados: VinculoIn, usuario: str) -> N
             raise ErroConfiguracaoIA(str(exc)) from exc
     if dados.perfil_fallback_id and dados.perfil_fallback_id == dados.perfil_id:
         raise ErroConfiguracaoIA("O perfil de contingência deve ser diferente do principal.")
-    v = db.get(VinculoTarefaIA, tarefa.value) or VinculoTarefaIA(tarefa=tarefa.value)
+    v = dao.vinculo(tarefa.value) or VinculoTarefaIA(tarefa=tarefa.value)
     v.perfil_id, v.perfil_fallback_id, v.alterado_por = (dados.perfil_id,
                                                         dados.perfil_fallback_id, usuario)
-    db.add(v)
-    db.commit()
+    dao.save_generic(v)
+    dao.commit()
+
+
+# ------------------------------------------------------------------ consultas da API
+def perfil_por_id(db: Session, perfil_id: int) -> PerfilProvedorIA | None:
+    return IaDao(db).perfil(perfil_id)
+
+
+def perfil_por_nome(db: Session, nome: str) -> PerfilProvedorIA | None:
+    return IaDao(db).perfil_por_nome(nome)
+
+
+def listar_perfis(db: Session) -> list[PerfilOut]:
+    return [to_out(p) for p in IaDao(db).perfis()]
+
+
+def excluir_perfil(db: Session, perfil: PerfilProvedorIA, usuario_id: int | None = None) -> None:
+    """Exclusão lógica. Perfil ainda vinculado a uma tarefa → `ErroConfiguracaoIA`."""
+    dao = IaDao(db, usuario_id)
+    if dao.vinculos_do_perfil(perfil.id):
+        raise ErroConfiguracaoIA(
+            "Perfil vinculado a uma tarefa. Troque o vínculo antes de excluir.")
+    dao.excluir_perfil(perfil)
+    dao.commit()
+
+
+def listar_usos(db: Session, limite: int):
+    return IaDao(db).usos(limite)

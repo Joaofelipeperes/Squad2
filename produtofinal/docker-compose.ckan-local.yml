@@ -10,15 +10,26 @@
 # A rede do CKAN se chama "<pasta da raiz>_default" (ex.: squad2_default). Confira com
 # `docker network ls`; se o nome for outro, defina CKAN_NETWORK antes de subir:
 #   PowerShell: $env:CKAN_NETWORK = "outra_default"     bash: export CKAN_NETWORK=outra_default
+#
+# A rede do CKAN também tem um serviço "db" (o Postgres do CKAN). Na API e no worker, que estão
+# nas duas redes, "db" pode resolver para ele e o login "gda" falha. Por isso o banco do produto
+# ganha o alias "gda-db" e a URL do banco aponta para esse nome (credenciais do docker-compose.yml).
 services:
+  db:
+    networks:
+      default:
+        aliases: [gda-db]
+
   api:
     environment:
       GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
+      GDA_DATABASE_URL: postgresql+psycopg://gda:gda@gda-db:5432/gda
     networks: [default, ckan]
 
   worker:
     environment:
       GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
+      GDA_DATABASE_URL: postgresql+psycopg://gda:gda@gda-db:5432/gda
     networks: [default, ckan]
 
 networks:

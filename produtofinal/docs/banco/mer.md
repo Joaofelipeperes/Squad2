@@ -2,9 +2,9 @@
 
 > **Arquivo gerado** por `scripts/gerar_mer.py` a partir dos modelos SQLAlchemy.
 > Não edite à mão: altere o modelo (ou sua docstring), crie a migração e rode o script.
-> Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
+> Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md) · [ADR-0019](../adr/0019-dao-exclusao-logica-e-auditoria.md).
 
-19 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final).
+19 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, `created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), omitidas do diagrama e listadas no dicionário de dados.
 
 ## Diagrama
 
@@ -30,16 +30,16 @@ erDiagram
         bool sistema
         bool exige_orgao
         bool todas
-        datetime created_at
-        datetime updated_at
     }
     acesso_papel_permissao {
-        int papel_id PK, FK
-        varchar permissao PK
+        int id PK
+        int papel_id FK
+        varchar permissao
     }
     acesso_usuario_papel {
-        int usuario_id PK, FK
-        int papel_id PK, FK
+        int id PK
+        int usuario_id FK
+        int papel_id FK
     }
     usuario {
         int id PK
@@ -47,10 +47,8 @@ erDiagram
         varchar nome
         varchar senha_hash
         bool ativo
-        varchar orgao_id FK
+        int orgao_id FK
         datetime ultimo_acesso
-        datetime created_at
-        datetime updated_at
     }
     coleta {
         int id PK
@@ -65,11 +63,12 @@ erDiagram
         text erro
     }
     dataset {
-        varchar ckan_id PK
+        int id PK
+        varchar id_ckan UK
         varchar name
         varchar titulo
         text descricao
-        varchar organizacao_id FK
+        int organizacao_id FK
         varchar autor
         varchar autor_email
         varchar licenca
@@ -83,25 +82,27 @@ erDiagram
     dataset_snapshot {
         int id PK
         int coleta_id FK
-        varchar dataset_id
+        int dataset_id
         varchar hash_conteudo
         json payload
     }
     organizacao {
-        varchar ckan_id PK
+        int id PK
+        varchar id_ckan UK
         varchar name
         varchar titulo
         varchar sigla
         int ultima_coleta_id FK
     }
     recurso {
-        varchar ckan_id PK
-        varchar dataset_id FK
+        int id PK
+        varchar id_ckan UK
+        int dataset_id FK
         varchar nome
         varchar formato
         text url
         varchar url_type
-        datetime created
+        datetime created_ckan
         datetime last_modified
         bool datastore_active
         bool eh_dicionario_dados
@@ -111,7 +112,7 @@ erDiagram
         int id PK
         int plano_id FK
         varchar orgao_sigla
-        varchar organizacao_id FK
+        int organizacao_id FK
         varchar nome_previsto
         text descricao
         varchar unidade_responsavel
@@ -120,29 +121,25 @@ erDiagram
         varchar periodicidade_original
         varchar politicas_publicas
         bool possui_conteudo_sigiloso
-        varchar dataset_id FK
+        int dataset_id FK
         varchar dataset_name_planilha
         int linha_planilha
         varchar classificacao
-        datetime created_at
-        datetime updated_at
     }
     pda_plano {
         int id PK
         varchar nome UK
         date vigencia_inicio
         date vigencia_fim
-        bool vigente
+        bool vigente UK
         varchar arquivo_nome
         varchar importado_por
         datetime importado_em
         int total_bases
-        datetime created_at
-        datetime updated_at
     }
     lgpd_achado {
         int id PK
-        varchar recurso_id FK
+        int recurso_id FK
         varchar coluna
         int linha
         int ocorrencias
@@ -152,19 +149,15 @@ erDiagram
         varchar prioridade
         varchar status
         varchar impressao_digital
-        datetime created_at
-        datetime updated_at
     }
     lgpd_correcao {
         int id PK
-        varchar recurso_id FK
+        int recurso_id FK
         varchar aprovado_por
         datetime aprovado_em
         varchar caminho_backup
         varchar status
         text erro
-        datetime created_at
-        datetime updated_at
     }
     lgpd_decisao {
         int id PK
@@ -188,8 +181,6 @@ erDiagram
         float timeout_s
         json extra
         bool ativo
-        datetime created_at
-        datetime updated_at
     }
     ia_uso {
         int id PK
@@ -206,19 +197,17 @@ erDiagram
         varchar erro
     }
     ia_vinculo_tarefa {
-        varchar tarefa PK
+        int id PK
+        varchar tarefa UK
         int perfil_id FK
         int perfil_fallback_id FK
         varchar alterado_por
-        datetime created_at
-        datetime updated_at
     }
     parametro {
-        varchar chave PK
+        int id PK
+        varchar chave UK
         json valor
         varchar alterado_por
-        datetime created_at
-        datetime updated_at
     }
     acesso_papel ||--o{ acesso_papel_permissao : "papel_id"
     usuario ||--o{ acesso_usuario_papel : "usuario_id"
@@ -249,22 +238,22 @@ erDiagram
 | `acesso_papel_permissao.papel_id` | `acesso_papel.id` | 1 : N | FK |  |
 | `acesso_usuario_papel.usuario_id` | `usuario.id` | 1 : N | FK |  |
 | `acesso_usuario_papel.papel_id` | `acesso_papel.id` | 1 : N | FK |  |
-| `usuario.orgao_id` | `organizacao.ckan_id` | 0..1 : N | FK |  |
-| `dataset.organizacao_id` | `organizacao.ckan_id` | 0..1 : N | FK |  |
+| `usuario.orgao_id` | `organizacao.id` | 0..1 : N | FK |  |
+| `dataset.organizacao_id` | `organizacao.id` | 0..1 : N | FK |  |
 | `dataset.ultima_coleta_id` | `coleta.id` | 0..1 : N | FK |  |
 | `dataset_snapshot.coleta_id` | `coleta.id` | 1 : N | FK |  |
 | `organizacao.ultima_coleta_id` | `coleta.id` | 0..1 : N | FK |  |
-| `recurso.dataset_id` | `dataset.ckan_id` | 1 : N | FK |  |
+| `recurso.dataset_id` | `dataset.id` | 1 : N | FK |  |
 | `recurso.ultima_coleta_id` | `coleta.id` | 0..1 : N | FK |  |
 | `pda_base_prevista.plano_id` | `pda_plano.id` | 1 : N | FK |  |
-| `pda_base_prevista.organizacao_id` | `organizacao.ckan_id` | 0..1 : N | FK |  |
-| `pda_base_prevista.dataset_id` | `dataset.ckan_id` | 0..1 : N | FK |  |
-| `lgpd_achado.recurso_id` | `recurso.ckan_id` | 1 : N | FK |  |
-| `lgpd_correcao.recurso_id` | `recurso.ckan_id` | 1 : N | FK |  |
+| `pda_base_prevista.organizacao_id` | `organizacao.id` | 0..1 : N | FK |  |
+| `pda_base_prevista.dataset_id` | `dataset.id` | 0..1 : N | FK |  |
+| `lgpd_achado.recurso_id` | `recurso.id` | 1 : N | FK |  |
+| `lgpd_correcao.recurso_id` | `recurso.id` | 1 : N | FK |  |
 | `lgpd_decisao.achado_id` | `lgpd_achado.id` | 1 : N | FK |  |
 | `ia_vinculo_tarefa.perfil_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
 | `ia_vinculo_tarefa.perfil_fallback_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
-| `dataset_snapshot.dataset_id` | `dataset.ckan_id` | — | referência lógica | Fotografia histórica: sem FK para não depender do estado atual do dataset. |
+| `dataset_snapshot.dataset_id` | `dataset.id` | — | referência lógica | Fotografia histórica: sem FK para não depender do estado atual do dataset. |
 | `ia_uso.perfil_id` | `ia_perfil_provedor.id` | — | referência lógica | Registro de uso sobrevive à exclusão do perfil (o nome fica em perfil_nome). |
 | `coleta.solicitada_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `lgpd_decisao.usuario` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
@@ -272,6 +261,7 @@ erDiagram
 | `ia_vinculo_tarefa.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `parametro.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `acesso_log.usuario` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
+| `<toda tabela>.created_id / changed_id` | `usuario.id` | — | referência lógica | Auditoria (ADR-0019): quem criou / alterou por último; vazio = sistema. Sem FK para não criar ciclos. |
 
 ## Dicionário de dados
 
@@ -294,6 +284,11 @@ Log de acesso: uma linha por requisição à API (quem, de onde, o quê, resulta
 | `status_http` | int | não |  |  |  |
 | `ip` | varchar(45) | sim |  |  |  |
 | `user_agent` | varchar(500) | sim |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_acesso_log_ocorrido_em`, `ix_acesso_log_usuario`
 
@@ -310,8 +305,13 @@ Conjunto nomeado de permissões atribuível a usuários (ex.: Gerência GEDA).
 | `sistema` | bool | não |  |  | `False` |
 | `exige_orgao` | bool | não |  |  | `False` |
 | `todas` | bool | não |  |  | `False` |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `uq_acesso_papel_codigo`
 
 #### `acesso_papel_permissao`
 
@@ -319,17 +319,33 @@ Código de permissão do catálogo (app/core/permissoes.py) concedido a um papel
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `papel_id` | int | não | PK, FK | `acesso_papel.id` |  |
-| `permissao` | varchar(80) | não | PK |  |  |
+| `id` | int | não | PK |  |  |
+| `papel_id` | int | não | FK | `acesso_papel.id` |  |
+| `permissao` | varchar(80) | não |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `ix_acesso_papel_permissao_papel_id`, `uq_acesso_papel_permissao_papel_id_permissao`
 
 #### `acesso_usuario_papel`
 
-Associação N:N entre `usuario` e `acesso_papel`.
+Papel atribuído a um usuário.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `usuario_id` | int | não | PK, FK | `usuario.id` |  |
-| `papel_id` | int | não | PK, FK | `acesso_papel.id` |  |
+| `id` | int | não | PK |  |  |
+| `usuario_id` | int | não | FK | `usuario.id` |  |
+| `papel_id` | int | não | FK | `acesso_papel.id` |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `ix_acesso_usuario_papel_papel_id`, `ix_acesso_usuario_papel_usuario_id`, `uq_acesso_usuario_papel_usuario_id_papel_id`
 
 #### `usuario`
 
@@ -342,12 +358,15 @@ Pessoa com acesso à solução; com órgão vinculado, fica restrita aos dados d
 | `nome` | varchar(200) | não |  |  |  |
 | `senha_hash` | varchar(200) | não |  |  |  |
 | `ativo` | bool | não |  |  | `True` |
-| `orgao_id` | varchar(64) | sim | FK | `organizacao.ckan_id` |  |
+| `orgao_id` | int | sim | FK | `organizacao.id` |  |
 | `ultimo_acesso` | datetime | sim |  |  |  |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
-Índices: `ix_usuario_email`
+Índices: `uq_usuario_email`
 
 ### Módulo `inventario` — Inventário CKAN
 Documentação do módulo: [docs/modulos/inventario.md](../modulos/inventario.md)
@@ -368,6 +387,11 @@ Execução da coleta do CKAN (agendada ou manual), com totais e eventual erro.
 | `total_datasets` | int | não |  |  | `0` |
 | `total_recursos` | int | não |  |  | `0` |
 | `erro` | text | sim |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 #### `dataset`
 
@@ -375,11 +399,12 @@ Conjunto de dados espelhado do CKAN (package), no estado da última coleta.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `ckan_id` | varchar(64) | não | PK |  |  |
+| `id` | int | não | PK |  |  |
+| `id_ckan` | varchar(64) | sim | UK |  |  |
 | `name` | varchar(200) | não |  |  |  |
 | `titulo` | varchar(500) | não |  |  |  |
 | `descricao` | text | sim |  |  |  |
-| `organizacao_id` | varchar(64) | sim | FK | `organizacao.ckan_id` |  |
+| `organizacao_id` | int | sim | FK | `organizacao.id` |  |
 | `autor` | varchar(300) | sim |  |  |  |
 | `autor_email` | varchar(300) | sim |  |  |  |
 | `licenca` | varchar(100) | sim |  |  |  |
@@ -389,8 +414,13 @@ Conjunto de dados espelhado do CKAN (package), no estado da última coleta.
 | `extras` | json | não |  |  | função |
 | `ativo_no_portal` | bool | não |  |  | `True` |
 | `ultima_coleta_id` | int | sim | FK | `coleta.id` |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
-Índices: `ix_dataset_name`, `ix_dataset_organizacao_id`
+Índices: `ix_dataset_name`, `ix_dataset_organizacao_id`, `uq_dataset_id_ckan`
 
 #### `dataset_snapshot`
 
@@ -400,9 +430,14 @@ Fotografia compacta de um dataset em uma coleta — insumo do diff entre coletas
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
 | `coleta_id` | int | não | FK | `coleta.id` |  |
-| `dataset_id` | varchar(64) | não |  |  |  |
+| `dataset_id` | int | não |  |  |  |
 | `hash_conteudo` | varchar(64) | não |  |  |  |
 | `payload` | json | não |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_dataset_snapshot_coleta_id`, `ix_dataset_snapshot_dataset_id`
 
@@ -412,13 +447,19 @@ Fotografia compacta de um dataset em uma coleta — insumo do diff entre coletas
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `ckan_id` | varchar(64) | não | PK |  |  |
+| `id` | int | não | PK |  |  |
+| `id_ckan` | varchar(64) | sim | UK |  |  |
 | `name` | varchar(200) | não |  |  |  |
 | `titulo` | varchar(300) | não |  |  |  |
 | `sigla` | varchar(40) | sim |  |  |  |
 | `ultima_coleta_id` | int | sim | FK | `coleta.id` |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
-Índices: `ix_organizacao_name`
+Índices: `ix_organizacao_name`, `uq_organizacao_id_ckan`
 
 #### `recurso`
 
@@ -426,33 +467,39 @@ Arquivo ou link de um dataset (resource); last_modified é o indicador de atuali
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `ckan_id` | varchar(64) | não | PK |  |  |
-| `dataset_id` | varchar(64) | não | FK | `dataset.ckan_id` |  |
+| `id` | int | não | PK |  |  |
+| `id_ckan` | varchar(64) | sim | UK |  |  |
+| `dataset_id` | int | não | FK | `dataset.id` |  |
 | `nome` | varchar(500) | sim |  |  |  |
 | `formato` | varchar(40) | sim |  |  |  |
 | `url` | text | sim |  |  |  |
 | `url_type` | varchar(20) | sim |  |  |  |
-| `created` | datetime | sim |  |  |  |
+| `created_ckan` | datetime | sim |  |  |  |
 | `last_modified` | datetime | sim |  |  |  |
 | `datastore_active` | bool | não |  |  | `False` |
 | `eh_dicionario_dados` | bool | não |  |  | `False` |
 | `ultima_coleta_id` | int | sim | FK | `coleta.id` |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
-Índices: `ix_recurso_dataset_id`
+Índices: `ix_recurso_dataset_id`, `uq_recurso_id_ckan`
 
 ### Módulo `pda` — PDA
 Documentação do módulo: [docs/modulos/pda.md](../modulos/pda.md)
 
 #### `pda_base_prevista`
 
-Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13); o `name` lido da planilha fica em `dataset_name_planilha` apenas para auditoria e para resolver vínculos.
+Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para `dataset.id`, que guarda o `id_ckan`. O `name` lido da planilha fica em `dataset_name_planilha` apenas para auditoria e para resolver vínculos.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
 | `plano_id` | int | não | FK | `pda_plano.id` |  |
 | `orgao_sigla` | varchar(100) | não |  |  |  |
-| `organizacao_id` | varchar(64) | sim | FK | `organizacao.ckan_id` |  |
+| `organizacao_id` | int | sim | FK | `organizacao.id` |  |
 | `nome_previsto` | varchar(500) | não |  |  |  |
 | `descricao` | text | sim |  |  |  |
 | `unidade_responsavel` | varchar(500) | sim |  |  |  |
@@ -461,12 +508,15 @@ Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13); o `na
 | `periodicidade_original` | varchar(100) | sim |  |  |  |
 | `politicas_publicas` | varchar(500) | sim |  |  |  |
 | `possui_conteudo_sigiloso` | bool | sim |  |  |  |
-| `dataset_id` | varchar(64) | sim | FK | `dataset.ckan_id` |  |
+| `dataset_id` | int | sim | FK | `dataset.id` |  |
 | `dataset_name_planilha` | varchar(200) | sim |  |  |  |
 | `linha_planilha` | int | sim |  |  |  |
 | `classificacao` | varchar(20) | não |  |  | `'pda'` |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_pda_base_prevista_dataset_id`, `ix_pda_base_prevista_organizacao_id`, `ix_pda_base_prevista_orgao_sigla`, `ix_pda_base_prevista_plano_id`
 
@@ -480,15 +530,18 @@ Um Plano de Dados Abertos importado (ex.: "PDA 2025-2027").
 | `nome` | varchar(200) | não | UK |  |  |
 | `vigencia_inicio` | date | sim |  |  |  |
 | `vigencia_fim` | date | sim |  |  |  |
-| `vigente` | bool | não |  |  | `False` |
+| `vigente` | bool | não | UK |  | `False` |
 | `arquivo_nome` | varchar(300) | sim |  |  |  |
 | `importado_por` | varchar(200) | sim |  |  |  |
 | `importado_em` | datetime | não |  |  | função |
 | `total_bases` | int | não |  |  | `0` |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
-Índices: `uq_pda_plano_nome_ci`, `uq_pda_plano_vigente`
+Índices: `uq_pda_plano_nome`, `uq_pda_plano_nome_ci`, `uq_pda_plano_vigente`
 
 ### Módulo `lgpd` — LGPD
 Documentação do módulo: [docs/modulos/lgpd.md](../modulos/lgpd.md)
@@ -500,7 +553,7 @@ Possível dado pessoal localizado num recurso (local e tipo, nunca o valor).
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
-| `recurso_id` | varchar(64) | não | FK | `recurso.ckan_id` |  |
+| `recurso_id` | int | não | FK | `recurso.id` |  |
 | `coluna` | varchar(300) | não |  |  |  |
 | `linha` | int | sim |  |  |  |
 | `ocorrencias` | int | não |  |  | `1` |
@@ -510,8 +563,11 @@ Possível dado pessoal localizado num recurso (local e tipo, nunca o valor).
 | `prioridade` | varchar(10) | não |  |  |  |
 | `status` | varchar(20) | não |  |  | `'revisar'` |
 | `impressao_digital` | varchar(64) | não |  |  |  |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_lgpd_achado_impressao_digital`, `ix_lgpd_achado_recurso_id`
 
@@ -522,14 +578,17 @@ Trilha da anonimização publicada no CKAN (PBI-92 a PBI-94).
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
-| `recurso_id` | varchar(64) | não | FK | `recurso.ckan_id` |  |
+| `recurso_id` | int | não | FK | `recurso.id` |  |
 | `aprovado_por` | varchar(200) | não |  |  |  |
 | `aprovado_em` | datetime | não |  |  |  |
 | `caminho_backup` | varchar(500) | não |  |  |  |
 | `status` | varchar(20) | não |  |  | `'pendente'` |
 | `erro` | text | sim |  |  |  |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_lgpd_correcao_recurso_id`
 
@@ -545,6 +604,11 @@ Histórico imutável das decisões humanas (PBI-42).
 | `justificativa` | text | sim |  |  |  |
 | `usuario` | varchar(200) | não |  |  |  |
 | `momento` | datetime | não |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_lgpd_decisao_achado_id`
 
@@ -570,8 +634,13 @@ Uma configuração nomeada de provedor+modelo. Ex.: 'Gemini SECTI', 'Qwen local'
 | `timeout_s` | float | não |  |  | `60.0` |
 | `extra` | json | não |  |  | função |
 | `ativo` | bool | não |  |  | `True` |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `uq_ia_perfil_provedor_nome`
 
 #### `ia_uso`
 
@@ -591,6 +660,11 @@ Uma linha por chamada. NÃO guarda prompt nem resposta (PBI-35 — não retenç�
 | `tokens_entrada` | int | sim |  |  |  |
 | `tokens_saida` | int | sim |  |  |  |
 | `erro` | varchar(500) | sim |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_ia_uso_momento`
 
@@ -600,12 +674,18 @@ Qual perfil atende cada tarefa de IA (e qual assume se o principal falhar).
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `tarefa` | varchar(40) | não | PK |  |  |
+| `id` | int | não | PK |  |  |
+| `tarefa` | varchar(40) | não | UK |  |  |
 | `perfil_id` | int | sim | FK | `ia_perfil_provedor.id` |  |
 | `perfil_fallback_id` | int | sim | FK | `ia_perfil_provedor.id` |  |
 | `alterado_por` | varchar(200) | sim |  |  |  |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `uq_ia_vinculo_tarefa_tarefa`
 
 ### Módulo `parametros` — Parâmetros
 Documentação do módulo: [docs/modulos/parametros.md](../modulos/parametros.md)
@@ -616,8 +696,14 @@ Valor de negócio editável pela GEDA; ausente no banco = vale o padrão do cat�
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
-| `chave` | varchar(80) | não | PK |  |  |
+| `id` | int | não | PK |  |  |
+| `chave` | varchar(80) | não | UK |  |  |
 | `valor` | json | não |  |  |  |
 | `alterado_por` | varchar(200) | sim |  |  |  |
-| `created_at` | datetime | não |  |  | função |
-| `updated_at` | datetime | não |  |  | função |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `uq_parametro_chave`

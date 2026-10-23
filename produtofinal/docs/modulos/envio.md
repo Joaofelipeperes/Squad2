@@ -7,7 +7,7 @@
 | **User stories** | nenhuma (requer nova US) |
 | **Backend** | `backend/app/modules/envio/` |
 | **Frontend** | `frontend/src/modules/envio/` |
-| **Última atualização** | 30/09/2026 |
+| **Última atualização** | 21/10/2026 |
 
 ## Propósito
 Permitir que servidores dos órgãos estaduais acessem a solução apenas para consultar os datasets
@@ -70,3 +70,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
 | Data | Alteração | Autor |
 |---|---|---|
 | 30/09/2026 | Criado como esqueleto não comprometido para o papel Órgão publicador | Victor |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): contrato `enviar_recurso` recebe o `id` inteiro do dataset | Victor |

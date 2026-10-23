@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 21/10/2026 |
+| **Última atualização** | 23/10/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -46,7 +46,7 @@ evolução temporal abaixo dos cards (PBI-75).
 |---|---|---|---|
 | GET | `/organizacoes` | `painel.acessar` | `OrganizacoesOut`: plano vigente (`{id, nome}` ou null), hoje, `formatos_abertos` e uma `OrganizacaoOut` por órgão (escopo de órgão do usuário) |
 
-`OrganizacaoOut`: chave (organizacao_id ou `sigla:<SIGLA>`), organizacao_id, nome, siglas,
+`OrganizacaoOut`: chave (`id` da organização em texto ou `sigla:<SIGLA>`), organizacao_id (inteiro), nome, siglas,
 datasets_no_portal, recursos_validos, recursos_formato_fechado, formatos_fechados `{formato: n}`
 ("" = sem formato), bases_previstas, bases_vinculadas, bases_publicadas, `bases_em_atraso` (só
 entre as vinculadas; null sem nenhuma vinculada), bases_proximas_do_prazo e os pendentes
@@ -55,6 +55,8 @@ entre as vinculadas; null sem nenhuma vinculada), bases_proximas_do_prazo e os p
 Ainda previstos: `GET /api/v1/painel/kpis` e `/alertas` (`painel.acessar`).
 
 ## Serviços e métodos
+`dao.py` — `PainelDao(Dao)` (ADR-0019): `organizacoes_visiveis`, `datasets_ativos_por_orgao`, `recursos_validos_por_orgao`, `orgao_de_cada_dataset`. Só leitura; registros excluídos não contam.
+
 - `kpis(db) -> dict` — PBI-56.
 - `indice_atencao_por_orgao(db)` — PBI-76/84, critério documentado e auditável (PBI-59).
 - `organizacoes(db, user) -> OrganizacoesOut` — US19: inventário (datasets ativos, recursos atuais
@@ -104,3 +106,5 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 18/10/2026 | Tela Organizações (US19): `GET /painel/organizacoes` e `service.organizacoes`; tabela e detalhe do protótipo com bases do PDA vigente, recursos em formato fechado (parâmetro `formatos_abertos`) e indicadores pendentes como "aguardando vínculo" / "a definir" | Humberto |
 | 18/10/2026 | Organizações: coluna "Em atraso" (nome do protótipo) conta só bases vinculadas; sem vínculo mostra "aguardando vínculo" em vez de contar toda base com prazo vencido (`bases_em_atraso`, `bases_proximas_do_prazo`) | Humberto |
 | 21/10/2026 | Organizações: filtros na tela (busca por nome/sigla, Em atraso, Bases no PDA, Organização no portal), sem mudança na API | Victor |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): `organizacao_id` inteiro e `chave` = `id` em texto; consultas juntam por `Dataset.id` | Victor |
+| 22/10/2026 | Banco só pelo `PainelDao` (ADR-0019): agregados da tela Organizações sem os registros excluídos | Victor |

@@ -22,13 +22,15 @@ class PlanoIn(BaseModel):
 class BaseIn(BaseModel):
     """Inclusão e edição manual de uma base prevista (mesmos campos da planilha).
 
-    `organizacao_id` vazio → órgão identificado pela sigla, como na importação. `dataset_id` = ID
-    do dataset no CKAN, digitado: é o vínculo (ADR-0006) e tem prioridade; serve para quando o
-    nome no PDA difere do name no portal. `dataset_link` = endereço do dataset no portal (ou só o
-    name): serve SÓ para achar o ID (PBI-13). Os dois vazios → sem vínculo."""
+    `organizacao_id` (id da organização) vazio → órgão identificado pela sigla, como na
+    importação. Vínculo com o dataset, em ordem de prioridade: `dataset_id` = id do dataset
+    escolhido na busca do formulário; `dataset_id_ckan` = ID do dataset no CKAN, digitado
+    (ADR-0006: serve para quando o nome no PDA difere do name no portal; precisa existir no
+    inventário e não pode divergir do endereço); `dataset_link` = endereço do dataset no portal
+    (ou só o name), que serve SÓ para achar o ID (PBI-13). Todos vazios → sem vínculo."""
 
     orgao_sigla: str = Field(max_length=100)
-    organizacao_id: str | None = None
+    organizacao_id: int | None = None
     nome_previsto: str = Field(max_length=500)
     descricao: str | None = None
     unidade_responsavel: str | None = Field(default=None, max_length=500)
@@ -36,8 +38,9 @@ class BaseIn(BaseModel):
     prazo_abertura: date | None = None
     politicas_publicas: str | None = Field(default=None, max_length=500)
     possui_conteudo_sigiloso: bool | None = None
+    dataset_id: int | None = None
     dataset_link: str | None = Field(default=None, max_length=500)
-    dataset_id: str | None = Field(default=None, max_length=100)
+    dataset_id_ckan: str | None = Field(default=None, max_length=100)
 
 
 class PlanoOut(BaseModel):
@@ -89,11 +92,23 @@ class OpcoesOut(BaseModel):
 
 
 class FormularioOut(BaseModel):
-    """Opções do formulário de base: organizações do portal (valor = ckan_id) e o domínio de
+    """Opções do formulário de base: organizações do portal (valor = id) e o domínio de
     periodicidade."""
 
     organizacoes: list[OpcaoOut]
     periodicidades: list[str]
+
+
+class DatasetOpcaoOut(BaseModel):
+    """Dataset do inventário encontrado pela busca do formulário de base."""
+
+    id: int
+    id_ckan: str | None
+    name: str
+    titulo: str
+    organizacao_id: int | None
+    orgao_nome: str | None
+    ativo_no_portal: bool
 
 
 class BaseOut(BaseModel):
@@ -112,7 +127,8 @@ class BaseOut(BaseModel):
     possui_conteudo_sigiloso: bool | None
     prazo_abertura: date | None
     vinculo: Vinculo
-    dataset_id: str | None
+    dataset_id: int | None
+    dataset_id_ckan: str | None  # para o link do portal
     dataset_name: str | None
     dataset_titulo: str | None
     dataset_name_planilha: str | None

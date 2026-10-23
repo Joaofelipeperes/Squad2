@@ -25,13 +25,24 @@ Todas as dependências são gratuitas e de código aberto (restrição do PGP v2
 **Com Docker** (recomendado):
 
 ```bash
-cp .env.example .env            # ajuste GDA_SECRET_KEY e GDA_ENCRYPTION_KEY
+cp .env.example .env            # ajuste GDA_SECRET_KEY e GDA_ENCRYPTION_KEY (obrigatórias fora de dev)
 docker compose up -d --build
 docker compose exec api python -m app.cli criar-usuario --email voce@cge.go.gov.br --nome "Seu Nome" --papel administrador
 docker compose exec api python -m app.cli semear-ia     # perfis de IA de exemplo
 ```
 
 Web em http://localhost:8080 · API em http://localhost:8000/api/v1/docs
+
+**Modo desenvolvimento** (alteração salva já vale, sem rebuild — ADR-0017):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+`frontend/` e `backend/` ficam montados nos containers: a tela atualiza sozinha no navegador e a API
+e o worker reiniciam ao salvar um `.py`. Mudou `package.json` ou `pyproject.toml`? Rode o mesmo
+comando com `--build -V`. Com o CKAN local, inclua `-f docker-compose.ckan-local.yml` antes do
+`docker-compose.dev.yml`. Para voltar ao modo normal (nginx com build): `docker compose up -d --build`.
 
 **Com o CKAN local deste repositório** (portal de testes, `docker-compose.yml` da raiz):
 

@@ -154,7 +154,7 @@ def name_do_link(valor: object) -> str | None:
 # ------------------------------------------------------------------ órgão
 
 _STOPWORDS = {"de", "da", "do", "das", "dos", "e", "a", "o"}
-Orgao = tuple[str, str, str, str | None]  # (ckan_id, name, titulo, sigla)
+Orgao = tuple[int, str, str, str | None]  # (id, name, titulo, sigla)
 
 # De-para explícito: siglas da planilha do PDA que nenhum critério automático deduz com segurança
 # (siglas silábicas, iniciais com "do Estado de Goiás", erro de digitação conhecido) → `name` da
@@ -189,8 +189,8 @@ def _contem_sequencia(seq: list[str], tokens: list[str]) -> bool:
     return n > 0 and any(tokens[i:i + n] == seq for i in range(len(tokens) - n + 1))
 
 
-def casar_orgao(sigla: object, orgaos: Iterable[Orgao]) -> str | None:
-    """Sigla da planilha → ckan_id da organização, ou None se não houver correspondência ÚNICA.
+def casar_orgao(sigla: object, orgaos: Iterable[Orgao]) -> int | None:
+    """Sigla da planilha → id da organização, ou None se não houver correspondência ÚNICA.
 
     Critérios, em ordem (o primeiro com resultado decide; empate → None, nunca chuta):
       0) de-para explícito `SIGLAS_CONHECIDAS` (sigla → name da organização);
@@ -236,13 +236,13 @@ def chave_sigla(sigla: str | None) -> str:
     return re.sub(r"\s+", " ", sigla or "").strip().upper()
 
 
-def orgao_por_evidencia(pares: Iterable[tuple[str, str | None]]) -> dict[str, str]:
+def orgao_por_evidencia(pares: Iterable[tuple[str, int | None]]) -> dict[str, int]:
     """Evidência do vínculo por ID: pares (sigla da planilha, organização do dataset vinculado) →
     {chave_sigla: organização} só para as siglas cujas bases vinculadas apontam para UMA única
     organização. Sigla com vínculos para duas ou mais organizações fica de fora (não chuta)."""
-    evidencias: dict[str, set[str]] = {}
+    evidencias: dict[str, set[int]] = {}
     for sigla, organizacao_id in pares:
-        if organizacao_id:
+        if organizacao_id is not None:
             evidencias.setdefault(chave_sigla(sigla), set()).add(organizacao_id)
     return {s: next(iter(orgs)) for s, orgs in evidencias.items() if len(orgs) == 1}
 
