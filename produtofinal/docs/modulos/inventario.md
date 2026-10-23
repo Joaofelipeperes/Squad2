@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 18/10/2026 |
+| **Última atualização** | 23/10/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -50,6 +50,8 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 - `iniciar(db, origem, solicitante=None) -> Coleta` — registra a coleta; `ColetaEmAndamento` se já houver uma.
 - `executar(coleta_id, client=None)` — percorre `organization_list` e `package_search` paginado,
   faz upsert, grava `dataset_snapshot` e marca como inativos os datasets que sumiram. Abre sessão própria.
+  Coleta concluída com sucesso chama `rastreabilidade.service.sincronizar(orgaos=...)` (leitura da
+  auditoria do CKAN e comparação do cadastro dos órgãos, ADR-0009); falha ali fica na própria sincronização e não muda o status da coleta.
 - `ultima_coleta(db)` · `coleta_em_andamento(db)` · `job_coleta_diaria()`.
 - `listar_datasets(db, user, *, busca, orgao, formato, situacao) -> DatasetsOut` e
   `obter_dataset(db, ckan_id, user) -> DatasetDetalheOut` (`DatasetNaoEncontrado`) — tela Datasets
@@ -105,7 +107,8 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | é consumido por | pda | `Dataset` (vínculo da base prevista pelo ID, `ativo_no_portal`), `Recurso` (recursos válidos e última atualização), `Organizacao` (órgão da base) |
 | é consumido por | atualizacoes, metadados | `Dataset`, `Recurso` |
 | é consumido por | lgpd | `Recurso` (varredura, url_type para anonimização) |
-| é consumido por | rastreabilidade | `Coleta`, `DatasetSnapshot` (diff entre coletas) |
+| é consumido por | rastreabilidade | `Dataset` (lista de datasets cuja auditoria é lida, inclusive os que saíram do portal), `Recurso` (nome do recurso nos eventos); `Coleta`, `DatasetSnapshot` (diff entre coletas, complemento futuro) |
+| aciona | rastreabilidade | `sincronizar(orgaos=...)` ao fim de cada coleta concluída, com a lista de órgãos baixada (comparação do cadastro dos órgãos) |
 | é consumido por | painel | `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` — tela Organizações |
 | é consumido por | metadados | `Dataset`, `Recurso` e `condicao_recurso_atual()` — `recursos_formato_fechado` (PBI-53) |
 | é consumido por | relatorios, assistente | contagens e última coleta |
@@ -157,3 +160,5 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 08/10/2026 | Periodicidade lida também do extra `Atualização` do portal (`regras.periodicidade_declarada`); `docker-compose.ckan-local.yml` liga a coleta ao CKAN local | João |
 | 18/10/2026 | Tela Datasets (PBI-83): `GET /datasets` e `GET /datasets/{id}`, busca e filtros, Status = situação no portal, detalhe com recursos atuais, data de metadado separada da última atualização real e dados do PDA da base vinculada pelo ID; coluna `dataset.descricao` (`notes`, migração `e5b2c7a9d1f4`) | Humberto |
 | 18/10/2026 | Interações: painel (tela Organizações) e metadados (formato fechado) passam a consumir `condicao_recurso_atual()` | Humberto |
+| 21/10/2026 | Coleta concluída aciona a sincronização da rastreabilidade (auditoria do CKAN, ADR-0009); Interações atualizadas | João |
+| 23/10/2026 | A coleta passa a lista de órgãos baixada para a rastreabilidade (comparação do cadastro dos órgãos entre coletas) | João |

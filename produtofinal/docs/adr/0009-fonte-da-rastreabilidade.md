@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | Em análise |
+| **Status** | Aceita (opção A) |
 | **Tipo** | Técnica |
-| **Data da decisão** | aberta em 22/09/2026; decisão prevista no PBI-70 |
-| **Data do registro** | 07/10/2026 |
+| **Data da decisão** | 21/10/2026 (aberta em 22/09/2026; PBI-70) |
+| **Data do registro** | 07/10/2026; decisão registrada em 21/10/2026 |
 | **Decisores** | João Felipe Peres Lima (responsável pela US29) |
 | **Consultados** | SECTI (31/08) |
 | **Origem** | Respostas da SECTI (31/08); daily de 22/09; reunião com o orientador (01/10) |
@@ -39,11 +39,31 @@ as alterações de linha e coluna.
 - **Contras:** granularidade diária; não sabe quem alterou; não vê mudanças desfeitas no mesmo dia.
 
 ## Decisão
-Pendente. A Opção C está implementável hoje e pode ser a base, com A ou B como complemento se a SECTI
-liberar acesso.
+**Opção A — extensão de auditoria no CKAN.** A extensão `ckanext-dsaudit`, adaptada ao CKAN 2.9.5
+neste repositório (pasta `ckanext-dsaudit/` na raiz, pacote para a SECTI em
+`instalacao-ckan-producao/`), grava no próprio CKAN cada alteração de metadados do dataset e dos
+recursos, cada troca de arquivo (com diff linha a linha) e cada alteração no DataStore, com autor e
+data. O módulo `rastreabilidade` lê essas atividades pela API `dsaudit_activity_list`, ao fim de
+cada coleta, e monta a linha do tempo.
+
+Critérios atendidos: (1) funciona no CKAN 2.9.5 — testada no CKAN local do repositório com dados
+reais do portal; (2) registra inclusão, alteração, privação e exclusão com data e autor; (3) já
+implementada. A Opção C (diff entre coletas) fica como complemento para quando a extensão não
+estiver instalada (contrato `diff_coletas`, PBI-43).
 
 ## Consequências
-A US15 (histórico com autor) só é viável com A ou B.
+- A solução continua externa ao CKAN: só **lê** a auditoria, por um token configurado em
+  `GDA_CKAN_AUDITORIA_API_TOKEN`.
+- A API da extensão exige permissão de **editor** em cada dataset (não precisa de sysadmin). Em
+  produção, o token deve ser de um usuário editor das organizações monitoradas; datasets sem
+  permissão são pulados e contados na sincronização.
+- No portal oficial, a rastreabilidade depende de a SECTI instalar a extensão. Antes disso, a tela
+  mostra que a leitura não foi concluída.
+- A US15 (histórico com autor) passa a ser viável: cada evento traz o usuário do CKAN.
+- Valores de linhas de arquivos e do DataStore não são copiados para a solução (LGPD): ficam no
+  CKAN; a solução guarda contagens e nomes de colunas.
+- A leitura é por dataset (a API não tem listagem global): uma chamada por dataset do inventário a
+  cada coleta, incremental (para no primeiro evento já conhecido).
 
 ## Validação
 Decisão do João com o time; confirmação de acesso com Wagner (SECTI).
@@ -52,3 +72,8 @@ Decisão do João com o time; confirmação de acesso com Wagner (SECTI).
 | Data | Revisão | Autor |
 |---|---|---|
 | 01/10/2026 | Na reunião com o orientador, o time relatou que a SECTI poderia liberar a extensão. Confirmar formalmente qual extensão e em que prazo antes de decidir | Victor |
+| 21/10/2026 | Decidida a opção A: `ckanext-dsaudit` adaptada ao CKAN 2.9.5 como fonte; módulo `rastreabilidade` lê `dsaudit_activity_list` com token de editor (`GDA_CKAN_AUDITORIA_API_TOKEN`) ao fim de cada coleta; `docker-compose.ckan-local.yml` repassa o token no ambiente local. Instalação no portal oficial depende da SECTI | João |
+| 22/10/2026 | Diff linha a linha de arquivos e do DataStore exibido na tela lendo a auditoria do CKAN no momento da consulta (`GET /eventos/{id}/diff`), sem gravar os valores na solução (LGPD, AGENTS.md regra 4). Alternativa descartada: copiar o diff para o banco da solução (duplicaria valores possivelmente pessoais). Privação passa a ser evento próprio, separado das demais mudanças da mesma gravação | João |
+| 23/10/2026 | A extensão não audita o cadastro dos órgãos (descrição, imagem, campos extras); o CKAN 2.9 grava "changed organization", mas sem os campos extras e com conteúdo acessível só ao administrador. Decidido aplicar a opção C aos órgãos: fotografia do cadastro a cada coleta e evento quando muda, sem autor e com a data da coleta. Alternativa avaliada: estender a extensão para auditar órgãos (autor e data exatos), que exige alterar a extensão e nova instalação pela SECTI — fica como evolução | João |
+| 23/10/2026 | Autoria das mudanças em órgãos: a comparação entre coletas continua dizendo o que mudou; quem alterou e quando passam a vir das atividades nativas do CKAN (`organization_activity_list`, lida com o token de editor) no intervalo entre as duas fotografias. Limite aceito: com mais de um autor no intervalo, não se sabe qual campo cada um mudou | João |
+| 23/10/2026 | Ações em dataset que não passam pelo `package_update` (Make public/Make private/Delete em lote na organização, package_patch) não são auditadas pela extensão. Decidido (opção B, sem alterar a extensão): ler as atividades nativas do CKAN e gravar as que não têm atividade da extensão do mesmo dataset a menos de 2 s (critério medido: na edição comum as duas ficam a centésimos de segundo); o que mudou vem das versões completas guardadas pelo CKAN nas atividades nativas (`activity_data_show`, permitido ao editor). Alternativa avaliada: interceptar as ações em lote na extensão (registro na origem, exige alterar a extensão e nova instalação pela SECTI) | João |

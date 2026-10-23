@@ -20,6 +20,14 @@ class CkanError(RuntimeError):
     pass
 
 
+class CkanAcessoNegado(CkanError):
+    """HTTP 403: o token usado não tem permissão para a action naquele objeto."""
+
+
+class CkanNaoEncontrado(CkanError):
+    """HTTP 404: objeto inexistente (ou removido definitivamente) no CKAN."""
+
+
 class CkanClient:
     def __init__(
         self,
@@ -28,14 +36,18 @@ class CkanClient:
         timeout: float | None = None,
         max_retries: int | None = None,
         transport: httpx.BaseTransport | None = None,  # injetável nos testes
+        api_token: str | None = None,  # só para actions que exigem login (auditoria)
     ) -> None:
         s = get_settings()
         self.base_url = (base_url or s.ckan_base_url).rstrip("/")
         self.max_retries = max_retries if max_retries is not None else s.ckan_max_retries
+        headers = {"User-Agent": "monitor-dados-abertos-go/0.1 (CGE-GO/GEDA)"}
+        if api_token:
+            headers["Authorization"] = api_token
         self._http = httpx.Client(
             base_url=f"{self.base_url}/api/3/action",
             timeout=timeout or s.ckan_timeout_s,
-            headers={"User-Agent": "monitor-dados-abertos-go/0.1 (CGE-GO/GEDA)"},
+            headers=headers,
             transport=transport,
         )
 
@@ -57,6 +69,10 @@ class CkanClient:
                 resp = self._http.get(f"/{name}", params=params)
                 if resp.status_code >= 500 or resp.status_code == 429:
                     raise httpx.HTTPStatusError("transitório", request=resp.request, response=resp)
+                if resp.status_code == 403:
+                    raise CkanAcessoNegado(f"{name}: acesso negado pelo CKAN (HTTP 403)")
+                if resp.status_code == 404:
+                    raise CkanNaoEncontrado(f"{name}: não encontrado no CKAN (HTTP 404)")
                 data = resp.json()
                 if not data.get("success"):
                     raise CkanError(f"{name} falhou: {data.get('error')}")
@@ -112,3 +128,38 @@ class CkanClient:
 
     def resource(self, resource_id: str) -> dict:
         return self.action("resource_show", id=resource_id)
+
+    # ------------------------------------------------------------------ auditoria (ADR-0009)
+    def auditoria_dataset(self, dataset_id: str, *, limit: int = 100, offset: int = 0,
+                          resource_id: str | None = None,
+                          activity_type: str | None = None) -> dict:
+        """Atividades gravadas pela extensão ckanext-dsaudit para um dataset (inclusive
+        excluído), da mais recente para a mais antiga: {"count": N, "results": [...]}.
+        Filtros opcionais por recurso e tipo de atividade. Exige token de usuário com permissão
+        de edição no dataset (CkanAcessoNegado se não)."""
+        params: dict = {"id": dataset_id, "limit": limit, "offset": offset}
+        if resource_id:
+            params["resource_id"] = resource_id
+        if activity_type:
+            params["activity_type"] = activity_type
+        return self.action("dsaudit_activity_list", **params)
+
+    def atividades_orgao(self, org_id: str, *, limit: int = 100, offset: int = 0) -> list[dict]:
+        """Atividades nativas do CKAN ligadas ao órgão (`organization_activity_list`), da mais
+        recente para a mais antiga: alterações no próprio órgão ("changed organization") e nos
+        datasets dele. Traz usuário e data; o conteúdo (`data`) vem resumido."""
+        return self.action("organization_activity_list", id=org_id, limit=limit, offset=offset)
+
+    def atividades_dataset(self, dataset_id: str, *, limit: int = 100,
+                           offset: int = 0) -> list[dict]:
+        """Atividades nativas do CKAN do dataset (`package_activity_list`), da mais recente para a
+        mais antiga: "new/changed/deleted package", com usuário e data (conteúdo resumido)."""
+        return self.action("package_activity_list", id=dataset_id, limit=limit, offset=offset)
+
+    def dados_atividade(self, activity_id: str) -> dict:
+        """Versão completa do objeto guardada pelo CKAN na atividade nativa (`activity_data_show`;
+        para dataset, o package_show daquele momento). Exige permissão de edição no dataset."""
+        return self.action("activity_data_show", id=activity_id, object_type="package")
+
+    def usuario(self, user_id: str) -> dict:
+        return self.action("user_show", id=user_id)

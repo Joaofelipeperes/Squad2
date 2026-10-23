@@ -10,15 +10,22 @@
 # A rede do CKAN se chama "<pasta da raiz>_default" (ex.: squad2_default). Confira com
 # `docker network ls`; se o nome for outro, defina CKAN_NETWORK antes de subir:
 #   PowerShell: $env:CKAN_NETWORK = "outra_default"     bash: export CKAN_NETWORK=outra_default
+#
+# Rastreabilidade (ADR-0009): o token de leitura da auditoria vem de CKAN_AUDITORIA_API_TOKEN ou,
+# na falta dele, do CKAN_API_KEY deixado pelo subir_ambiente.ps1 (admin do CKAN local). Para testar
+# com permissão mínima, defina CKAN_AUDITORIA_API_TOKEN com o token de um usuário editor.
+# Com este arquivo, o valor de GDA_CKAN_AUDITORIA_API_TOKEN do .env é substituído por esse.
 services:
   api:
     environment:
       GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
+      GDA_CKAN_AUDITORIA_API_TOKEN: ${CKAN_AUDITORIA_API_TOKEN:-${CKAN_API_KEY:-}}
     networks: [default, ckan]
 
   worker:
     environment:
       GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
+      GDA_CKAN_AUDITORIA_API_TOKEN: ${CKAN_AUDITORIA_API_TOKEN:-${CKAN_API_KEY:-}}
     networks: [default, ckan]
 
 networks:

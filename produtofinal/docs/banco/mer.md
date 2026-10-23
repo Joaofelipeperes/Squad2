@@ -4,7 +4,7 @@
 > Não edite à mão: altere o modelo (ou sua docstring), crie a migração e rode o script.
 > Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 
-19 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final).
+22 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final).
 
 ## Diagrama
 
@@ -174,6 +174,47 @@ erDiagram
         varchar usuario
         datetime momento
     }
+    rastreabilidade_evento {
+        int id PK
+        varchar origem
+        varchar ckan_activity_id
+        int sequencia
+        int orgao_snapshot_id FK, UK
+        datetime ocorrido_em
+        varchar tipo
+        varchar activity_type
+        varchar dataset_id
+        varchar dataset_titulo
+        varchar organizacao_id
+        varchar recurso_id
+        varchar recurso_nome
+        varchar usuario
+        text resumo
+        json detalhes
+        bool tem_diff
+        datetime sincronizado_em
+    }
+    rastreabilidade_orgao_snapshot {
+        int id PK
+        varchar organizacao_id
+        datetime capturado_em
+        bool ativo
+        varchar hash_conteudo
+        json payload
+    }
+    rastreabilidade_sincronizacao {
+        int id PK
+        datetime iniciada_em
+        datetime finalizada_em
+        varchar status
+        int datasets_consultados
+        int datasets_sem_permissao
+        int datasets_nao_encontrados
+        int orgaos_consultados
+        datetime atividades_nativas_ate
+        int eventos_novos
+        text erro
+    }
     ia_perfil_provedor {
         int id PK
         varchar nome UK
@@ -236,10 +277,13 @@ erDiagram
     recurso ||--o{ lgpd_achado : "recurso_id"
     recurso ||--o{ lgpd_correcao : "recurso_id"
     lgpd_achado ||--o{ lgpd_decisao : "achado_id"
+    rastreabilidade_orgao_snapshot |o--o| rastreabilidade_evento : "orgao_snapshot_id"
     ia_perfil_provedor |o--o{ ia_vinculo_tarefa : "perfil_id"
     ia_perfil_provedor |o--o{ ia_vinculo_tarefa : "perfil_fallback_id"
     dataset |o..o{ dataset_snapshot : "dataset_id (lógica)"
     ia_perfil_provedor |o..o{ ia_uso : "perfil_id (lógica)"
+    dataset |o..o{ rastreabilidade_evento : "dataset_id (lógica)"
+    organizacao |o..o{ rastreabilidade_orgao_snapshot : "organizacao_id (lógica)"
 ```
 
 ## Relacionamentos
@@ -262,6 +306,7 @@ erDiagram
 | `lgpd_achado.recurso_id` | `recurso.ckan_id` | 1 : N | FK |  |
 | `lgpd_correcao.recurso_id` | `recurso.ckan_id` | 1 : N | FK |  |
 | `lgpd_decisao.achado_id` | `lgpd_achado.id` | 1 : N | FK |  |
+| `rastreabilidade_evento.orgao_snapshot_id` | `rastreabilidade_orgao_snapshot.id` | 0..1 : 0..1 | FK |  |
 | `ia_vinculo_tarefa.perfil_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
 | `ia_vinculo_tarefa.perfil_fallback_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
 | `dataset_snapshot.dataset_id` | `dataset.ckan_id` | — | referência lógica | Fotografia histórica: sem FK para não depender do estado atual do dataset. |
@@ -272,6 +317,9 @@ erDiagram
 | `ia_vinculo_tarefa.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `parametro.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `acesso_log.usuario` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
+| `rastreabilidade_evento.dataset_id` | `dataset.ckan_id` | — | referência lógica | Evento histórico: sobrevive à saída do dataset do inventário. |
+| `rastreabilidade_evento.organizacao_id` | `organizacao.ckan_id` | — | referência lógica | Órgão do dataset na sincronização; usado no filtro e no escopo de órgão. |
+| `rastreabilidade_orgao_snapshot.organizacao_id` | `organizacao.ckan_id` | — | referência lógica | Fotografia histórica do cadastro: sobrevive à saída do órgão do portal. |
 
 ## Dicionário de dados
 
@@ -547,6 +595,69 @@ Histórico imutável das decisões humanas (PBI-42).
 | `momento` | datetime | não |  |  |  |
 
 Índices: `ix_lgpd_decisao_achado_id`
+
+### Módulo `rastreabilidade` — rastreabilidade
+Documentação do módulo: [docs/modulos/rastreabilidade.md](../modulos/rastreabilidade.md)
+
+#### `rastreabilidade_evento`
+
+Item da linha do tempo: alteração em dataset, recurso ou cadastro de órgão.
+
+| Coluna | Tipo | Nulo | Chave | Referência | Padrão |
+|---|---|:-:|---|---|---|
+| `id` | int | não | PK |  |  |
+| `origem` | varchar(30) | não |  |  | `'auditoria_ckan'` |
+| `ckan_activity_id` | varchar(64) | sim |  |  |  |
+| `sequencia` | int | não |  |  | `0` |
+| `orgao_snapshot_id` | int | sim | FK, UK | `rastreabilidade_orgao_snapshot.id` |  |
+| `ocorrido_em` | datetime | não |  |  |  |
+| `tipo` | varchar(30) | não |  |  |  |
+| `activity_type` | varchar(40) | não |  |  |  |
+| `dataset_id` | varchar(64) | sim |  |  |  |
+| `dataset_titulo` | varchar(500) | sim |  |  |  |
+| `organizacao_id` | varchar(64) | sim |  |  |  |
+| `recurso_id` | varchar(64) | sim |  |  |  |
+| `recurso_nome` | varchar(500) | sim |  |  |  |
+| `usuario` | varchar(200) | sim |  |  |  |
+| `resumo` | text | não |  |  |  |
+| `detalhes` | json | não |  |  | função |
+| `tem_diff` | bool | não |  |  | `False` |
+| `sincronizado_em` | datetime | não |  |  | função |
+
+Índices: `ix_rastreabilidade_evento_dataset_id`, `ix_rastreabilidade_evento_ocorrido_em`, `ix_rastreabilidade_evento_organizacao_id`, `ix_rastreabilidade_evento_tipo`
+
+#### `rastreabilidade_orgao_snapshot`
+
+Fotografia do cadastro de um órgão (título, descrição, imagem, campos extras), gravada só quando muda — insumo da comparação entre coletas.
+
+| Coluna | Tipo | Nulo | Chave | Referência | Padrão |
+|---|---|:-:|---|---|---|
+| `id` | int | não | PK |  |  |
+| `organizacao_id` | varchar(64) | não |  |  |  |
+| `capturado_em` | datetime | não |  |  | função |
+| `ativo` | bool | não |  |  | `True` |
+| `hash_conteudo` | varchar(64) | não |  |  |  |
+| `payload` | json | não |  |  |  |
+
+Índices: `ix_rastreabilidade_orgao_snapshot_organizacao_id`
+
+#### `rastreabilidade_sincronizacao`
+
+Execução da leitura da auditoria do CKAN, com totais e eventual erro.
+
+| Coluna | Tipo | Nulo | Chave | Referência | Padrão |
+|---|---|:-:|---|---|---|
+| `id` | int | não | PK |  |  |
+| `iniciada_em` | datetime | não |  |  | função |
+| `finalizada_em` | datetime | sim |  |  |  |
+| `status` | varchar(20) | não |  |  | `'executando'` |
+| `datasets_consultados` | int | não |  |  | `0` |
+| `datasets_sem_permissao` | int | não |  |  | `0` |
+| `datasets_nao_encontrados` | int | não |  |  | `0` |
+| `orgaos_consultados` | int | não |  |  | `0` |
+| `atividades_nativas_ate` | datetime | sim |  |  |  |
+| `eventos_novos` | int | não |  |  | `0` |
+| `erro` | text | sim |  |  |  |
 
 ### Módulo `ia` — Modelos de IA
 Documentação do módulo: [docs/modulos/ia.md](../modulos/ia.md)
