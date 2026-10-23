@@ -121,6 +121,7 @@ export interface BaseEntrada {
   possui_conteudo_sigiloso: boolean | null;
   dataset_id: number | null; // escolhido na busca; tem precedência sobre dataset_link
   dataset_link: string | null; // link do portal ou name; serve só para achar o ID
+  dataset_id_ckan?: string | null; // ID do dataset no CKAN digitado (a busca já aceita o ID)
 }
 
 /** Opções do formulário de base: organizações do portal (valor = id) e periodicidades. */

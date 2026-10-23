@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { KeyboardEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Organizacao } from "./api";
 import { organizacoesApi } from "./api";
 import { OrganizacaoDetalheModal } from "./OrganizacaoDetalheModal";
@@ -14,7 +14,12 @@ import { PageLede } from "@/shared/ui/PageLede";
 export default function OrganizacoesPage() {
   const dados = useQuery({ queryKey: ["painel", "organizacoes"], queryFn: organizacoesApi.lista });
   const [detalhe, setDetalhe] = useState<Organizacao | null>(null);
+  const [filtros, setFiltros] = useState<FiltrosOrganizacoes>(FILTROS_VAZIOS);
   const d = dados.data;
+  // A lista vem inteira (um registro por órgão, poucas dezenas): o filtro é feito na própria tela.
+  const visiveis = useMemo(() => (d ? d.organizacoes.filter((o) => atende(o, filtros)) : []), [d, filtros]);
+
+  const set = (campo: keyof FiltrosOrganizacoes) => (valor: string) => setFiltros((f) => ({ ...f, [campo]: valor }));
 
   return (
     <section className="screen">
@@ -23,10 +28,30 @@ export default function OrganizacoesPage() {
       </PageLede>
 
       <div className="panel">
+        <div className="filters-bar">
+          <div className="search-field">
+            <i className="fa-solid fa-magnifying-glass" />
+            <input type="text" className="text-input" aria-label="Buscar por nome ou sigla do órgão"
+                   placeholder="Buscar por nome ou sigla do órgão..." value={filtros.busca}
+                   onChange={(e) => set("busca")(e.target.value)} />
+          </div>
+          <Filtro id="org-filtro-atraso" rotulo="Em atraso" valor={filtros.atraso} onMudar={set("atraso")}
+            opcoes={OPCOES_ATRASO} />
+          <Filtro id="org-filtro-pda" rotulo="Bases no PDA" valor={filtros.pda} onMudar={set("pda")}
+            opcoes={OPCOES_PDA} />
+          <Filtro id="org-filtro-portal" rotulo="Organização no portal" valor={filtros.portal}
+            onMudar={set("portal")} opcoes={OPCOES_PORTAL} />
+          <div className="filter-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFiltros(FILTROS_VAZIOS)}>
+              Limpar filtros</button>
+          </div>
+        </div>
         <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
-          <div className="sub" style={{ fontSize: 12.5 }}>
+          <div className="sub" style={{ fontSize: 12.5 }} aria-live="polite">
             {d && (d.plano
-              ? <>Bases do PDA vigente: <strong>{d.plano.nome}</strong> · {d.organizacoes.length} órgão(s)</>
+              ? <>Bases do PDA vigente: <strong>{d.plano.nome}</strong> · {visiveis.length === d.organizacoes.length
+                  ? `${d.organizacoes.length} órgão(s)`
+                  : `${visiveis.length} de ${d.organizacoes.length} órgão(s)`}</>
               : "Nenhum PDA vigente: as colunas de bases ficam zeradas até um PDA ser cadastrado.")}
           </div>
         </div>
@@ -50,8 +75,10 @@ export default function OrganizacoesPage() {
                 <tr><td colSpan={7} className="table-empty">
                   Nenhum órgão no inventário: rode a coleta pelo botão "Atualizar dados".
                 </td></tr>
+              ) : visiveis.length === 0 ? (
+                <tr><td colSpan={7} className="table-empty">Nenhum órgão encontrado.</td></tr>
               ) : (
-                d.organizacoes.map((o) => <Linha key={o.chave} o={o} onAbrir={setDetalhe} />)
+                visiveis.map((o) => <Linha key={o.chave} o={o} onAbrir={setDetalhe} />)
               )}
             </tbody>
           </table>
@@ -72,6 +99,64 @@ export default function OrganizacoesPage() {
       <OrganizacaoDetalheModal org={detalhe} formatosAbertos={d?.formatos_abertos ?? []}
         onFechar={() => setDetalhe(null)} />
     </section>
+  );
+}
+
+interface FiltrosOrganizacoes {
+  busca: string;
+  atraso: string; // "" | "com" | "sem" | "proximas" | "aguardando"
+  pda: string; // "" | "com" | "sem"
+  portal: string; // "" | "com" | "sem"
+}
+
+const FILTROS_VAZIOS: FiltrosOrganizacoes = { busca: "", atraso: "", pda: "", portal: "" };
+
+const OPCOES_ATRASO = [
+  { valor: "com", rotulo: "Com bases em atraso" },
+  { valor: "sem", rotulo: "Sem atraso (entre as vinculadas)" },
+  { valor: "proximas", rotulo: "Com bases próximas do prazo" },
+  { valor: "aguardando", rotulo: "Aguardando vínculo" },
+];
+const OPCOES_PDA = [
+  { valor: "com", rotulo: "Com bases previstas" },
+  { valor: "sem", rotulo: "Sem bases previstas" },
+];
+const OPCOES_PORTAL = [
+  { valor: "com", rotulo: "Com organização no portal" },
+  { valor: "sem", rotulo: "Sem organização no portal" },
+];
+
+/** Busca sem diferenciar maiúsculas nem acentos ("saude" acha "Saúde"). */
+function normalizar(t: string) {
+  return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+function atende(o: Organizacao, f: FiltrosOrganizacoes) {
+  const termo = normalizar(f.busca);
+  if (termo && ![o.nome, ...o.siglas].some((t) => normalizar(t).includes(termo))) return false;
+  if (f.atraso === "com" && !(o.bases_em_atraso != null && o.bases_em_atraso > 0)) return false;
+  if (f.atraso === "sem" && o.bases_em_atraso !== 0) return false;
+  if (f.atraso === "proximas" && o.bases_proximas_do_prazo === 0) return false;
+  if (f.atraso === "aguardando" && o.bases_em_atraso != null) return false;
+  if (f.pda === "com" && o.bases_previstas === 0) return false;
+  if (f.pda === "sem" && o.bases_previstas > 0) return false;
+  if (f.portal === "com" && o.organizacao_id == null) return false;
+  if (f.portal === "sem" && o.organizacao_id != null) return false;
+  return true;
+}
+
+function Filtro({ id, rotulo, valor, opcoes, onMudar }: {
+  id: string; rotulo: string; valor: string; opcoes: { valor: string; rotulo: string }[];
+  onMudar: (v: string) => void;
+}) {
+  return (
+    <div className="filter-field">
+      <label htmlFor={id}>{rotulo}</label>
+      <select id={id} value={valor} onChange={(e) => onMudar(e.target.value)}>
+        <option value="">Todos</option>
+        {opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+      </select>
+    </div>
   );
 }
 

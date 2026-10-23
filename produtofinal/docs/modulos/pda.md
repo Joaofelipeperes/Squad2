@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 22/10/2026 |
+| **Última atualização** | 23/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -74,7 +74,7 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 | PUT | `/planos/{id}` | `pda.gerenciar_planos` | JSON `PlanoIn` → `PlanoOut`: edita nome e vigência (não troca o vigente; `definir_vigente` é ignorado). **409** nome de outro PDA; **422**; **404** |
 | PUT | `/planos/{id}/vigente` | `pda.gerenciar_planos` | Define o PDA vigente → `PlanoOut`; **404** |
 | DELETE | `/planos/{id}` | `pda.gerenciar_planos` | Exclui (exclusão lógica) o PDA e suas bases → 204; o nome fica livre para outro PDA; **409** se for o vigente e houver outros PDAs; **404** |
-| POST | `/planos/{id}/bases` | `pda.gerenciar_planos` | JSON `BaseIn` → 201 `BaseOut`: inclui uma base prevista. **422** sigla ou nome vazios, endereço do dataset não reconhecido, organização inexistente ou diferente da do dataset; **403** órgão de outro escopo; **404** plano |
+| POST | `/planos/{id}/bases` | `pda.gerenciar_planos` | JSON `BaseIn` → 201 `BaseOut`: inclui uma base prevista. **422** sigla ou nome vazios, endereço do dataset não reconhecido, organização inexistente ou diferente da do dataset; **403** órgão de outro escopo; **404** plano | Vínculo: `dataset_id` (busca) > `dataset_id_ckan` (ID do CKAN digitado: **422** se não existir no inventário ou divergir do dataset achado pelo endereço) > `dataset_link`.
 | PUT | `/bases/{id}` | `pda.gerenciar_planos` | JSON `BaseIn` → `BaseOut`: edita a base (inclusive o endereço do dataset). Mesmos erros; **404** |
 | DELETE | `/bases/{id}` | `pda.gerenciar_planos` | Remove (exclusão lógica) a base do PDA → 204 (atualiza `total_bases` com as bases ativas); **403**; **404** |
 | GET | `/datasets/{dataset_id}/bases` | `pda.acessar` | `BaseOut[]`: bases previstas vinculadas **pelo ID** a um dataset do portal, em todos os PDAs (vigente primeiro). Sem vínculo → `[]` (nunca casa pelo nome). Usado pelo detalhe da tela Datasets |
@@ -96,8 +96,10 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
 - `PlanoIn`: nome, vigencia_inicio, vigencia_fim, definir_vigente (só na criação).
 - `BaseIn`: orgao_sigla*, organizacao_id (vazio = pela sigla), nome_previsto*, descricao,
   unidade_responsavel, periodicidade (valor do domínio ou texto livre, normalizado),
-  prazo_abertura, politicas_publicas, possui_conteudo_sigiloso, dataset_id (`dataset.id` escolhido na busca; precede o link; inexistente → 422),
-  dataset_link (link do portal ou name).
+  prazo_abertura, politicas_publicas, possui_conteudo_sigiloso, dataset_id (`dataset.id` escolhido na
+  busca; tem prioridade; inexistente → 422), dataset_id_ckan (ID do dataset no CKAN digitado — ADR-0006;
+  precisa existir no inventário e, se o link achar outro dataset, dá 422), dataset_link (link do portal
+  ou name; só acha o ID).
 - `FormularioOut`: organizacoes `[{valor, rotulo}]`, periodicidades.
 - `DatasetOpcaoOut`: id, id_ckan, name, titulo, organizacao_id, orgao_nome, ativo_no_portal.
 - `BaseOut`: dados da planilha + `orgao_chave` (`id` da organização em texto ou `sigla:<SIGLA>`), orgao_nome,
@@ -349,6 +351,8 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 18/10/2026 | `GET /datasets/{dataset_id}/bases` e `bases_do_dataset`: bases vinculadas pelo ID a um dataset, para o detalhe da tela Datasets | Humberto |
 | 18/10/2026 | Tela aceita `?orgao=<chave>` na URL (botão "Ver bases no PDA" da tela Organizações); Interações com o painel atualizadas | Humberto |
 | 18/10/2026 | Situação "Prazo vencido" (`regras.PRAZO_VENCIDO`): base sem vínculo com prazo vencido deixa de aparecer como "Em atraso", que passa a exigir vínculo (dataset conferido e fora do portal); badge cinza com a dica "aguardando vínculo" e opção no filtro | Humberto |
+| 21/10/2026 | Correções no cadastro manual: o modal de edição abria por trás do detalhe da base (modal compartilhado agora em portal, com pilha para Esc/Tab); novo campo "ID do dataset no CKAN" (`BaseIn.dataset_id`, `_vinculo_por_id`) para vincular quando o nome do PDA difere do name no portal | Humberto |
 | 21/10/2026 | Vínculo base → dataset pela busca no inventário: `GET /formulario/datasets` (`buscar_datasets`), `BaseIn.dataset_id` (precede `dataset_link`; mesmo dataset mantém o name da planilha) e campo de busca `DatasetBusca` no `BaseFormModal` no lugar do link digitado; o órgão acompanha o do dataset escolhido. Sem mudança de tabela (FKs `dataset_id` → `dataset` e `dataset.organizacao_id` → `organizacao` já existiam) | Victor |
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `pda_base_prevista.organizacao_id` e `.dataset_id` passam a inteiros (`organizacao.id`, `dataset.id`); `BaseIn`, `BaseOut`, `DatasetOpcaoOut` e as opções de organização usam o `id`; `BaseOut.dataset_id_ckan` para o link do portal; `orgao_chave` = `id` em texto | Victor |
 | 22/10/2026 | DAO (ADR-0019): `PdaDao` em `dao.py` concentra todo acesso ao banco do módulo; exclusão de PDA e de base passa a ser lógica (`deleted`), com as bases do PDA excluídas junto; `total_bases` conta só as ativas; únicos do nome e do vigente só entre ativos (nome de PDA excluído pode ser reaproveitado); gravações registram o usuário em `created_id`/`changed_id` (rotas de editar, vigente, excluir e vincular passam a receber o usuário) | Victor |
+| 23/10/2026 | Merge com `desenvolvimento`: o campo "ID do dataset no CKAN" do Humberto passa a `BaseIn.dataset_id_ckan` (`_vinculo_por_id_ckan`, mesma validação, agora pelo `PdaDao`), abaixo de `dataset_id` (busca) na prioridade; na tela, o ID do CKAN é colado no campo de busca `DatasetBusca`, que já o aceita, em vez de um campo separado | Victor |

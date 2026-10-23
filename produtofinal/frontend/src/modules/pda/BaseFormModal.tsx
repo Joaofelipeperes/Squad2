@@ -204,8 +204,9 @@ export function BaseFormModal({ aberto, plano, base, onFechar, onSalva }: Props)
             </span>
           )}
           <span className="help">
-            Datasets do inventário coletado do portal. O vínculo gravado é o ID do dataset; deixe vazio se a base
-            ainda não foi publicada.
+            Busque pelo título, name, link ou ID do CKAN (útil quando o nome no PDA é diferente do name no
+            portal; o ID está na tela Datasets). O vínculo gravado é o ID do dataset; deixe vazio se a base ainda
+            não foi publicada.
           </span>
         </div>
         {opcoes.isError && (

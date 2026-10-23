@@ -648,6 +648,26 @@ def _vinculo_escolhido(dao: PdaDao, dataset_id: int, atual: BasePrevista | None
     return ds.id, ds.name
 
 
+def _vinculo_por_id_ckan(dao: PdaDao, id_ckan: str | None, link: str | None,
+                         atual: BasePrevista | None) -> tuple[int | None, str | None]:
+    """ID do dataset no CKAN digitado (ADR-0006) → (dataset_id, dataset_name_planilha). Tem
+    prioridade sobre o endereço: precisa existir no inventário e, se o endereço também achar um
+    dataset, os dois têm de ser o mesmo. Endereço sem dataset no inventário (nome do PDA diferente
+    do name do portal) não impede: o name fica só para auditoria."""
+    id_link, name = _vinculo_informado(dao, link, atual)
+    ident = _limpo(id_ckan)
+    if ident is None:
+        return id_link, name
+    ds = dao.dataset_por_id_ckan(ident)
+    if ds is None:
+        raise Invalido("ID do dataset não encontrado no inventário do portal: confira o ID ou "
+                       "rode a coleta (Atualizar dados).")
+    if id_link is not None and id_link != ds.id:
+        raise Invalido("O ID e o endereço informados apontam para datasets diferentes: corrija um "
+                       "deles ou deixe o endereço vazio.")
+    return ds.id, name
+
+
 def _orgao_informado(dao: PdaDao, plano_id: int, sigla: str, escolhido: int | None,
                      dataset_id: int | None) -> int | None:
     """Órgão da base cadastrada à mão: o do dataset vinculado; senão o escolhido no formulário;
@@ -681,9 +701,11 @@ def _valores_da_base(dao: PdaDao, plano_id: int, dados: BaseIn,
     periodicidade = regras.periodicidade_informada(original)
     if atual is not None and periodicidade == atual.periodicidade:
         original = atual.periodicidade_original  # mantém o texto da planilha ("Mnsal")
+    # Prioridade: dataset escolhido na busca > ID do CKAN digitado > endereço (só acha o ID)
     escolhido = dados.dataset_id
     dataset_id, name = (_vinculo_escolhido(dao, escolhido, atual) if escolhido is not None
-                        else _vinculo_informado(dao, dados.dataset_link, atual))
+                        else _vinculo_por_id_ckan(dao, dados.dataset_id_ckan, dados.dataset_link,
+                                                  atual))
     return {
         "orgao_sigla": sigla,
         "organizacao_id": _orgao_informado(dao, plano_id, sigla, dados.organizacao_id,

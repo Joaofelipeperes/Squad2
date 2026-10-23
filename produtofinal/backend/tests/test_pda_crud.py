@@ -124,6 +124,45 @@ def test_incluir_bases_com_e_sem_vinculo(client, gerente, inventario):
     assert client.get(f"{API}/bases", headers=gerente).json()["total_previstas"] == 3
 
 
+def test_vinculo_pelo_id_do_ckan(client, gerente, inventario):
+    p = _criar_plano(client, gerente).json()
+    url = f"{API}/planos/{p['id']}/bases"
+    # Nome do PDA diferente do name no portal: o ID resolve o vínculo e o name fica para auditoria
+    b = client.post(url, headers=gerente, json=_base(
+        dataset_link="folha-pagamento-servidores", dataset_id_ckan=" ds-folha ")).json()
+    assert b["vinculo"] == "resolvido" and b["dataset_id"] == FOLHA
+    assert b["dataset_id_ckan"] == "ds-folha"
+    assert b["dataset_name_planilha"] == "folha-pagamento-servidores"
+    assert b["orgao_chave"] == str(ADM) and b["situacao"] == "Publicado"
+
+    # Só o ID, sem endereço
+    b2 = client.post(url, headers=gerente, json=_base(dataset_id_ckan="ds-folha")).json()
+    assert b2["vinculo"] == "resolvido" and b2["dataset_id"] == FOLHA
+
+    # Edição: trocar o ID pendente por um válido
+    pendente = client.post(url, headers=gerente, json=_base(dataset_link="nao-existe")).json()
+    assert pendente["vinculo"] == "pendente"
+    r = client.put(f"{API}/bases/{pendente['id']}", headers=gerente,
+                   json=_base(dataset_link="nao-existe", dataset_id_ckan="ds-folha"))
+    assert r.status_code == 200, r.text
+    assert r.json()["vinculo"] == "resolvido" and r.json()["dataset_id"] == FOLHA
+
+
+def test_vinculo_pelo_id_invalido(client, gerente, inventario):
+    with SessionLocal() as db:
+        db.add(Dataset(id=ESCOLAS, id_ckan="ds-outro", name="outro", titulo="Outro",
+                       organizacao_id=ADM, ultima_coleta_id=1))
+        db.commit()
+    p = _criar_plano(client, gerente).json()
+    url = f"{API}/planos/{p['id']}/bases"
+    r = client.post(url, headers=gerente, json=_base(dataset_id_ckan="id-inexistente"))
+    assert r.status_code == 422 and "ID do dataset não encontrado" in r.json()["detail"]
+    r = client.post(url, headers=gerente, json=_base(dataset_id_ckan="ds-outro",
+                                                           dataset_link="folha-de-pagamento"))
+    assert r.status_code == 422 and "datasets diferentes" in r.json()["detail"]
+    assert _plano(client, gerente, p["id"])["total_bases"] == 0
+
+
 @pytest.mark.parametrize("campos,mensagem", [
     ({"orgao_sigla": " "}, "órgão"),
     ({"nome_previsto": ""}, "nome da base"),

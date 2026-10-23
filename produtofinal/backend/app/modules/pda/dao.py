@@ -106,6 +106,9 @@ class PdaDao(Dao):
     def dataset(self, dataset_id: int) -> Dataset | None:
         return self.obter(Dataset, dataset_id)
 
+    def dataset_por_id_ckan(self, id_ckan: str) -> Dataset | None:
+        return self.buscar_um(select(Dataset).where(Dataset.id_ckan == id_ckan))
+
     def organizacao(self, organizacao_id: int) -> Organizacao | None:
         return self.obter(Organizacao, organizacao_id)
 

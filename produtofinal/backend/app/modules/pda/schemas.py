@@ -23,9 +23,11 @@ class BaseIn(BaseModel):
     """Inclusão e edição manual de uma base prevista (mesmos campos da planilha).
 
     `organizacao_id` (id da organização) vazio → órgão identificado pela sigla, como na
-    importação. `dataset_id` = id do dataset escolhido na busca do formulário (vínculo direto).
-    Sem ele, `dataset_link` = endereço do dataset no portal (ou só o name): serve SÓ para achar o
-    ID (PBI-13); ambos vazios → sem vínculo."""
+    importação. Vínculo com o dataset, em ordem de prioridade: `dataset_id` = id do dataset
+    escolhido na busca do formulário; `dataset_id_ckan` = ID do dataset no CKAN, digitado
+    (ADR-0006: serve para quando o nome no PDA difere do name no portal; precisa existir no
+    inventário e não pode divergir do endereço); `dataset_link` = endereço do dataset no portal
+    (ou só o name), que serve SÓ para achar o ID (PBI-13). Todos vazios → sem vínculo."""
 
     orgao_sigla: str = Field(max_length=100)
     organizacao_id: int | None = None
@@ -38,6 +40,7 @@ class BaseIn(BaseModel):
     possui_conteudo_sigiloso: bool | None = None
     dataset_id: int | None = None
     dataset_link: str | None = Field(default=None, max_length=500)
+    dataset_id_ckan: str | None = Field(default=None, max_length=100)
 
 
 class PlanoOut(BaseModel):
