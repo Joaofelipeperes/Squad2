@@ -72,6 +72,31 @@ class ImportacaoResumoOut(BaseModel):
     colunas_opcionais_ausentes: list[str]  # rótulos das colunas opcionais não encontradas
 
 
+class CampoPlanilhaOut(BaseModel):
+    campo: str  # orgao | base | descricao | unidade | periodicidade | prazo | politicas | ...
+    rotulo: str
+    obrigatorio: bool
+    sugestao: int | None  # índice da coluna pré-selecionada (nome igual ou muito parecido)
+
+
+class ColunasPlanilhaOut(BaseModel):
+    """Etapa de mapeamento da importação: cabeçalho lido, campos do sistema e prévia."""
+
+    aba: int  # 0-based (no CSV, a leitura por separador); devolvida no MapeamentoIn
+    linha: int  # 0-based; a linha na planilha é linha + 1
+    colunas: list[str]  # títulos ("" = coluna sem título)
+    campos: list[CampoPlanilhaOut]
+    previa: list[list[str | None]]  # até 5 linhas de dados, alinhadas a `colunas`
+
+
+class MapeamentoIn(BaseModel):
+    """Correspondência escolhida pelo usuário (campo → índice da coluna em ColunasPlanilhaOut)."""
+
+    aba: int = Field(ge=0, le=50)
+    linha: int = Field(ge=0, le=100)
+    colunas: dict[str, int]
+
+
 class VinculosOut(BaseModel):
     vinculos_resolvidos: int  # resolvidos NESTA execução
     vinculos_pendentes: int   # que continuam pendentes após a execução
@@ -136,3 +161,30 @@ class BasesOut(BaseModel):
     total_previstas: int  # bases do plano visíveis ao usuário, SEM filtros
     opcoes: OpcoesOut
     bases: list[BaseOut]
+
+
+class LinhaIdCkanOut(BaseModel):
+    """Linha do CSV de IDs do CKAN e o que acontece com ela."""
+
+    linha: int  # número da linha no arquivo (1-based)
+    sigla: str | None
+    nome_pda: str | None
+    dataset_id: str | None  # ID informado (normalizado quando é um UUID)
+    base_id: int | None = None
+    base_nome: str | None = None
+    id_atual: str | None = None  # ID que a base já tinha (substituições)
+    motivo: str | None = None  # por que a linha não foi aplicada
+
+
+class IdsCkanOut(BaseModel):
+    """Resumo da importação de IDs do CKAN. `aplicado=False` = só análise, nada gravado."""
+
+    aplicado: bool
+    total_linhas: int
+    atualizadas: int  # bases gravadas nesta chamada (0 na análise)
+    atualizar: list[LinhaIdCkanOut]  # base sem ID (ou com vínculo pendente) → recebe o ID
+    substituir: list[LinhaIdCkanOut]  # base já tem OUTRO ID: só grava com sobrescrever=true
+    iguais: int  # base já tinha esse mesmo ID
+    sem_id: int  # linhas sem ID no arquivo ("Não encontrado" ou vazio)
+    sem_base: list[LinhaIdCkanOut]  # SIGLA + NOME_PDA sem base correspondente (ou ambígua)
+    invalidas: list[LinhaIdCkanOut]  # ID inválido, fora do inventário ou repetido com outro ID

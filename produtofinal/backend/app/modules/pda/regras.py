@@ -4,7 +4,8 @@
 - normalização da periodicidade prevista;
 - extração do `name` a partir da URL "Disponível no Portal" (só para RESOLVER o ID — PBI-13);
 - casamento da sigla do órgão com as organizações do portal;
-- situação da base quanto ao prazo de abertura (PBI-19) e flag de prazo (PBI-20/22).
+- situação da base quanto ao prazo de abertura (PBI-19) e flag de prazo (PBI-20/22);
+- mapeamento de colunas da planilha (sugestão por nome parecido) e leitura do CSV de IDs do CKAN.
 """
 import calendar
 import csv
@@ -12,10 +13,12 @@ import io
 import re
 import unicodedata
 import zipfile
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from difflib import SequenceMatcher
 from itertools import chain, islice
+from typing import TypeVar
 from urllib.parse import unquote, urlsplit
 
 # ------------------------------------------------------------------ texto
@@ -577,6 +580,12 @@ def _localizar_cabecalho(abas: Iterable[Aba]):
 
 def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
     linhas, idx_cab, col = _localizar_cabecalho(abas)
+    return _extrair_bases(linhas, idx_cab, col, lambda ln: _mapear_cabecalho(ln) == col)
+
+
+def _extrair_bases(linhas: Iterable[Sequence[object]], idx_cab: int, col: dict[str, int],
+                   repete_cabecalho: Callable[[Sequence[object]], bool]) -> PlanilhaLida:
+    """Linhas depois do cabeçalho → bases previstas, com as colunas `col` (campo → índice)."""
 
     def celula(linha: Sequence[object], campo: str) -> object:
         i = col.get(campo)
@@ -587,7 +596,7 @@ def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
     for numero, linha in enumerate(linhas, start=idx_cab + 2):
         if all(_texto(v) is None for v in linha):
             continue
-        if _mapear_cabecalho(linha) == col:  # planilhas concatenadas ou convertidas de PDF
+        if repete_cabecalho(linha):  # planilhas concatenadas ou convertidas de PDF
             lida.ignoradas.append((numero, "Cabeçalho repetido."))
             continue
         # Rodapé só na coluna Órgão: uma base cujo nome começa com "Total" é uma base de verdade
@@ -623,16 +632,28 @@ def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
     return lida
 
 
-def ler_planilha(conteudo: bytes, nome_arquivo: str) -> PlanilhaLida:
-    """PBI-12 — lê a planilha do PDA (uma linha por base prevista). Colunas localizadas pelo
-    cabeçalho normalizado, não pela posição. `linha` = número da linha na planilha (1-based).
-    A leitura é sob demanda e limitada (abas, colunas, linhas e tamanho descompactado)."""
+T = TypeVar("T")
+
+
+@dataclass
+class Mapeamento:
+    """Colunas escolhidas pelo usuário na importação: aba (0-based; no CSV, a leitura por
+    separador), linha do cabeçalho (0-based) e campo → índice da coluna."""
+    aba: int
+    linha: int
+    colunas: dict[str, int]
+
+
+def _com_abas(conteudo: bytes, nome_arquivo: str, ler: Callable[[Iterable[Aba]], T],
+              o_que: str = "a planilha do PDA") -> T:
+    """Abre o .csv (uma leitura por separador candidato) ou o .xlsx (uma por aba) e entrega as
+    abas a `ler`. Erros de leitura viram PlanilhaInvalida (422)."""
     ext = extensao_valida(nome_arquivo)
     if ext is None:
-        raise PlanilhaInvalida("Formato não suportado: envie a planilha do PDA em .xlsx ou .csv.")
+        raise PlanilhaInvalida(f"Formato não suportado: envie {o_que} em .xlsx ou .csv.")
     if ext == ".csv":
         try:
-            return _ler_linhas(_abas_csv(conteudo))
+            return ler(_abas_csv(conteudo))
         except csv.Error as exc:
             raise PlanilhaInvalida(f"CSV ilegível: {exc}") from exc
 
@@ -644,6 +665,242 @@ def ler_planilha(conteudo: bytes, nome_arquivo: str) -> PlanilhaLida:
     except Exception as exc:  # qualquer falha do openpyxl ao abrir = arquivo .xlsx inválido (422)
         raise PlanilhaInvalida(_MSG_XLSX_INVALIDO) from exc
     try:
-        return _ler_linhas(_abas_xlsx(wb))
+        return ler(_abas_xlsx(wb))
     finally:
         wb.close()
+
+
+def ler_planilha(conteudo: bytes, nome_arquivo: str,
+                 mapeamento: Mapeamento | None = None) -> PlanilhaLida:
+    """PBI-12 — lê a planilha do PDA (uma linha por base prevista). Sem `mapeamento`, as colunas
+    são localizadas pelo cabeçalho normalizado (não pela posição); com ele, valem as colunas que o
+    usuário escolheu na etapa de mapeamento. `linha` = número da linha na planilha (1-based).
+    A leitura é sob demanda e limitada (abas, colunas, linhas e tamanho descompactado)."""
+    if mapeamento is None:
+        return _com_abas(conteudo, nome_arquivo, _ler_linhas)
+    validar_mapeamento(mapeamento.colunas, CAMPOS_PDA)
+    return _com_abas(conteudo, nome_arquivo, lambda abas: _ler_com_mapeamento(abas, mapeamento))
+
+
+# ------------------------------------------------------------------ mapeamento de colunas
+
+# Campos que a planilha do PDA pode ter: (campo, rótulo, obrigatório)
+CAMPOS_PDA: tuple[tuple[str, str, bool], ...] = (
+    ("orgao", "Órgão (sigla)", True),
+    ("base", "Base de Dados (nome no PDA)", True),
+    ("descricao", "Descrição", False),
+    ("unidade", "Unidade Responsável", False),
+    ("periodicidade", "Atualização (periodicidade)", False),
+    ("prazo", "Meta/Prazo para abertura", False),
+    ("politicas", "Políticas Públicas", False),
+    ("sigiloso", "Possui Conteúdo Sigiloso?", False),
+    ("portal", "Disponível no Portal (link do dataset)", False),
+)
+# Nomes de coluna reconhecidos por campo, compactos (sem acento, espaço, "_" e pontuação), em
+# ordem de preferência: "sigla" antes de "orgao", porque há planilhas com as duas colunas e a de
+# órgão traz o nome por extenso.
+_SINONIMOS_PDA: dict[str, tuple[str, ...]] = {
+    "orgao": ("sigla", "siglaorgao", "sigladoorgao", "orgaosigla", "orgao"),
+    "base": ("basededados", "nomepda", "nomenopda", "nomedabase", "nomeprevisto", "basedados",
+             "base"),
+    "descricao": ("descricao", "descricaodabase"),
+    "unidade": ("unidaderesponsavel", "unidade", "arearesponsavel"),
+    "periodicidade": ("atualizacao", "periodicidade", "periodicidadedeatualizacao", "frequencia"),
+    "prazo": ("metaprazoparaabertura", "prazo", "prazodeabertura", "prazoparaabertura",
+              "previsaodeabertura", "previsaoabertura", "dataprevista", "meta"),
+    "politicas": ("politicaspublicas", "politicas"),
+    "sigiloso": ("possuiconteudosigiloso", "conteudosigiloso", "sigiloso"),
+    "portal": ("disponivelnoportal", "linkdoportal", "linkdodataset", "enderecododataset",
+               "portal", "link", "url", "endereco"),
+}
+PREVIA_LINHAS = 5
+_SEMELHANCA_MINIMA = 0.85
+
+
+@dataclass
+class CabecalhoLido:
+    aba: int
+    linha: int  # 0-based; a linha na planilha é linha + 1
+    colunas: list[str]  # texto do cabeçalho ("" = coluna sem título)
+    sugestao: dict[str, int]  # campo → índice da coluna
+    previa: list[list[str | None]]  # primeiras linhas de dados, alinhadas a `colunas`
+
+
+def _chave_coluna(valor: object) -> str:
+    return _compacto(_texto(valor) or "")
+
+
+def sugerir_colunas(cabecalho: Sequence[object],
+                    sinonimos: dict[str, tuple[str, ...]]) -> dict[str, int]:
+    """Campo → índice da coluna com nome igual ou muito parecido, ignorando maiúsculas, acentos,
+    espaços, "_" e pontuação. Cada coluna vai para um campo só. Ordem: nome igual; nome parecido
+    (erro de digitação, plural); nome que começa ou termina com o esperado ("CPF_cliente")."""
+    chaves = [_chave_coluna(v) for v in cabecalho]
+    livres = [i for i, c in enumerate(chaves) if c]
+    sugestao: dict[str, int] = {}
+
+    def escolher(campo: str, i: int) -> None:
+        sugestao[campo] = i
+        livres.remove(i)
+
+    for campo, nomes in sinonimos.items():
+        i = next((i for n in nomes for i in livres if chaves[i] == n), None)
+        if i is not None:
+            escolher(campo, i)
+    for campo, nomes in sinonimos.items():
+        if campo in sugestao:
+            continue
+        notas = [(SequenceMatcher(None, chaves[i], n).ratio(), -i) for i in livres for n in nomes]
+        if notas and max(notas)[0] >= _SEMELHANCA_MINIMA:
+            escolher(campo, -max(notas)[1])
+    for campo, nomes in sinonimos.items():
+        if campo in sugestao:
+            continue
+        i = next((i for n in nomes if len(n) >= 3 for i in livres
+                  if chaves[i].startswith(n) or chaves[i].endswith(n)), None)
+        if i is not None:
+            escolher(campo, i)
+    return sugestao
+
+
+def validar_mapeamento(colunas: dict[str, int], campos: tuple[tuple[str, str, bool], ...]) -> None:
+    """Campos conhecidos, obrigatórios presentes e cada coluna usada uma vez só."""
+    rotulos = {c: r for c, r, _ in campos}
+    desconhecidos = sorted(set(colunas) - set(rotulos))
+    if desconhecidos:
+        raise PlanilhaInvalida(f"Campo desconhecido no mapeamento: {', '.join(desconhecidos)}.")
+    faltando = [r for c, r, obrigatorio in campos if obrigatorio and c not in colunas]
+    if faltando:
+        raise PlanilhaInvalida(f"Escolha a coluna dos campos obrigatórios: {', '.join(faltando)}.")
+    if any(i < 0 for i in colunas.values()):
+        raise PlanilhaInvalida("Índice de coluna inválido no mapeamento.")
+    if len(set(colunas.values())) != len(colunas):
+        raise PlanilhaInvalida("A mesma coluna foi escolhida para mais de um campo.")
+
+
+def _celulas_texto(linha: Sequence[object]) -> list[str | None]:
+    return [_texto(v, colapsar=False) for v in linha]
+
+
+def _ler_cabecalho(abas: Iterable[Aba]) -> CabecalhoLido:
+    """Linha de cabeçalho mais provável (nas 30 primeiras linhas de cada aba): a que tem mais
+    colunas reconhecidas e, no empate, a primeira; precisa de ao menos duas células preenchidas."""
+    melhor: tuple[tuple[int, int], CabecalhoLido] | None = None
+    for n_aba, aba in enumerate(abas):
+        inicio = list(islice(_linhas_limitadas(aba), _LINHAS_PROCURA_CABECALHO + PREVIA_LINHAS))
+        for idx, linha in enumerate(inicio[:_LINHAS_PROCURA_CABECALHO]):
+            preenchidas = sum(1 for v in linha if _texto(v) is not None)
+            if preenchidas < 2:
+                continue
+            sugestao = sugerir_colunas(linha, _SINONIMOS_PDA)
+            nota = (len(sugestao), preenchidas)
+            if melhor is None or nota > melhor[0]:
+                dados = [ln for ln in inicio[idx + 1:] if any(_texto(v) is not None for v in ln)]
+                colunas = [_texto(v) or "" for v in linha]
+                previa = [(_celulas_texto(ln) + [None] * len(colunas))[:len(colunas)]
+                          for ln in dados[:PREVIA_LINHAS]]
+                melhor = nota, CabecalhoLido(aba=n_aba, linha=idx, colunas=colunas,
+                                             sugestao=sugestao, previa=previa)
+    if melhor is None:
+        raise PlanilhaInvalida("Nenhuma linha de cabeçalho encontrada nas 30 primeiras linhas "
+                               "(é preciso ao menos duas colunas com título).")
+    return melhor[1]
+
+
+def ler_cabecalho(conteudo: bytes, nome_arquivo: str) -> CabecalhoLido:
+    """Etapa de mapeamento da importação: cabeçalho, sugestão de correspondência e prévia."""
+    return _com_abas(conteudo, nome_arquivo, _ler_cabecalho)
+
+
+def _ler_com_mapeamento(abas: Iterable[Aba], m: Mapeamento) -> PlanilhaLida:
+    aba = next(islice(abas, m.aba, None), None)
+    if aba is None:
+        raise PlanilhaInvalida("Aba do mapeamento não encontrada: selecione o arquivo de novo.")
+    linhas = _linhas_limitadas(aba)
+    ate_cabecalho = list(islice(linhas, m.linha + 1))
+    cabecalho = ate_cabecalho[m.linha] if len(ate_cabecalho) > m.linha else []
+    if not cabecalho or any(i >= len(cabecalho) for i in m.colunas.values()):
+        raise PlanilhaInvalida("As colunas escolhidas não existem neste arquivo: selecione-o de "
+                               "novo e refaça o mapeamento.")
+    titulos = _celulas_texto(cabecalho)
+    return _extrair_bases(linhas, m.linha, dict(m.colunas),
+                          lambda ln: _celulas_texto(ln) == titulos)
+
+
+# ------------------------------------------------------------------ CSV de IDs do CKAN
+
+# (campo, rótulo, obrigatório)
+CAMPOS_IDS: tuple[tuple[str, str, bool], ...] = (
+    ("sigla", "SIGLA", True),
+    ("nome_pda", "NOME_PDA", True),
+    ("nome_dataset", "NOME_DATASET", False),
+    ("id", "ID_DATASET", True),
+)
+_SINONIMOS_IDS: dict[str, tuple[str, ...]] = {
+    "sigla": ("sigla", "siglaorgao", "sigladoorgao", "orgaosigla", "orgao"),
+    "nome_pda": ("nomepda", "nomenopda", "basededados", "nomedabase", "nomeprevisto"),
+    "nome_dataset": ("nomedataset", "nomedabaseckan", "nomenoportal", "nomeckan", "titulo"),
+    "id": ("iddataset", "idunico", "idckan", "iddodataset", "datasetid", "id", "uuid"),
+}
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+# "Não encontrado" (planilha da GEDA) e afins = linha sem ID, não é erro
+_SEM_ID = {"", "-", "--", "nao encontrado", "nao localizado", "sem id", "n/a", "na"}
+
+
+@dataclass
+class LinhaIdCkan:
+    linha: int
+    sigla: str | None
+    nome_pda: str | None
+    nome_dataset: str | None
+    id_informado: str | None  # texto da célula (aparado); None = sem ID
+
+
+def normalizar_uuid(valor: object) -> str | None:
+    """ID do CKAN (UUID) em minúsculas, ou None se o texto não for um UUID."""
+    t = (_texto(valor) or "").strip().lower()
+    return t if _UUID.match(t) else None
+
+
+def chave_base(sigla: object, nome: object) -> tuple[str, str]:
+    """SIGLA + nome da base para casar o CSV com o PDA, sem diferença de maiúsculas, acentos e
+    espaços extras."""
+    return normalizar_texto(sigla), normalizar_texto(nome)
+
+
+def _extrair_ids(linhas: Iterable[Sequence[object]], idx_cab: int, cabecalho: Sequence[object],
+                 col: dict[str, int]) -> list[LinhaIdCkan]:
+    def celula(ln: Sequence[object], campo: str) -> str | None:
+        i = col.get(campo)
+        return _texto(ln[i]) if i is not None and i < len(ln) else None
+
+    lidas: list[LinhaIdCkan] = []
+    titulos = _celulas_texto(cabecalho)
+    for numero, ln in enumerate(linhas, start=idx_cab + 2):
+        if all(_texto(v) is None for v in ln) or _celulas_texto(ln) == titulos:
+            continue
+        id_texto = celula(ln, "id")
+        lidas.append(LinhaIdCkan(
+            linha=numero, sigla=celula(ln, "sigla"), nome_pda=celula(ln, "nome_pda"),
+            nome_dataset=celula(ln, "nome_dataset"),
+            id_informado=None if normalizar_texto(id_texto) in _SEM_ID else id_texto))
+    return lidas
+
+
+def _ler_ids(abas: Iterable[Aba]) -> list[LinhaIdCkan]:
+    obrigatorios = [c for c, _, o in CAMPOS_IDS if o]
+    for aba in abas:
+        linhas = _linhas_limitadas(aba)
+        inicio = list(islice(linhas, _LINHAS_PROCURA_CABECALHO))
+        for idx, cab in enumerate(inicio):
+            col = sugerir_colunas(cab, _SINONIMOS_IDS)
+            if all(c in col for c in obrigatorios):
+                return _extrair_ids(chain(inicio[idx + 1:], linhas), idx, cab, col)
+    raise PlanilhaInvalida("Cabeçalho não encontrado: o arquivo precisa das colunas SIGLA, "
+                           "NOME_PDA e ID_DATASET (ou ID_UNICO); NOME_DATASET é opcional.")
+
+
+def ler_ids_ckan(conteudo: bytes, nome_arquivo: str) -> list[LinhaIdCkan]:
+    """CSV (ou .xlsx) com o ID do CKAN de cada base: SIGLA, NOME_PDA, NOME_DATASET, ID_DATASET.
+    Aceita UTF-8 ou Latin-1/Windows-1252 e separador ";" ou ","."""
+    return _com_abas(conteudo, nome_arquivo, _ler_ids, "o arquivo de IDs")

@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 21/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -17,7 +17,7 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes (`pda.editar_vinculos`) |
+| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes, e **Importar IDs do CKAN** (`pda.editar_vinculos`) |
 
 - **Painel "PDA"** (acima dos filtros): select com os PDAs ("Nome (vigente)"), badge Vigente /
   Não vigente e a linha "N bases previstas · importado (ou criado manualmente) em dd/mm/aaaa por
@@ -39,11 +39,22 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
   atualização | Situação. Vínculo pendente mostra o name da planilha + badge "vínculo pendente";
   dataset inativo recebe badge "fora do portal"; ID abreviado (8 caracteres) com o completo no
   `title`; data estimada pela criação leva "(est.)". Contador "N base(s) encontrada(s) de M previstas".
-- **Modal Importar PDA**: nome*, início e fim da vigência, arquivo .xlsx/.csv* (até 5 MB), "Definir
-  como vigente" (marcado e travado quando é o primeiro PDA). Após o envio mostra o resumo (bases
+- **Modal Importar PDA**, em etapas (`ImportarPdaModal.tsx`): (1) nome*, início e fim da vigência,
+  arquivo .xlsx/.csv* (até 5 MB), "Definir como vigente" (marcado e travado quando é o primeiro PDA)
+  → **Continuar**; (2) **mapeamento de colunas** (`MapeamentoColunas.tsx`): cada campo do sistema ao
+  lado de um seletor com as colunas da planilha, pré-selecionado quando o nome é igual ou muito
+  parecido (sem diferença de maiúsculas, acentos, espaços e "_"); obrigatórios sem coluna ficam em
+  vermelho e bloqueiam **Importar**; coluna já usada em outro campo fica desabilitada; prévia das 5
+  primeiras linhas já mapeadas; **Voltar** refaz a etapa 1. Após importar mostra o resumo (bases
   importadas, linhas ignoradas com motivo, vínculos resolvidos/pendentes, sem vínculo, órgãos sem
   correspondência), avisa quando falta a coluna "Prazo" (e lista as demais colunas opcionais
   ausentes) e seleciona o PDA novo.
+- **Modal Importar IDs do CKAN** (`ImportarIdsModal.tsx`): arquivo CSV (ou .xlsx) com SIGLA,
+  NOME_PDA, NOME_DATASET e ID_DATASET (ou ID_UNICO) → **Analisar arquivo** (nada é gravado) → resumo:
+  bases sem ID que recebem, bases que já têm **outro** ID (lista atual → novo), já com o mesmo ID,
+  linhas sem base correspondente, linhas com problema no ID (não é UUID, fora do inventário, mesma
+  base com IDs diferentes) e linhas sem ID; caixa **Sobrescrever** (desmarcada) para as bases com
+  outro ID → **Gravar N IDs** → resumo final e recarga da tabela.
 - **Modal de detalhe** (`showDatasetDetails` do protótipo): nome, órgão, unidade, ID do dataset,
   dataset no portal, prazo, data de publicação (`metadata_created` do dataset vinculado e ativo;
   sem vínculo, "Não publicado"), periodicidade (+ original da planilha), última atualização real,
@@ -65,7 +76,8 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 | Método | Rota (`/api/v1/pda`) | Permissão | Descrição |
 |---|---|---|---|
 | GET | `/planos` | `pda.acessar` | PDAs cadastrados (`PlanoOut[]`): vigente primeiro, depois `importado_em` desc. Totais e vínculos respeitam o escopo de órgão do usuário |
-| POST | `/planos` | `pda.gerenciar_planos` | multipart: `nome`, `arquivo`, `vigencia_inicio`/`vigencia_fim` (aaaa-mm-dd, opcionais), `definir_vigente` (padrão false) → 201 `ImportacaoResumoOut` (PBI-12). **409** nome repetido (sem diferenciar maiúsculas); **413** arquivo > 5 MB; **422** nome vazio ou com mais de 200 caracteres, extensão diferente de .xlsx/.csv, .xlsx/.csv ilegível, .xlsx grande demais descompactado (> 50 MB), mais de 20 abas ou de 20.000 linhas, cabeçalho obrigatório ausente, prazo ilegível, planilha sem base, data inválida ou fim < início |
+| POST | `/planilha/colunas` | `pda.gerenciar_planos` | multipart `arquivo` → `ColunasPlanilhaOut`: cabeçalho, coluna sugerida para cada campo e prévia (etapa de mapeamento; nada é gravado). **413**; **422** formato, arquivo ilegível ou sem linha de cabeçalho |
+| POST | `/planos` | `pda.gerenciar_planos` | multipart: `nome`, `arquivo`, `vigencia_inicio`/`vigencia_fim` (aaaa-mm-dd, opcionais), `definir_vigente` (padrão false), `mapeamento` (JSON `MapeamentoIn`, opcional; sem ele as colunas são achadas pelo cabeçalho) → 201 `ImportacaoResumoOut` (PBI-12). **409** nome repetido (sem diferenciar maiúsculas); **413** arquivo > 5 MB; **422** nome vazio ou com mais de 200 caracteres, extensão diferente de .xlsx/.csv, .xlsx/.csv ilegível, .xlsx grande demais descompactado (> 50 MB), mais de 20 abas ou de 20.000 linhas, cabeçalho obrigatório ausente, prazo ilegível, planilha sem base, data inválida ou fim < início; com mapeamento: JSON inválido, obrigatório sem coluna, coluna repetida ou inexistente no arquivo |
 | POST | `/planos/manual` | `pda.gerenciar_planos` | JSON `PlanoIn` (`nome`, `vigencia_inicio`, `vigencia_fim`, `definir_vigente`) → 201 `PlanoOut` de um PDA **vazio**, sem planilha (`arquivo_nome` nulo; `importado_por` = quem criou). **409** nome repetido; **422** nome vazio/longo ou fim < início |
 | GET | `/planos/{id}` | `pda.acessar` | `PlanoOut` (totais no escopo de órgão); **404** |
 | PUT | `/planos/{id}` | `pda.gerenciar_planos` | JSON `PlanoIn` → `PlanoOut`: edita nome e vigência (não troca o vigente; `definir_vigente` é ignorado). **409** nome de outro PDA; **422**; **404** |
@@ -77,6 +89,7 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 | GET | `/datasets/{dataset_id}/bases` | `pda.acessar` | `BaseOut[]`: bases previstas vinculadas **pelo ID** a um dataset do portal, em todos os PDAs (vigente primeiro). Sem vínculo → `[]` (nunca casa pelo nome). Usado pelo detalhe da tela Datasets |
 | GET | `/formulario` | `pda.gerenciar_planos` | `FormularioOut`: organizações do portal visíveis ao usuário (`{valor: ckan_id, rotulo}`) e o domínio de periodicidade |
 | POST | `/planos/{id}/vincular` | `pda.editar_vinculos` | Tenta de novo os vínculos pendentes → `VinculosOut` (PBI-12/13); **404** |
+| POST | `/planos/{id}/ids-ckan` | `pda.editar_vinculos` | multipart: `arquivo` (CSV SIGLA, NOME_PDA, NOME_DATASET, ID_DATASET), `aplicar` (padrão false = só analisa), `sobrescrever` (padrão false) → `IdsCkanOut`. **404** plano; **413**; **422** formato, sem cabeçalho ou sem linhas |
 | GET | `/bases` | `pda.acessar` | `?plano_id=&orgao=&situacao=&periodicidade=&ano=&prazo=` → `BasesOut` (PBI-19 a 21). Sem `plano_id` usa o vigente; sem PDA → `plano=null` e listas vazias. **404** plano inexistente; **422** `ano` não numérico ou `prazo` diferente de `vencido`/`proximo` |
 | GET | `/bases/{id}` | `pda.acessar` | `BaseOut`; **404** se não existe ou é de outro órgão para usuário restrito |
 
@@ -89,6 +102,12 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   tem_coluna_prazo, tem_coluna_portal (sem "Disponível no Portal" nenhuma base é vinculada),
   colunas_opcionais_ausentes (rótulos).
 - `VinculosOut`: vinculos_resolvidos (nesta execução), vinculos_pendentes (que continuam pendentes).
+- `ColunasPlanilhaOut`: aba e linha do cabeçalho (0-based), colunas (títulos), campos
+  `[{campo, rotulo, obrigatorio, sugestao}]` (sugestao = índice da coluna ou null), previa (até 5
+  linhas). `MapeamentoIn`: aba, linha, colunas `{campo: índice}`.
+- `IdsCkanOut`: aplicado, total_linhas, atualizadas (0 na análise), atualizar, substituir (com
+  id_atual), iguais, sem_id, sem_base, invalidas — listas de `LinhaIdCkanOut` {linha, sigla,
+  nome_pda, dataset_id, base_id, base_nome, id_atual, motivo}.
 - `PlanoIn`: nome, vigencia_inicio, vigencia_fim, definir_vigente (só na criação).
 - `BaseIn`: orgao_sigla*, organizacao_id (vazio = pela sigla), nome_previsto*, descricao,
   unidade_responsavel, periodicidade (valor do domínio ou texto livre, normalizado),
@@ -106,7 +125,15 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
 
 ## Serviços e métodos
 `regras.py` (funções puras, reaproveitáveis numa extensão CKAN — ADR 0004):
-- `ler_planilha(conteudo: bytes, nome_arquivo: str) -> PlanilhaLida` — PBI-12; `linhas:
+- `ler_cabecalho(conteudo, nome_arquivo) -> CabecalhoLido` — etapa de mapeamento: linha de
+  cabeçalho mais provável (mais colunas reconhecidas nas 30 primeiras linhas de cada aba),
+  `sugerir_colunas(cabecalho, sinonimos)` (nome igual → muito parecido, `SequenceMatcher` ≥ 0,85 →
+  começa/termina com o esperado; cada coluna para um campo só; "sigla" antes de "orgao") e prévia.
+  `validar_mapeamento(colunas, CAMPOS_PDA)`: campos conhecidos, obrigatórios e coluna única.
+- `ler_ids_ckan(conteudo, nome_arquivo) -> list[LinhaIdCkan]` — CSV/.xlsx de IDs (UTF-8 ou
+  Latin-1/Windows-1252, ";" ou ","); "Não encontrado" ou vazio = sem ID. `normalizar_uuid(valor)` e
+  `chave_base(sigla, nome)` (comparação sem maiúsculas, acentos e espaços extras).
+- `ler_planilha(conteudo: bytes, nome_arquivo: str, mapeamento: Mapeamento | None = None) -> PlanilhaLida` — PBI-12; `linhas:
   list[LinhaPda]`, `ignoradas: list[(linha, motivo)]`, `tem_coluna_prazo`, `tem_coluna_portal`,
   `colunas_opcionais_ausentes`. Leitura sob demanda e limitada (`TAMANHO_DESCOMPACTADO_MAXIMO` 50 MB,
   `ABAS_MAXIMO` 20, `LINHAS_MAXIMO` 20.000, `COLUNAS_MAXIMO` 60, fim da aba após 1.000 linhas vazias
@@ -131,6 +158,15 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
 - `importar_plano(db, *, nome, vigencia_inicio, vigencia_fim, definir_vigente, arquivo_nome,
   conteudo, importado_por) -> ImportacaoResumoOut` — PBI-12/13, atômico.
 - `resolver_vinculos_pendentes(db, plano_id) -> {"vinculos_resolvidos", "vinculos_pendentes"}` — PBI-12/13.
+- `colunas_planilha(conteudo, arquivo_nome) -> ColunasPlanilhaOut` — etapa de mapeamento;
+  `importar_plano(..., mapeamento=None)` usa as colunas escolhidas. O servidor não guarda o arquivo
+  entre as etapas: o frontend o envia de novo na confirmação.
+- `importar_ids_ckan(db, plano_id, conteudo, arquivo_nome, user, *, aplicar, sobrescrever) -> IdsCkanOut`
+  — grava `dataset_id` (o vínculo, ADR-0006) nas bases casadas por SIGLA + nome (uma base só; mais
+  de uma = ambígua, não aplica). ID precisa ser UUID e existir no inventário; base com outro ID só
+  muda com `sobrescrever`; mesma base com IDs diferentes no arquivo não é aplicada; o órgão do
+  dataset vinculado prevalece e depois roda `_completar_orgao_por_evidencia`. Usuário restrito a
+  órgão só vê as próprias bases e só vincula datasets do próprio órgão.
 - `listar_planos(db, user=None) -> list[PlanoOut]` · `obter_plano(db, plano_id, user=None)` ·
   `definir_vigente(db, plano_id) -> PlanoOut` · `excluir_plano(db, plano_id) -> None`.
 - CRUD manual: `criar_plano(db, PlanoIn, criado_por) -> PlanoOut` (PDA vazio) ·
@@ -334,3 +370,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 18/10/2026 | Tela aceita `?orgao=<chave>` na URL (botão "Ver bases no PDA" da tela Organizações); Interações com o painel atualizadas | Humberto |
 | 18/10/2026 | Situação "Prazo vencido" (`regras.PRAZO_VENCIDO`): base sem vínculo com prazo vencido deixa de aparecer como "Em atraso", que passa a exigir vínculo (dataset conferido e fora do portal); badge cinza com a dica "aguardando vínculo" e opção no filtro | Humberto |
 | 21/10/2026 | Correções no cadastro manual: o modal de edição abria por trás do detalhe da base (modal compartilhado agora em portal, com pilha para Esc/Tab); novo campo "ID do dataset no CKAN" (`BaseIn.dataset_id`, `_vinculo_por_id`) para vincular quando o nome do PDA difere do name no portal | Humberto |
+| 22/10/2026 | Importação do PDA com etapa de **mapeamento de colunas** (`POST /planilha/colunas`, `MapeamentoIn` em `POST /planos`, `regras.ler_cabecalho`/`sugerir_colunas`/`validar_mapeamento`, `MapeamentoColunas.tsx`) e **Importar IDs do CKAN** em lote por SIGLA + NOME_PDA com análise, confirmação para sobrescrever e resumo (`POST /planos/{id}/ids-ckan`, `regras.ler_ids_ckan`, `service.importar_ids_ckan`, `ImportarIdsModal.tsx`) | Humberto |

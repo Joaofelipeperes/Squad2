@@ -37,6 +37,46 @@ export interface ImportacaoResumo {
 
 export interface VinculosResultado { vinculos_resolvidos: number; vinculos_pendentes: number }
 
+/** Etapa de mapeamento da importação (POST /pda/planilha/colunas). */
+export interface CampoPlanilha {
+  campo: string;
+  rotulo: string;
+  obrigatorio: boolean;
+  sugestao: number | null; // índice da coluna pré-selecionada
+}
+export interface ColunasPlanilha {
+  aba: number;
+  linha: number; // 0-based; linha na planilha = linha + 1
+  colunas: string[]; // "" = coluna sem título
+  campos: CampoPlanilha[];
+  previa: (string | null)[][];
+}
+/** Enviado como JSON no campo "mapeamento" da importação. */
+export interface Mapeamento { aba: number; linha: number; colunas: Record<string, number> }
+
+/** Importação dos IDs do CKAN (POST /pda/planos/{id}/ids-ckan). */
+export interface LinhaIdCkan {
+  linha: number;
+  sigla: string | null;
+  nome_pda: string | null;
+  dataset_id: string | null;
+  base_id: number | null;
+  base_nome: string | null;
+  id_atual: string | null;
+  motivo: string | null;
+}
+export interface IdsCkanResumo {
+  aplicado: boolean;
+  total_linhas: number;
+  atualizadas: number;
+  atualizar: LinhaIdCkan[];
+  substituir: LinhaIdCkan[];
+  iguais: number;
+  sem_id: number;
+  sem_base: LinhaIdCkan[];
+  invalidas: LinhaIdCkan[];
+}
+
 export interface Opcao { valor: string; rotulo: string }
 
 export type Vinculo = "resolvido" | "pendente" | "sem_vinculo";
@@ -141,6 +181,18 @@ function consultaBases(planoId: number | null, f: FiltrosPda): string {
 export const pdaApi = {
   planos: () => api.get<PlanoPda[]>("/pda/planos"),
   importar: (form: FormData) => api.upload<ImportacaoResumo>("/pda/planos", form),
+  colunasPlanilha: (arquivo: File) => {
+    const form = new FormData();
+    form.append("arquivo", arquivo, arquivo.name);
+    return api.upload<ColunasPlanilha>("/pda/planilha/colunas", form);
+  },
+  importarIds: (planoId: number, arquivo: File, aplicar: boolean, sobrescrever: boolean) => {
+    const form = new FormData();
+    form.append("arquivo", arquivo, arquivo.name);
+    form.append("aplicar", aplicar ? "true" : "false");
+    form.append("sobrescrever", sobrescrever ? "true" : "false");
+    return api.upload<IdsCkanResumo>(`/pda/planos/${planoId}/ids-ckan`, form);
+  },
   criarPlano: (dados: PlanoEntrada) => api.post<PlanoPda>("/pda/planos/manual", dados),
   atualizarPlano: (id: number, dados: PlanoEntrada) => api.put<PlanoPda>(`/pda/planos/${id}`, dados),
   formulario: () => api.get<FormularioPda>("/pda/formulario"),

@@ -8,6 +8,7 @@ import { BaseDetalheModal } from "./BaseDetalheModal";
 import { BaseFormModal } from "./BaseFormModal";
 import { ConfirmarModal } from "./ConfirmarModal";
 import { abreviarId, fmtData, fmtDataHora, plural } from "./formato";
+import { ImportarIdsModal } from "./ImportarIdsModal";
 import { ImportarPdaModal } from "./ImportarPdaModal";
 import { PlanoFormModal } from "./PlanoFormModal";
 import { SituacaoBadge } from "./SituacaoBadge";
@@ -30,6 +31,7 @@ export default function PdaPage() {
   const [filtros, setFiltros] = useState<FiltrosPda>(
     () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "" }));
   const [importarAberto, setImportarAberto] = useState(false);
+  const [idsAberto, setIdsAberto] = useState(false);
   const [confirmacao, setConfirmacao] = useState<"vigente" | "excluir" | null>(null);
   const [detalhe, setDetalhe] = useState<BasePda | null>(null);
   // Formulários do CRUD manual: PDA (novo/editar) e base (null = incluir; BasePda = editar)
@@ -151,7 +153,8 @@ export default function PdaPage() {
             onNovo={() => setPlanoForm("novo")} onEditar={() => setPlanoForm("editar")}
             onDefinirVigente={() => setConfirmacao("vigente")}
             onExcluir={() => setConfirmacao("excluir")}
-            onVincular={() => vincular.mutate(plano)} vinculando={vincular.isPending} />
+            onVincular={() => vincular.mutate(plano)} vinculando={vincular.isPending}
+            onImportarIds={() => setIdsAberto(true)} />
 
           <div className="panel">
             <Filtros filtros={filtros} onMudar={setFiltros} dados={bases.data} />
@@ -235,6 +238,8 @@ export default function PdaPage() {
             primeiro={false} onFechar={() => setPlanoForm(null)} onSalvo={aoSalvarPlano} />
           <BaseFormModal aberto={baseForm != null} plano={plano} base={baseForm?.base ?? null}
             onFechar={() => setBaseForm(null)} onSalva={aoSalvarBase} />
+          <ImportarIdsModal aberto={idsAberto} plano={plano} onFechar={() => setIdsAberto(false)}
+            onGravado={(r) => { toast(`IDs do CKAN gravados em ${r.atualizadas} base(s).`); recarregar(); }} />
         </>
       )}
 
@@ -290,6 +295,7 @@ interface PainelPlanoProps {
   onExcluir: () => void;
   onVincular: () => void;
   vinculando: boolean;
+  onImportarIds: () => void;
 }
 
 function vigencia(p: PlanoPda): string | null {
@@ -301,6 +307,7 @@ function vigencia(p: PlanoPda): string | null {
 
 function PainelPlano({
   planos, plano, onTrocar, onImportar, onNovo, onEditar, onDefinirVigente, onExcluir, onVincular, vinculando,
+  onImportarIds,
 }: PainelPlanoProps) {
   const origem = plano.arquivo_nome ? "importado" : "criado manualmente";
   // O vigente só pode ser excluído quando é o único PDA (regra do backend)
@@ -336,6 +343,10 @@ function PainelPlano({
                   : `Atualizar vínculos (${plural(plano.vinculos_pendentes, "pendente", "pendentes")})`}
               </button>
             )}
+            <button type="button" className="btn btn-outline btn-sm" onClick={onImportarIds}
+              title="Grava o ID do dataset no CKAN nas bases deste PDA a partir de um CSV">
+              <i className="fa-solid fa-fingerprint" />Importar IDs do CKAN
+            </button>
           </Pode>
           <Pode permissao="pda.gerenciar_planos">
             {!plano.vigente && (

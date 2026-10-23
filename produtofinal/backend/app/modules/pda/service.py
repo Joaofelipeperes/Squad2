@@ -11,6 +11,7 @@ Vários PDAs podem estar cadastrados; o VIGENTE rege a tela e os indicadores de 
 assistente): `plano_vigente(db)` e `bases_do_plano(db, plano_id, user)`.
 """
 import re
+from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -34,8 +35,12 @@ from app.modules.pda.schemas import (
     BaseIn,
     BaseOut,
     BasesOut,
+    CampoPlanilhaOut,
+    ColunasPlanilhaOut,
     FormularioOut,
+    IdsCkanOut,
     ImportacaoResumoOut,
+    LinhaIdCkanOut,
     LinhaIgnoradaOut,
     OpcaoOut,
     OpcoesOut,
@@ -285,8 +290,12 @@ def _datasets_por_name(db: Session, names: set[str]) -> dict[str, Dataset]:
 
 def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
                    vigencia_fim: date | None, definir_vigente: bool, arquivo_nome: str,
-                   conteudo: bytes, importado_por: str | None) -> ImportacaoResumoOut:
+                   conteudo: bytes, importado_por: str | None,
+                   mapeamento: regras.Mapeamento | None = None) -> ImportacaoResumoOut:
     """PBI-12/13 — importa a planilha de um PDA (atômico: qualquer erro → nada gravado).
+
+    `mapeamento` = colunas escolhidas pelo usuário na etapa de mapeamento (`colunas_planilha`);
+    sem ele, as colunas são achadas pelo cabeçalho.
 
     Vínculo: name extraído da URL "Disponível no Portal" → `Dataset.ckan_id` do inventário
     ("resolvido"); name sem dataset no inventário → "pendente" (resolver depois com
@@ -297,7 +306,7 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
     """
     nome = _validar_plano(db, nome, vigencia_inicio, vigencia_fim)
     try:
-        lida = regras.ler_planilha(conteudo, arquivo_nome)
+        lida = regras.ler_planilha(conteudo, arquivo_nome, mapeamento)
     except regras.PlanilhaInvalida as exc:
         raise Invalido(str(exc)) from exc
     if not lida.linhas:
@@ -420,6 +429,114 @@ def resolver_vinculos_pendentes(db: Session, plano_id: int) -> dict[str, int]:
     _completar_orgao_por_evidencia(db, plano_id)
     db.commit()
     return {"vinculos_resolvidos": resolvidos, "vinculos_pendentes": len(pendentes) - resolvidos}
+
+
+# ------------------------------------------------------------------ mapeamento de colunas
+def colunas_planilha(conteudo: bytes, arquivo_nome: str) -> ColunasPlanilhaOut:
+    """Etapa de mapeamento da importação: cabeçalho da planilha, campo do sistema com a coluna
+    sugerida (nome igual ou muito parecido) e prévia das primeiras linhas. Nada é gravado; na
+    confirmação o arquivo é enviado de novo com o `MapeamentoIn` (o servidor não guarda arquivo)."""
+    try:
+        lido = regras.ler_cabecalho(conteudo, arquivo_nome)
+    except regras.PlanilhaInvalida as exc:
+        raise Invalido(str(exc)) from exc
+    return ColunasPlanilhaOut(
+        aba=lido.aba, linha=lido.linha, colunas=lido.colunas, previa=lido.previa,
+        campos=[CampoPlanilhaOut(campo=c, rotulo=r, obrigatorio=o, sugestao=lido.sugestao.get(c))
+                for c, r, o in regras.CAMPOS_PDA])
+
+
+# ------------------------------------------------------------------ IDs do CKAN em lote
+def importar_ids_ckan(db: Session, plano_id: int, conteudo: bytes, arquivo_nome: str,
+                      user: UsuarioAtual, *, aplicar: bool, sobrescrever: bool) -> IdsCkanOut:
+    """Grava o ID do dataset (o vínculo — ADR-0006) nas bases do PDA a partir de um CSV com
+    SIGLA, NOME_PDA, NOME_DATASET e ID_DATASET. Cada linha casa com UMA base pela SIGLA + nome da
+    base (sem diferença de maiúsculas, acentos e espaços extras). O ID precisa ser um UUID e
+    existir no inventário. `aplicar=False` só analisa; base que já tem OUTRO ID só é alterada com
+    `sobrescrever=True`. Bases fora do escopo de órgão do usuário não são vistas."""
+    plano = _plano_ou_404(db, plano_id)
+    try:
+        linhas = regras.ler_ids_ckan(conteudo, arquivo_nome)
+    except regras.PlanilhaInvalida as exc:
+        raise Invalido(str(exc)) from exc
+    if not linhas:
+        raise Invalido("Nenhuma linha de dados no arquivo de IDs.")
+
+    bases = db.scalars(_consulta_bases(user).where(BasePrevista.plano_id == plano.id)).all()
+    por_chave: dict[tuple[str, str], list[BasePrevista]] = defaultdict(list)
+    for b in bases:
+        por_chave[regras.chave_base(b.orgao_sigla, b.nome_previsto)].append(b)
+    uuids = {u for u in (regras.normalizar_uuid(ln.id_informado) for ln in linhas) if u}
+    datasets: dict[str, Dataset] = {}
+    lista = sorted(uuids)
+    for i in range(0, len(lista), _LOTE_IN):
+        datasets.update((d.ckan_id, d) for d in db.scalars(
+            select(Dataset).where(Dataset.ckan_id.in_(lista[i:i + _LOTE_IN]))))
+
+    sem_base: list[LinhaIdCkanOut] = []
+    invalidas: list[LinhaIdCkanOut] = []
+    candidatas: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    sem_id = 0
+    for ln in linhas:
+        uuid = regras.normalizar_uuid(ln.id_informado)
+        saida = LinhaIdCkanOut(linha=ln.linha, sigla=ln.sigla, nome_pda=ln.nome_pda,
+                               dataset_id=uuid or ln.id_informado)
+        if ln.id_informado is None:
+            sem_id += 1
+            continue
+        achadas = por_chave.get(regras.chave_base(ln.sigla, ln.nome_pda), [])
+        if not achadas:
+            sem_base.append(saida.model_copy(update={"motivo": "Nenhuma base do PDA com essa "
+                                                                "sigla e nome."}))
+        elif len(achadas) > 1:
+            sem_base.append(saida.model_copy(update={"motivo": f"{len(achadas)} bases do PDA com "
+                                                                "essa sigla e nome."}))
+        elif uuid is None:
+            invalidas.append(saida.model_copy(update={"motivo": "ID não é um UUID válido."}))
+        elif uuid not in datasets:
+            invalidas.append(saida.model_copy(update={
+                "motivo": "ID não encontrado no inventário do portal (rode a coleta)."}))
+        elif user.restrito_a_orgao and datasets[uuid].organizacao_id != user.orgao_id:
+            invalidas.append(saida.model_copy(update={"motivo": "Dataset de outro órgão."}))
+        else:
+            b = achadas[0]
+            candidatas.append((saida.model_copy(update={
+                "base_id": b.id, "base_nome": b.nome_previsto, "id_atual": b.dataset_id}), b))
+
+    # Mesma base em mais de uma linha: com IDs diferentes, nenhuma é aplicada
+    ids_por_base: dict[int, set[str]] = defaultdict(set)
+    for saida, b in candidatas:
+        ids_por_base[b.id].add(saida.dataset_id or "")
+    atualizar: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    substituir: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    iguais = 0
+    vistas: set[int] = set()
+    for saida, b in candidatas:
+        if len(ids_por_base[b.id]) > 1:
+            invalidas.append(saida.model_copy(update={
+                "motivo": "A mesma base aparece em outra linha com outro ID."}))
+        elif b.id in vistas or b.dataset_id == saida.dataset_id:
+            iguais += 1
+        elif b.dataset_id is None:
+            atualizar.append((saida, b))
+        else:
+            substituir.append((saida, b))
+        vistas.add(b.id)
+
+    gravar = atualizar + (substituir if sobrescrever else [])
+    if aplicar and gravar:
+        with _transacao(db):
+            for saida, b in gravar:
+                ds = datasets[saida.dataset_id or ""]
+                b.dataset_id = ds.ckan_id
+                if ds.organizacao_id:  # o órgão do dataset vinculado prevalece (como no CRUD)
+                    b.organizacao_id = ds.organizacao_id
+            db.flush()
+            _completar_orgao_por_evidencia(db, plano.id)
+    return IdsCkanOut(
+        aplicado=aplicar, total_linhas=len(linhas), atualizadas=len(gravar) if aplicar else 0,
+        atualizar=[s for s, _ in atualizar], substituir=[s for s, _ in substituir], iguais=iguais,
+        sem_id=sem_id, sem_base=sem_base, invalidas=sorted(invalidas, key=lambda s: s.linha))
 
 
 # ------------------------------------------------------------------ situação (PBI-15/19/22)
