@@ -5,6 +5,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from pydantic import ValidationError
 
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
@@ -13,8 +14,11 @@ from app.modules.pda.schemas import (
     BaseIn,
     BaseOut,
     BasesOut,
+    ColunasPlanilhaOut,
     FormularioOut,
+    IdsCkanOut,
     ImportacaoResumoOut,
+    MapeamentoIn,
     PlanoIn,
     PlanoOut,
     VinculosOut,
@@ -45,6 +49,26 @@ def _vazio(valor: str | None) -> str | None:
     return (valor.strip() or None) if valor is not None else None
 
 
+def _conteudo(arquivo: UploadFile, o_que: str = "a planilha do PDA") -> bytes:
+    """Arquivo enviado (.xlsx ou .csv, até 5 MB) → bytes; 422 formato, 413 tamanho."""
+    if regras.extensao_valida(arquivo.filename) is None:
+        raise HTTPException(422, f"Formato não suportado: envie {o_que} em .xlsx ou .csv.")
+    conteudo = arquivo.file.read(regras.TAMANHO_MAXIMO + 1)
+    if len(conteudo) > regras.TAMANHO_MAXIMO:
+        raise HTTPException(413, "Arquivo maior que 5 MB.")
+    return conteudo
+
+
+def _mapeamento(valor: str | None) -> regras.Mapeamento | None:
+    if valor is None or not valor.strip():
+        return None
+    try:
+        m = MapeamentoIn.model_validate_json(valor)
+    except ValidationError:
+        raise HTTPException(422, "Mapeamento de colunas inválido.") from None
+    return regras.Mapeamento(aba=m.aba, linha=m.linha, colunas=m.colunas)
+
+
 # ------------------------------------------------------------------ planos (PDAs)
 @router.get("/planos", response_model=list[PlanoOut])
 def listar_planos(db: DbSession,
@@ -62,20 +86,30 @@ def importar_plano(
     vigencia_inicio: Annotated[str | None, Form()] = None,
     vigencia_fim: Annotated[str | None, Form()] = None,
     definir_vigente: Annotated[bool, Form()] = False,
+    mapeamento: Annotated[str | None, Form()] = None,
 ):
-    """PBI-12 — importa a planilha de um PDA (.xlsx ou .csv, até 5 MB). multipart/form-data."""
-    if regras.extensao_valida(arquivo.filename) is None:
-        raise HTTPException(422, "Formato não suportado: envie a planilha do PDA em .xlsx ou .csv.")
-    conteudo = arquivo.file.read(regras.TAMANHO_MAXIMO + 1)
-    if len(conteudo) > regras.TAMANHO_MAXIMO:
-        raise HTTPException(413, "Arquivo maior que 5 MB.")
+    """PBI-12 — importa a planilha de um PDA (.xlsx ou .csv, até 5 MB). multipart/form-data.
+    `mapeamento` (opcional) = JSON `MapeamentoIn` com as colunas escolhidas na etapa de mapeamento
+    (`POST /planilha/colunas`); sem ele, as colunas são achadas pelo cabeçalho."""
+    conteudo = _conteudo(arquivo)
+    mapa = _mapeamento(mapeamento)
     inicio = _data_form(vigencia_inicio, "Início da vigência")
     fim = _data_form(vigencia_fim, "Fim da vigência")
     with _erros_http():
         return service.importar_plano(
             db, nome=nome, vigencia_inicio=inicio, vigencia_fim=fim,
             definir_vigente=definir_vigente, arquivo_nome=arquivo.filename or "",
-            conteudo=conteudo, importado_por=user.nome)
+            conteudo=conteudo, importado_por=user.nome, mapeamento=mapa)
+
+
+@router.post("/planilha/colunas", response_model=ColunasPlanilhaOut,
+             dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
+def colunas_planilha(arquivo: Annotated[UploadFile, File()]):
+    """Etapa de mapeamento da importação: cabeçalho, coluna sugerida para cada campo e prévia.
+    Nada é gravado."""
+    conteudo = _conteudo(arquivo)
+    with _erros_http():
+        return service.colunas_planilha(conteudo, arquivo.filename or "")
 
 
 @router.post("/planos/manual", response_model=PlanoOut, status_code=status.HTTP_201_CREATED)
@@ -125,6 +159,23 @@ def vincular(plano_id: int, db: DbSession):
     """PBI-12/13 — tenta resolver de novo os vínculos pendentes do PDA."""
     with _erros_http():
         return service.resolver_vinculos_pendentes(db, plano_id)
+
+
+@router.post("/planos/{plano_id}/ids-ckan", response_model=IdsCkanOut)
+def importar_ids_ckan(
+    plano_id: int,
+    db: DbSession,
+    arquivo: Annotated[UploadFile, File()],
+    user: Annotated[UsuarioAtual, Depends(require(P.PDA_EDITAR_VINCULOS))],
+    aplicar: Annotated[bool, Form()] = False,
+    sobrescrever: Annotated[bool, Form()] = False,
+):
+    """Importa o ID do CKAN de cada base (CSV SIGLA, NOME_PDA, NOME_DATASET, ID_DATASET).
+    `aplicar=false` só analisa; `sobrescrever=true` troca IDs diferentes já gravados."""
+    conteudo = _conteudo(arquivo, "o arquivo de IDs")
+    with _erros_http():
+        return service.importar_ids_ckan(db, plano_id, conteudo, arquivo.filename or "", user,
+                                         aplicar=aplicar, sobrescrever=sobrescrever)
 
 
 # ------------------------------------------------------------------ bases previstas
