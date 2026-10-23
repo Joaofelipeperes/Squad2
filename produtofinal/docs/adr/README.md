@@ -28,7 +28,7 @@ a fonte.
 | 22/09/2026 | D3 — Eixos 1 e 2 em paralelo; João assume a base comum; Victor coordena | Processo | Aceita | Backlog v2, aba Alterações v1→v2 |
 | 22/09/2026 | D4 — Metadados obrigatórios (US16), login (US24) e Assistente (US28) viram compromisso | Escopo | Aceita | Backlog v2, aba Alterações v1→v2 |
 | 22/09/2026 | D5 — Protótipo V1 é a referência das telas | Escopo | Aceita | [ADR-0007](0007-prototipo-v1-referencia-das-telas.md) |
-| 22/09/2026 | Abrir a definição da fonte da rastreabilidade (US29) após incompatibilidade da extensão de auditoria | Técnica | Em análise | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 22/09/2026 | Abrir a definição da fonte da rastreabilidade (US29) após incompatibilidade da extensão de auditoria | Técnica | Decidida em 21/10 (opção A) | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
 | 30/09/2026 | Monólito modular com FastAPI e React | Técnica | Aceita | [ADR-0001](0001-monolito-modular.md) |
 | 30/09/2026 | Gateway de IA com provedores plugáveis e política de dados sensíveis | Técnica | Aceita | [ADR-0002](0002-camada-ia-plugavel.md) |
 | 30/09/2026 | Frontend em React reaproveitando o CSS do protótipo | Técnica | Aceita | [ADR-0003](0003-frontend-modular.md) |
@@ -44,13 +44,18 @@ a fonte.
 | 01/10/2026 | Registrar toda decisão técnica como ADR numa linha do tempo | Processo | Aceita | [ADR-0015](0015-registro-de-decisoes.md) |
 | 07/10/2026 | Convenções de modelagem formalizadas e MER gerado do código | Técnica | Revisão da ADR-0013 | [ADR-0013](0013-banco-de-dados-e-convencoes.md) |
 | 14/10/2026 | Log de acesso: toda requisição à API gravada em `acesso_log` por middleware | Técnica | Aceita | [ADR-0016](0016-log-de-acesso-no-banco.md) |
+| 21/10/2026 | Fonte da rastreabilidade: auditoria da extensão `ckanext-dsaudit`, lida com token de editor (opção A) | Técnica | Aceita | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 22/10/2026 | Diff de arquivos lido do CKAN sob demanda, sem gravar valores; privação como evento próprio | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Cadastro dos órgãos rastreado por comparação entre coletas (a extensão não audita órgãos) | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Autoria das mudanças em órgãos lida das atividades nativas do CKAN | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Ações em lote e outras fora da edição auditada detectadas pelas atividades nativas do CKAN sem par na extensão | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
 
 ## Decisões em aberto
 
 | Tema | Opções | Quem decide | Onde |
 |---|---|---|---|
 | Forma de entrega final | Extensão do CKAN × aplicação acessada pelo portal | Paloma / Júnior, com a SECTI | ADR-0004, PBI-102 |
-| Fonte da rastreabilidade | Extensão de auditoria × activity stream × diff entre coletas | João, com a SECTI | ADR-0009, PBI-70 (prazo previsto 28/09) |
+| Instalação da extensão de auditoria no portal oficial | Instalar `ckanext-dsaudit` (pacote em `instalacao-ckan-producao/`) × manter a rastreabilidade só no CKAN local | SECTI, via Paloma | ADR-0009 |
 | Modelo local para classificar dados pessoais | Qwen ajustado do LIGO × modelos testados pela Luiza × classificador especializado | Luiza | ADR-0010 |
 | Chave de modelo comercial para o Assistente | Gemini via SECTI/LIGO × modelo local | SECTI/LIGO via Paloma (limite 19/10) | ADR-0002 |
 | Hospedagem do protótipo navegável | Oracle Cloud (camada gratuita, conta do coordenador) × OpenShift da TI Central | Victor, com a Paloma | Sugestão do orientador (01/10) |
