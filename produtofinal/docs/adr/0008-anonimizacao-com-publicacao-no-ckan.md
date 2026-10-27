@@ -53,3 +53,4 @@ Autorização formal CGE-GO/SECTI antes de ligar em produção (PBI-95).
 | Data | Revisão | Autor |
 |---|---|---|
 | 30/09/2026 | Salvaguardas implementadas em `CkanWriter` e permissão `lgpd.aprovar_correcao` criada | Victor |
+| 26/10/2026 | Fluxo implementado (prévia → aprovação → publicação → reversão). Cópia do original e prévia em pasta fora do banco (`GDA_LGPD_ARQUIVOS_DIR`), volume `lgpd_arquivos` no Docker; publica exatamente o arquivo conferido na prévia, depois de verificar pelo hash que o original não mudou. Operador padrão do CPF = regra informada pela Paloma em 17/09 (ocultar 3 primeiros e 2 últimos dígitos); demais tipos, marcador do tipo. Prazo de retenção da cópia continua com a GEDA | Squad 2 |

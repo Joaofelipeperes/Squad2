@@ -27,4 +27,11 @@ CATALOGO: dict[str, DefParametro] = {d.chave: d for d in [
                  ["CSV", "JSON", "XML", "ODS", "GEOJSON", "TXT"], "PBI-52"),
     DefParametro("confianca_minima_lgpd", "Confiança mínima para alerta LGPD (%)",
                  "Achados abaixo deste score não geram alerta.", 60, "PBI-86"),
+    DefParametro("margem_embeddings_lgpd", "Margem do filtro semântico (endereço)",
+                 "Texto vai ao modelo de endereço se a pontuação de embeddings for maior ou igual a "
+                 "esta margem. Menor = mais textos ao modelo (mais lento, deixa passar menos). "
+                 "Calibrar com o gabarito (avaliar.py --calibrar).", 0.0, "PBI-33"),
+    DefParametro("tamanho_maximo_recurso_lgpd_mb", "Tamanho máximo de recurso varrido (MB)",
+                 "Recursos maiores não são baixados pela varredura LGPD e ficam sinalizados.",
+                 50, "PBI-32"),
 ]}

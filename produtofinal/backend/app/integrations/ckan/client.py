@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
 
 
 class CkanError(RuntimeError):
-    pass
+    def __init__(self, mensagem: str, status_http: int | None = None) -> None:
+        super().__init__(mensagem)
+        self.status_http = status_http
 
 
 class CkanClient:
@@ -32,6 +34,7 @@ class CkanClient:
         s = get_settings()
         self.base_url = (base_url or s.ckan_base_url).rstrip("/")
         self.max_retries = max_retries if max_retries is not None else s.ckan_max_retries
+        self._transport = transport
         self._http = httpx.Client(
             base_url=f"{self.base_url}/api/3/action",
             timeout=timeout or s.ckan_timeout_s,
@@ -112,3 +115,35 @@ class CkanClient:
 
     def resource(self, resource_id: str) -> dict:
         return self.action("resource_show", id=resource_id)
+
+    # ------------------------------------------------------------------ arquivos dos recursos
+    def url_download(self, recurso_id: str, dataset_id: str, url: str | None,
+                     url_type: str | None) -> str | None:
+        """Endereço para baixar o arquivo do recurso. Arquivo enviado ao CKAN (`upload`) é baixado
+        pelo endereço deste cliente, não pela URL gravada: dentro do Docker, a URL gravada aponta
+        para o endereço público do portal (ex.: localhost:5000), que o container não alcança.
+        Link externo é baixado da própria URL."""
+        if not url:
+            return None
+        if url_type == "upload":
+            nome = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+            return f"{self.base_url}/dataset/{dataset_id}/resource/{recurso_id}/download/{nome}"
+        return url
+
+    def baixar(self, url: str, limite_bytes: int) -> bytes:
+        """Baixa um arquivo (para a varredura LGPD), parando se passar de `limite_bytes`."""
+        partes, total = [], 0
+        try:
+            with httpx.Client(transport=self._transport, timeout=self._http.timeout,
+                              follow_redirects=True, headers=self._http.headers) as http, \
+                    http.stream("GET", url) as resp:
+                if resp.status_code >= 400:
+                    raise CkanError(f"HTTP {resp.status_code} ao baixar {url}", resp.status_code)
+                for pedaco in resp.iter_bytes():
+                    total += len(pedaco)
+                    if total > limite_bytes:
+                        raise CkanError(f"Arquivo maior que {limite_bytes // (1024 * 1024)} MB.")
+                    partes.append(pedaco)
+        except httpx.HTTPError as exc:
+            raise CkanError(f"Falha ao baixar {url}: {exc}") from exc
+        return b"".join(partes)

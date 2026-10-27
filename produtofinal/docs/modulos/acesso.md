@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 22/10/2026 |
+| **Última atualização** | 27/10/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -118,6 +118,7 @@ Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
 | rastreabilidade.acessar | ✓ | ✓ | ✓ | | |
 | lgpd.acessar | ✓ | ✓ | ✓ | | |
 | lgpd.triar | ✓ | ✓ | | | |
+| lgpd.varrer | ✓ | ✓ | | | |
 | lgpd.aprovar_correcao | ✓ | ✓ | | | |
 | metadados.acessar | ✓ | ✓ | ✓ | | |
 | relatorios.acessar | ✓ | ✓ | ✓ | ✓ | |
@@ -188,3 +189,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 15/10/2026 | Pendência registrada: avaliar login com a conta de e-mail institucional da CGE; sem mudança de código | Victor |
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `usuario.orgao_id` passa a inteiro → `organizacao.id`; `OrgaoResumo` com `id` e `id_ckan`; `UsuarioIn.orgao_id` inteiro; CLI `criar-usuario --orgao` aceita `id_ckan` ou `name` da organização | Victor |
 | 22/10/2026 | Banco só pelo `AcessoDao` (ADR-0019): exclusão lógica de papéis (com vínculos) e de usuários (`excluir_usuario`); vínculos usuário–papel e papel–permissão viram tabelas com `id` e são trocados por exclusão lógica + criação; auditoria `created_id`/`changed_id` com o editor; e-mail e código únicos só entre ativos | Victor |
+| 26/10/2026 | Permissão `lgpd.varrer` (pedir varredura LGPD) para Administrador e Gerência GEDA. Em banco já existente, o papel Gerência não recebe a permissão sozinho: incluir na tela Usuários e papéis | Squad 2 |

@@ -7,7 +7,7 @@
 | **User stories** | US8 (PBI-22), US11 (PBI-31, PBI-86), US16 (PBI-48), US17 (PBI-52) |
 | **Backend** | `backend/app/modules/parametros/` |
 | **Frontend** | `frontend/src/modules/parametros/` |
-| **Última atualização** | 22/10/2026 |
+| **Última atualização** | 27/10/2026 |
 
 ## Propósito
 Concentra os valores de negócio que a GEDA precisa ajustar sem depender do time (janelas, listas,
@@ -35,7 +35,9 @@ limites), com valor padrão no código.
 | `metadados_obrigatorios` | notes, license_id, author, author_email, periodicidade (provisório) | metadados |
 | `tipos_dado_pessoal` | cpf, email, telefone, endereco, data_nascimento, nome (provisório) | lgpd |
 | `formatos_abertos` | CSV, JSON, XML, ODS, GEOJSON, TXT | metadados |
-| `confianca_minima_lgpd` | 60 | lgpd |
+| `confianca_minima_lgpd` | 60 (limiar da varredura = valor/100) | lgpd |
+| `margem_embeddings_lgpd` | 0.0 (margem do filtro semântico do detector3) | lgpd |
+| `tamanho_maximo_recurso_lgpd_mb` | 50 | lgpd |
 
 ## Modelo de dados
 Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
@@ -78,3 +80,4 @@ Decisões registradas: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 | 07/10/2026 | Docstring nas tabelas sem descrição, para o MER gerado (ADR-0013); sem mudança de esquema | Victor |
 | 18/10/2026 | Interações: o painel (tela Organizações) passa a ler `formatos_abertos`; sem mudança de código neste módulo | Humberto |
 | 22/10/2026 | `parametro` com `id` próprio (chave vira única entre ativos) e banco só pelo `ParametrosDao` (ADR-0019); auditoria com quem alterou | Victor |
+| 26/10/2026 | Parâmetros `margem_embeddings_lgpd` e `tamanho_maximo_recurso_lgpd_mb` para a varredura LGPD | Squad 2 |

@@ -56,3 +56,4 @@ Coordenação (30/09). Reforçada pelo orientador e pelo LIGO em 01/10.
 |---|---|---|
 | 01/10/2026 | LIGO/TI Central ofereceu um Qwen ajustado internamente enquanto avalia o custo do Gemini; o orientador recomendou modelo offline para classificar conteúdo (custo, latência e LGPD) e Gemini para o Assistente. Ambos cabem no desenho atual (o Qwen entra como perfil `openai_compat` ou `ollama`), sem mudança de código. Estratégia de detecção registrada na ADR-0010 | Victor |
 | 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor |
+| 26/10/2026 | Contrato ganha `embed()` (opcional; Ollama e compatível com OpenAI) e o gateway, `embed(tarefa, textos)`; tarefas têm tipo `chat` ou `embeddings`. Ollama pede `think: false` com fallback. Sem mudança na decisão (ADR-0021) | Squad 2 |
