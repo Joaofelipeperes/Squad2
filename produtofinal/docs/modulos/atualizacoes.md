@@ -66,7 +66,7 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 | é consumido por | pda | `service.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da base |
 | é consumido por | inventario | `regras.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da tela Datasets |
 | é consumido por | painel, relatorios, assistente | situação de atualização por dataset e órgão |
-| é consumido por | painel | `regras.situacao_periodicidade` e `vencimento_atualizacao` — gráfico "Status das atualizações", cartão "Atualizações em atraso" e alertas do Dashboard |
+| é consumido por | painel | `regras.situacao_periodicidade` e `vencimento_atualizacao` — gráfico "Status das atualizações", cartão "Atualizações em atraso" e alertas do Dashboard; coluna "Atualização" e cartão "Atualizações atrasadas" da tela Organizações |
 
 ## Jobs agendados
 Nenhum.

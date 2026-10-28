@@ -52,15 +52,20 @@ evolução temporal abaixo dos cards (PBI-75).
   Bases publicadas ("N de M vinculada(s)" ou **aguardando vínculo** quando o órgão não tem base
   vinculada) | **Em atraso** (só entre as bases **vinculadas**: prazo vencido e dataset fora do
   portal; **aguardando vínculo** quando o órgão não tem base vinculada, porque sem vínculo não há
-  como saber se a base já foi publicada; com vínculo parcial, "N de M vinculada(s)") | Atualização,
-  Riscos LGPD e Índice de atenção (**a definir**). Os pendentes aparecem como badge cinza, nunca 0.
+  como saber se a base já foi publicada; com vínculo parcial, "N de M vinculada(s)") |
+  **Atualização** (% das bases vinculadas com prazo definido que estão dentro da periodicidade do PDA
+  — Atualizado ou Próximo do vencimento, ADR-0020; badge verde sem atrasadas, âmbar ≥ 50%, vermelho
+  abaixo; "aguardando vínculo" sem base vinculada; "sem prazo definido" quando só há Eventual,
+  Estática ou bases sem data) | Riscos LGPD e Índice de atenção (**a definir**). Os pendentes
+  aparecem como badge cinza, nunca 0.
 - **Filtros** (na própria tela, sobre a lista já carregada): busca por nome ou sigla (sem
   diferenciar maiúsculas e acentos); **Em atraso** (com bases em atraso, sem atraso entre as
   vinculadas, com bases próximas do prazo, aguardando vínculo); **Bases no PDA** (com/sem bases
   previstas); **Organização no portal** (com/sem). "Limpar filtros" volta a mostrar todos; o
   contador passa a "N de M órgão(s)".
 - **Detalhe**: cartões do protótipo (previstas; publicadas e não publicadas, aguardando vínculo;
-  atualizações atrasadas e possíveis dados pessoais, a definir; **recursos sem formato aberto** com
+  **atualizações atrasadas** (de N bases com prazo, com o % em dia); possíveis dados pessoais, a
+  definir; **recursos sem formato aberto** com
   o total de recursos e datasets), bases em atraso (mesma regra da tabela) e próximas do prazo,
   formatos fechados por tipo e a lista de formatos abertos em vigor; "Últimas alterações" pendente
   da rastreabilidade.
@@ -74,8 +79,9 @@ evolução temporal abaixo dos cards (PBI-75).
 `OrganizacaoOut`: chave (`id` da organização em texto ou `sigla:<SIGLA>`), organizacao_id (inteiro), nome, siglas,
 datasets_no_portal, recursos_validos, recursos_formato_fechado, formatos_fechados `{formato: n}`
 ("" = sem formato), bases_previstas, bases_vinculadas, bases_publicadas, `bases_em_atraso` (só
-entre as vinculadas; null sem nenhuma vinculada), bases_proximas_do_prazo e os pendentes
-`atualizacao_pct`, `riscos_lgpd`, `indice_atencao` (null).
+entre as vinculadas; null sem nenhuma vinculada), bases_proximas_do_prazo, `atualizacao_pct` (% em
+dia entre as vinculadas com prazo; null sem nenhuma), `atualizacoes_atrasadas` (null idem),
+`atualizacoes_avaliadas` e os pendentes `riscos_lgpd`, `indice_atencao` (null).
 
 `KpisOut`: orgaos_monitorados, orgaos_no_pda, bases_previstas, bases_vinculadas, bases_publicadas,
 `bases_em_atraso` (só entre as vinculadas; null sem nenhuma vinculada), bases_prazo_vencido,
@@ -111,7 +117,7 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 |---|---|---|
 | consome | inventario | contagens e última coleta; `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` (Organizações) |
 | consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)`: bases previstas, vinculadas, publicadas e metas por órgão, **sempre do PDA vigente** (Organizações); `regras` (situações, `chave_sigla`); `hoje_local()` |
-| consome | atualizacoes | `regras.situacao_periodicidade` e `vencimento_atualizacao` (status das atualizações, cartão e alertas do Dashboard); desatualizados por órgão em Organizações (a implementar) |
+| consome | atualizacoes | `regras.situacao_periodicidade` e `vencimento_atualizacao` (status das atualizações, cartão e alertas do Dashboard; coluna Atualização e cartão do detalhe em Organizações) |
 | consome | lgpd | indicador de risco e ranking de exposição (US27) |
 | consome | metadados | completude média; `recursos_formato_fechado(db, formatos_abertos)` e `regras.normalizar_formato` (Organizações); `datasets_sem_recurso(db)` (Dashboard) |
 | consome | parametros | `formatos_abertos` |
@@ -128,8 +134,7 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 ## Pendências
 - Fórmula do índice de atenção (validar com a GEDA).
 - Dashboard: "Possíveis dados pessoais" depende do módulo `lgpd`; gráficos de evolução temporal
-  (PBI-75) exigem guardar os indicadores por coleta. Organizações: a coluna "Atualização" já pode
-  usar a regra da ADR-0020.
+  (PBI-75) exigem guardar os indicadores por coleta.
 - Organizações: "Bases publicadas" depende do vínculo base × dataset (hoje 0 de 409 no PDA vigente);
   "Atualização" da regra por periodicidade (`atualizacoes`, PBI-27/28); "Riscos LGPD" do módulo
   `lgpd`; "Últimas alterações" da `rastreabilidade`. Validar com a GEDA se ZIP (605 recursos no
@@ -148,3 +153,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 28/10/2026 | Dashboard (Visão Geral, US19/PBI-56): `GET /painel/visao-geral`, `service.visao_geral`/`kpis`/`faixa_de_idade`, `PainelDao.datasets_por_situacao`/`recursos_validos`; tela com cartões, PDA vigente por situação, idade da última atualização real, alertas prioritários e fluxo; pendentes como "—" com o motivo | Humberto |
 | 28/10/2026 | Dashboard: gráfico "Status das atualizações" (rosca) e cartão "Atualizações em atraso" pela periodicidade do PDA vigente (ADR-0020), no lugar da idade da última atualização; alerta "Atualização atrasada"; `situacoes_atualizacao` no lugar de `idade_atualizacao` | Humberto |
 | 28/10/2026 | Dashboard: alertas em abas por tipo (Todos / PDA / Atualização / Inventário), até 10 de cada (`alertas_por_tipo`), para um tipo numeroso não esconder os outros | Humberto |
+| 28/10/2026 | Organizações: coluna **Atualização** (% em dia pela periodicidade do PDA, ADR-0020) e cartão "Atualizações atrasadas" no detalhe (`atualizacao_pct`, `atualizacoes_atrasadas`, `atualizacoes_avaliadas`) | Humberto |

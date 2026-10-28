@@ -31,7 +31,11 @@ class OrganizacaoOut(BaseModel):
     bases_em_atraso: int | None
     bases_proximas_do_prazo: int  # situação "Próximo do prazo" (planejamento; não acusa atraso)
     # Pendentes
-    atualizacao_pct: float | None = None  # regra de atualização por periodicidade (PBI-27/28)
+    # Atualização pela periodicidade do PDA (ADR-0020), entre as bases vinculadas com prazo definido
+    # (Atualizado, Próximo do vencimento ou Atrasado); None = nenhuma base avaliada
+    atualizacao_pct: float | None = None  # % dentro do prazo (Atualizado + Próximo do vencimento)
+    atualizacoes_atrasadas: int | None = None
+    atualizacoes_avaliadas: int = 0
     riscos_lgpd: int | None = None  # módulo lgpd
     indice_atencao: str | None = None  # critério documentado (PBI-76/84)
 

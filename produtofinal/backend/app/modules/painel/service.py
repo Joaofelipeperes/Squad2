@@ -37,6 +37,9 @@ AGUARDANDO_VINCULO = "Aguardando vínculo"
 ATUALIZACAO_ATRASADA = "Atualização atrasada"
 ALERTAS_MAXIMO = 10  # por tipo de alerta
 TIPOS_DE_ALERTA = ("PDA", "Atualização", "Inventário")
+# Situações de atualização com prazo definido (entram no % de Organizações)
+_COM_PRAZO = (regras_atualizacao.ATUALIZADO, regras_atualizacao.PROXIMO_DO_VENCIMENTO,
+              regras_atualizacao.ATRASADO)
 # Prioridade dos alertas (menor primeiro); "Prazo vencido" sem vínculo não é alerta: o atraso
 # não está confirmado (ver pda.md)
 _PRIORIDADE = {EM_ATRASO: 0, ATUALIZACAO_ATRASADA: 1, SEM_RECURSO: 2, PROXIMO_DO_PRAZO: 3,
@@ -136,7 +139,8 @@ def indice_atencao_por_orgao(db):
 def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     """US19 — tela Organizações: por órgão, o inventário do portal (datasets ativos, recursos e
     recursos em formato fechado) e as bases do PDA VIGENTE (previstas, vinculadas, publicadas,
-    em atraso entre as vinculadas e próximas do prazo). Respeita o escopo de órgão do usuário.
+    em atraso entre as vinculadas, próximas do prazo e atualização pela periodicidade do PDA —
+    ADR-0020). Respeita o escopo de órgão do usuário.
     Indicadores que dependem de vínculo, de regra ainda não definida ou de outro módulo vêm como
     None."""
     dao = PainelDao.de(db, user)
@@ -153,6 +157,7 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
             fechados[org][regras_metadados.normalizar_formato(r.formato)] += 1
 
     plano = pda.plano_vigente(db)
+    hoje = pda.hoje_local()
     bases = pda.bases_do_plano(db, plano.id, user) if plano else []
     por_chave: dict[str, list] = defaultdict(list)
     for b in bases:
@@ -161,6 +166,9 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     def linha(chave: str, organizacao: Organizacao | None) -> OrganizacaoOut:
         bs = por_chave.get(chave, [])
         vinculadas = [b for b in bs if b.dataset_id]
+        situacoes = [situacao_atualizacao(b, hoje) for b in vinculadas]
+        avaliadas = [x for x in situacoes if x in _COM_PRAZO]
+        atrasadas = avaliadas.count(regras_atualizacao.ATRASADO)
         siglas = Counter(chave_sigla(b.orgao_sigla) for b in bs)
         nome = organizacao.titulo.strip() if organizacao else chave.removeprefix("sigla:")
         org_id = organizacao.id if organizacao else None
@@ -175,11 +183,15 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
             bases_publicadas=sum(1 for b in bs if b.situacao == PUBLICADO),
             bases_em_atraso=(sum(1 for b in vinculadas if b.situacao == EM_ATRASO)
                              if vinculadas else None),
-            bases_proximas_do_prazo=sum(1 for b in bs if b.situacao == PROXIMO_DO_PRAZO))
+            bases_proximas_do_prazo=sum(1 for b in bs if b.situacao == PROXIMO_DO_PRAZO),
+            atualizacao_pct=(round(100 * (len(avaliadas) - atrasadas) / len(avaliadas))
+                             if avaliadas else None),
+            atualizacoes_atrasadas=atrasadas if avaliadas else None,
+            atualizacoes_avaliadas=len(avaliadas))
 
     linhas = [linha(pda.orgao_chave(org_id, ""), o) for org_id, o in orgs.items()]
     linhas += [linha(chave, None) for chave in por_chave if chave.startswith("sigla:")]
     linhas.sort(key=lambda o: (normalizar_texto(o.nome), o.chave))
     return OrganizacoesOut(
         plano=PlanoResumoOut(id=plano.id, nome=plano.nome) if plano else None,
-        hoje=pda.hoje_local(), formatos_abertos=abertos, organizacoes=linhas)
+        hoje=hoje, formatos_abertos=abertos, organizacoes=linhas)

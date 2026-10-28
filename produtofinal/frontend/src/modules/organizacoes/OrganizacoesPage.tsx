@@ -86,12 +86,16 @@ export default function OrganizacoesPage() {
         <div className="panel-body" style={{ paddingTop: 10 }}>
           <p className="help-texto">
             <Pendente>aguardando vínculo</Pendente> depende de ligar as bases do PDA aos datasets do portal
-            (pelo ID). <Pendente>a definir</Pendente> depende de regra ainda não definida (atualização por
-            periodicidade, índice de atenção) ou do módulo de dados pessoais.
+            (pelo ID). <Pendente>a definir</Pendente> depende de regra ainda não definida (índice de atenção)
+            ou do módulo de dados pessoais.
           </p>
           <p className="help-texto">
             Em atraso conta só bases vinculadas cujo prazo venceu sem publicação: sem o vínculo não há como
             saber se a base já está no portal.
+          </p>
+          <p className="help-texto">
+            Atualização: % das bases vinculadas que estão dentro do prazo da periodicidade do PDA (Mensal = 30
+            dias, sem tolerância). Bases Eventual ou Estática e as sem data de atualização não entram na conta.
           </p>
         </div>
       </div>
@@ -196,9 +200,26 @@ function Linha({ o, onAbrir }: { o: Organizacao; onAbrir: (o: Organizacao) => vo
               {o.bases_em_atraso}{semConfirmacao ? ` de ${o.bases_vinculadas} vinculada(s)` : ""}
             </span>}
       </td>
-      <td>{o.atualizacao_pct != null ? `${o.atualizacao_pct}%` : <Pendente>a definir</Pendente>}</td>
+      <td><Atualizacao o={o} /></td>
       <td>{o.riscos_lgpd != null ? o.riscos_lgpd : <Pendente>a definir</Pendente>}</td>
       <td>{o.indice_atencao ?? <Pendente>a definir</Pendente>}</td>
     </tr>
+  );
+}
+
+/** Coluna Atualização: % dentro do prazo pela periodicidade do PDA vigente (ADR-0020). */
+function Atualizacao({ o }: { o: Organizacao }) {
+  if (o.atualizacao_pct == null) {
+    return o.bases_vinculadas === 0
+      ? <Pendente>aguardando vínculo</Pendente>
+      : <Pendente>sem prazo definido</Pendente>;
+  }
+  const atrasadas = o.atualizacoes_atrasadas ?? 0;
+  const classe = atrasadas === 0 ? "badge-green" : o.atualizacao_pct >= 50 ? "badge-amber" : "badge-red";
+  return (
+    <span className={`badge ${classe}`}
+      title={`${o.atualizacoes_avaliadas - atrasadas} de ${o.atualizacoes_avaliadas} base(s) com prazo dentro da periodicidade do PDA; ${atrasadas} atrasada(s)`}>
+      {o.atualizacao_pct}%
+    </span>
   );
 }
