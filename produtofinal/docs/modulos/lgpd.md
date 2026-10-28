@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 27/10/2026 |
+| **Última atualização** | 28/10/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -177,3 +177,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 26/10/2026 | Tela: removido o aviso fixo do topo ("resultados indicativos…"), a pedido da Eixo 2 | Squad 2 |
 | 26/10/2026 | Painel de varredura com as duas opções explicadas (todo o portal × um dataset específico); detecção: CPF/CNPJ com máscara completa não é descartado pela regra de coincidência (colunas de códigos) | Luiza |
 | 27/10/2026 | Merge com `desenvolvimento` (ADR-0018/0019): `LgpdDao` concentra o acesso ao banco; `lgpd_achado`, `lgpd_varredura` e `lgpd_correcao` apontam para `recurso.id` e herdam `id`/`deleted`/auditoria da `Base`; API e tela usam o `id` próprio de dataset e recurso; download e publicação no CKAN pelo `id_ckan`; migrações refeitas numa só (`9d583e5bd118`, sobre `a8e2f5c1d9b4`) | Luiza |
+| 28/10/2026 | Migração `9d583e5bd118`: `lgpd_varredura.deleted` com `server_default=sa.false()` (era `sa.text('0')`, aceito no SQLite e recusado no PostgreSQL — a API não subia no Docker) | Victor |
