@@ -49,6 +49,7 @@ a fonte.
 | 22/10/2026 | Banco só por DAOs (classe-pai `Dao`), `id` em toda tabela, exclusão lógica (`deleted`) e auditoria (`created`/`changed` + usuário) | Técnica | Aceita | [ADR-0019](0019-dao-exclusao-logica-e-auditoria.md) |
 | 23/10/2026 | Contexto do Assistente identifica datasets e arquivos citados e usa histórico curto da conversa | Técnica | Revisão da ADR-0011 | [ADR-0011](0011-assistente-sem-banco-vetorial.md) |
 | 23/10/2026 | Claude Haiku como modelo principal do Assistente (adaptador `anthropic` já disponível) | Técnica | Em análise | [ADR-0020](0020-claude-haiku-no-assistente.md) |
+| 23/10/2026 | Importação do PDA vinculando pelo ID do CKAN da planilha (`ID_UNICO`), com leitura configurável (colunas, linha do cabeçalho, delimitador) guardada no navegador | Técnica | Aceita | [ADR-0022](0022-importacao-do-pda-configuravel-com-id-do-ckan.md) |
 | 26/10/2026 | Varredura LGPD com o motor do detector3 portado para o backend, IA (chat e embeddings) pelo gateway | Técnica | Proposta | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
 | 26/10/2026 | Embeddings no contrato de IA e Qwen3 sem raciocínio no Ollama | Técnica | Revisão da ADR-0002 | [ADR-0002](0002-camada-ia-plugavel.md) |
 

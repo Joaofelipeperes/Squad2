@@ -9,7 +9,7 @@ interface Props {
   onFechar: () => void;
   children: ReactNode;
   rodape?: ReactNode;
-  largo?: boolean; // janelas com tabelas (ex.: prévia da anonimização)
+  largo?: boolean; // janelas com tabelas ou muitas colunas (ex.: prévia da anonimização, importação do PDA)
 }
 
 const FOCAVEIS =

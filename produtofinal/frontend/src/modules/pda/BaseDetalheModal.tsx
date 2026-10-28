@@ -86,9 +86,14 @@ export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props)
           )}
           {b.vinculo === "pendente" && (
             <>
-              <span className="mono" style={{ fontWeight: 500, wordBreak: "break-all" }}>{b.dataset_name_planilha}</span>{" "}
+              <span className="mono" style={{ fontWeight: 500, wordBreak: "break-all" }}>
+                {b.dataset_id_ckan_planilha ?? b.dataset_name_planilha}
+              </span>{" "}
               <span className="badge badge-amber">vínculo pendente</span>
-              <Nota>Endereço informado no PDA; nenhum dataset do inventário atual corresponde a ele.</Nota>
+              <Nota>
+                {b.dataset_id_ckan_planilha ? "ID do CKAN" : "Endereço"} informado no PDA; nenhum dataset do
+                inventário atual corresponde a ele.
+              </Nota>
             </>
           )}
           {b.vinculo === "sem_vinculo" && (

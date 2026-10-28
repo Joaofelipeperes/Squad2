@@ -42,8 +42,10 @@ class PlanoPda(Base):
 
 class BasePrevista(Base):
     """Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para
-    `dataset.id`, que guarda o `id_ckan`. O `name` lido da planilha fica em
-    `dataset_name_planilha` apenas para auditoria e para resolver vínculos."""
+    `dataset.id`, que guarda o `id_ckan`. O que a planilha informou fica para auditoria e para
+    resolver vínculos pendentes: o ID do dataset no CKAN (coluna "ID_UNICO") em
+    `dataset_id_ckan_planilha` e o `name` (link "Disponível no Portal") em
+    `dataset_name_planilha`. `dataset_id` nulo com um dos dois preenchido = vínculo pendente."""
 
     __tablename__ = "pda_base_prevista"
 
@@ -63,6 +65,7 @@ class BasePrevista(Base):
     dataset_id: Mapped[int | None] = mapped_column(ForeignKey("dataset.id"), nullable=True,
                                                    index=True)
     dataset_name_planilha: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    dataset_id_ckan_planilha: Mapped[str | None] = mapped_column(String(64), nullable=True)
     linha_planilha: Mapped[int | None] = mapped_column(Integer, nullable=True)
     classificacao: Mapped[str] = mapped_column(String(20), default="pda")  # pda | espontanea (US7)
 

@@ -123,6 +123,7 @@ erDiagram
         bool possui_conteudo_sigiloso
         int dataset_id FK
         varchar dataset_name_planilha
+        varchar dataset_id_ckan_planilha
         int linha_planilha
         varchar classificacao
     }
@@ -526,7 +527,7 @@ Documentação do módulo: [docs/modulos/pda.md](../modulos/pda.md)
 
 #### `pda_base_prevista`
 
-Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para `dataset.id`, que guarda o `id_ckan`. O `name` lido da planilha fica em `dataset_name_planilha` apenas para auditoria e para resolver vínculos.
+Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para `dataset.id`, que guarda o `id_ckan`. O que a planilha informou fica para auditoria e para resolver vínculos pendentes: o ID do dataset no CKAN (coluna "ID_UNICO") em `dataset_id_ckan_planilha` e o `name` (link "Disponível no Portal") em `dataset_name_planilha`. `dataset_id` nulo com um dos dois preenchido = vínculo pendente.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
@@ -544,6 +545,7 @@ Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK pa
 | `possui_conteudo_sigiloso` | bool | sim |  |  |  |
 | `dataset_id` | int | sim | FK | `dataset.id` |  |
 | `dataset_name_planilha` | varchar(200) | sim |  |  |  |
+| `dataset_id_ckan_planilha` | varchar(64) | sim |  |  |  |
 | `linha_planilha` | int | sim |  |  |  |
 | `classificacao` | varchar(20) | não |  |  | `'pda'` |
 | `deleted` | bool | não |  |  | `False` |
