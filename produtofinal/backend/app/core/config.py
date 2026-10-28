@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     ckan_timeout_s: float = 30.0
     ckan_page_size: int = 500
     ckan_max_retries: int = 3
+    # CKAN — leitura da auditoria (extensão ckanext-dsaudit, ADR-0009). A API
+    # dsaudit_activity_list exige permissão de EDITOR no dataset: use o token de um usuário
+    # editor das organizações monitoradas (nunca de sysadmin em produção). Vazio = a
+    # rastreabilidade não sincroniza.
+    ckan_auditoria_api_token: SecretStr | None = None
 
     # CKAN — escrita (somente publicação de recurso anonimizado, US26 / PBI-95)
     # Permanece desligada até a autorização formal CGE-GO/SECTI. Credencial é da GEDA.

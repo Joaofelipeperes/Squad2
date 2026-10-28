@@ -48,7 +48,11 @@ docker compose exec api python -c "from app.integrations.ckan.client import Ckan
 ```
 
 A rede do CKAN é `<pasta da raiz>_default` (ex.: `squad2_default`); se for outra, defina
-`CKAN_NETWORK` antes de subir. Depois, o botão **Atualizar dados** coleta do CKAN local.
+`CKAN_NETWORK` antes de subir. Depois, o botão **Atualizar dados** coleta do CKAN local e, em
+seguida, lê a auditoria da extensão `ckanext-dsaudit` para a tela **Rastreabilidade** (ADR-0009). O
+token dessa leitura vem de `CKAN_AUDITORIA_API_TOKEN` ou, na falta dele, do `CKAN_API_KEY` deixado
+pelo `subir_ambiente.ps1`; em produção use o token de um usuário **editor**
+(`GDA_CKAN_AUDITORIA_API_TOKEN` no `.env`).
 
 **Sem Docker** (desenvolvimento):
 
