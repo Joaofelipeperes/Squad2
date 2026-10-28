@@ -14,7 +14,7 @@ export interface Kpis {
   datasets_fora_do_portal: number;
   recursos_monitorados: number;
   datasets_sem_recurso: number;
-  atualizacoes_em_atraso: number | null; // entre as vinculadas (ADR-0020); null = nenhuma
+  atualizacoes_em_atraso: number | null; // entre as vinculadas (ADR-0023); null = nenhuma
   possiveis_dados_pessoais: number | null;
 }
 

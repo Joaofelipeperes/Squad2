@@ -1,7 +1,8 @@
 import { api } from "@/shared/api/client";
 
 export interface CampoSpec {
-  name: "base_url" | "model" | "api_key";
+  /** base_url, model e api_key são fixos; outros nomes são campos adicionais do provedor (extra). */
+  name: string;
   label: string;
   required: boolean;
   secret: boolean;
@@ -31,6 +32,7 @@ export interface PerfilIA {
   max_tokens: number;
   timeout_s: number;
   ativo: boolean;
+  extra: Record<string, string>;
   atualizado_em: string;
 }
 export type PerfilIn = Omit<PerfilIA, "id" | "tem_chave" | "api_key_dica" | "atualizado_em"> & {
@@ -45,6 +47,7 @@ export interface TarefaIA {
   perfil_id: number | null;
   perfil_fallback_id: number | null;
   somente_local: boolean;
+  tipo: "chat" | "embeddings";
 }
 export interface TesteConexao { ok: boolean; mensagem: string; latencia_ms: number | null; modelos: string[] }
 export interface UsoIA {
@@ -59,7 +62,8 @@ export const iaApi = {
   criar: (b: PerfilIn) => api.post<PerfilIA>("/ia/perfis", b),
   atualizar: (id: number, b: PerfilIn) => api.put<PerfilIA>(`/ia/perfis/${id}`, b),
   excluir: (id: number) => api.del<void>(`/ia/perfis/${id}`),
-  testarConexao: (b: { tipo: string; modelo?: string; base_url?: string | null; api_key?: string | null; perfil_id?: number }) =>
+  testarConexao: (b: { tipo: string; modelo?: string; base_url?: string | null; api_key?: string | null;
+                        perfil_id?: number; extra?: Record<string, string> }) =>
     api.post<TesteConexao>("/ia/testar-conexao", b),
   testarPerfil: (id: number) => api.post<TesteConexao>(`/ia/perfis/${id}/testar`),
   tarefas: () => api.get<TarefaIA[]>("/ia/tarefas"),

@@ -50,6 +50,13 @@ class Settings(BaseSettings):
 
     # Agendamento (US23)
     coleta_cron: str = "0 3 * * *"  # todo dia às 03:00
+    # Varredura LGPD incremental (PBI-34): recursos novos ou alterados, depois da coleta
+    lgpd_varredura_cron: str = "0 5 * * *"
+    lgpd_varredura_max_recursos: int = 200  # por execução (o modelo local é lento em CPU)
+    # Anonimização (US26): cópia do original e prévia ficam FORA do banco, nesta pasta (no Docker,
+    # um volume). Contém dado pessoal: nunca versionar; retenção definida pela GEDA.
+    lgpd_arquivos_dir: str = "dados_lgpd"
+    lgpd_sal_hash: SecretStr | None = None  # sal do operador "hash"; vazio = deriva da secret_key
     timezone: str = "America/Sao_Paulo"
 
     # IA — política de dados sensíveis

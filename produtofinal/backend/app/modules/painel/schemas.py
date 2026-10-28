@@ -31,7 +31,7 @@ class OrganizacaoOut(BaseModel):
     bases_em_atraso: int | None
     bases_proximas_do_prazo: int  # situação "Próximo do prazo" (planejamento; não acusa atraso)
     # Pendentes
-    # Atualização pela periodicidade do PDA (ADR-0020), entre as bases vinculadas com prazo definido
+    # Atualização pela periodicidade do PDA (ADR-0023), entre as bases vinculadas com prazo definido
     # (Atualizado, Próximo do vencimento ou Atrasado); None = nenhuma base avaliada
     atualizacao_pct: float | None = None  # % dentro do prazo (Atualizado + Próximo do vencimento)
     atualizacoes_atrasadas: int | None = None
@@ -61,7 +61,7 @@ class KpisOut(BaseModel):
     datasets_fora_do_portal: int  # excluídos ou privados depois de coletados
     recursos_monitorados: int  # atuais, sem dicionário, de datasets ativos
     datasets_sem_recurso: int  # PBI-51
-    atualizacoes_em_atraso: int | None = None  # entre as vinculadas (ADR-0020); None = nenhuma
+    atualizacoes_em_atraso: int | None = None  # entre as vinculadas (ADR-0023); None = nenhuma
     possiveis_dados_pessoais: int | None = None  # módulo lgpd
 
 
@@ -87,7 +87,7 @@ class VisaoGeralOut(BaseModel):
     ultima_coleta: datetime | None  # fim da última coleta concluída (PBI-58)
     kpis: KpisOut
     situacoes_pda: list[ContagemOut]  # bases do PDA vigente por situação (ordem do filtro)
-    # bases do PDA vigente por situação de atualização (periodicidade do PDA, ADR-0020), mais
+    # bases do PDA vigente por situação de atualização (periodicidade do PDA, ADR-0023), mais
     # "Aguardando vínculo" para as bases sem dataset
     situacoes_atualizacao: list[ContagemOut]
     atualizacao_estimada: int  # bases vinculadas cuja data veio da criação (sem last_modified)

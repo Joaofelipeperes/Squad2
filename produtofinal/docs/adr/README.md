@@ -47,7 +47,12 @@ a fonte.
 | 21/10/2026 | Modo desenvolvimento no Docker: código montado do computador e recarga automática (`docker-compose.dev.yml`) | Técnica | Aceita | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
 | 21/10/2026 | Chave primária própria (`id`) nas tabelas espelhadas do CKAN, com o ID do CKAN em `id_ckan` | Técnica | Aceita | [ADR-0018](0018-chave-primaria-propria-e-id-ckan.md) |
 | 22/10/2026 | Banco só por DAOs (classe-pai `Dao`), `id` em toda tabela, exclusão lógica (`deleted`) e auditoria (`created`/`changed` + usuário) | Técnica | Aceita | [ADR-0019](0019-dao-exclusao-logica-e-auditoria.md) |
-| 28/10/2026 | Situação de atualização pela periodicidade do PDA vigente: Mensal = 30 dias sem tolerância, "próximo do vencimento" a partir de 80% do prazo; Eventual/Estática sem prazo; Múltipla = menor periodicidade | Negócio | Aceita (validar com a GEDA) | [ADR-0020](0020-situacao-de-atualizacao-pela-periodicidade-do-pda.md) |
+| 23/10/2026 | Contexto do Assistente identifica datasets e arquivos citados e usa histórico curto da conversa | Técnica | Revisão da ADR-0011 | [ADR-0011](0011-assistente-sem-banco-vetorial.md) |
+| 23/10/2026 | Claude Haiku como modelo principal do Assistente (adaptador `anthropic` já disponível) | Técnica | Em análise | [ADR-0020](0020-claude-haiku-no-assistente.md) |
+| 23/10/2026 | Importação do PDA vinculando pelo ID do CKAN da planilha (`ID_UNICO`), com leitura configurável (colunas, linha do cabeçalho, delimitador) guardada no navegador | Técnica | Aceita | [ADR-0022](0022-importacao-do-pda-configuravel-com-id-do-ckan.md) |
+| 26/10/2026 | Varredura LGPD com o motor do detector3 portado para o backend, IA (chat e embeddings) pelo gateway | Técnica | Proposta | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
+| 26/10/2026 | Embeddings no contrato de IA e Qwen3 sem raciocínio no Ollama | Técnica | Revisão da ADR-0002 | [ADR-0002](0002-camada-ia-plugavel.md) |
+| 28/10/2026 | Situação de atualização pela periodicidade do PDA vigente: Mensal = 30 dias sem tolerância, "próximo do vencimento" a partir de 80% do prazo; Eventual/Estática sem prazo; Múltipla = menor periodicidade | Negócio | Aceita (validar com a GEDA) | [ADR-0023](0023-situacao-de-atualizacao-pela-periodicidade-do-pda.md) |
 
 ## Decisões em aberto
 
@@ -55,8 +60,9 @@ a fonte.
 |---|---|---|---|
 | Forma de entrega final | Extensão do CKAN × aplicação acessada pelo portal | Paloma / Júnior, com a SECTI | ADR-0004, PBI-102 |
 | Fonte da rastreabilidade | Extensão de auditoria × activity stream × diff entre coletas | João, com a SECTI | ADR-0009, PBI-70 (prazo previsto 28/09) |
-| Modelo local para classificar dados pessoais | Qwen ajustado do LIGO × modelos testados pela Luiza × classificador especializado | Luiza | ADR-0010 |
-| Chave de modelo comercial para o Assistente | Gemini via SECTI/LIGO × modelo local | SECTI/LIGO via Paloma (limite 19/10) | ADR-0002 |
+| Modelo local para classificar dados pessoais | qwen2.5:7b-instruct × qwen3 × qwen3.5 (versões médias) × Qwen ajustado do LIGO × classificador especializado | Luiza | ADR-0010, ADR-0021 |
+| Prioridade e tipos dos achados LGPD | Regra proposta (CPF sempre Alta; confiança ≥90/≥70) e inclusão de CNPJ/CEP × regra da GEDA | Paloma, com a Luiza | docs/modulos/lgpd.md |
+| Modelo do Assistente | Gemini via SECTI/LIGO × Claude Haiku (custo próprio) × modelo local | Paloma, com SECTI/LIGO | ADR-0002, ADR-0020 |
 | Hospedagem do protótipo navegável | Oracle Cloud (camada gratuita, conta do coordenador) × OpenShift da TI Central | Victor, com a Paloma | Sugestão do orientador (01/10) |
 | Distribuição dos papéis padrão | Matriz atual × ajustes da GEDA | Paloma | ADR-0005 |
 | Envio de recursos pelos órgãos | Incluir no escopo × manter fora | Paloma / Júnior, com a SECTI | docs/modulos/envio.md |

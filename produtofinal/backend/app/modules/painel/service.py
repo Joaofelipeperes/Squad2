@@ -47,7 +47,7 @@ _PRIORIDADE = {EM_ATRASO: 0, ATUALIZACAO_ATRASADA: 1, SEM_RECURSO: 2, PROXIMO_DO
 
 
 def situacao_atualizacao(base, hoje: date) -> str:
-    """Situação de atualização de uma base do PDA vigente (ADR-0020): sem vínculo → "Aguardando
+    """Situação de atualização de uma base do PDA vigente (ADR-0023): sem vínculo → "Aguardando
     vínculo"; dataset fora do portal → "Sem informação"; senão a regra por periodicidade do
     módulo atualizacoes sobre a última atualização real do dataset vinculado."""
     if not base.dataset_id:
@@ -78,7 +78,7 @@ def kpis(db: Session, user: UsuarioAtual, bases: list, *, orgaos: int, datasets:
 
 def visao_geral(db: Session, user: UsuarioAtual) -> VisaoGeralOut:
     """US19 — tela Visão Geral (Dashboard): cartões, bases do PDA VIGENTE por situação do PDA e
-    por situação de atualização (periodicidade do PDA, ADR-0020) e alertas prioritários. Tudo no
+    por situação de atualização (periodicidade do PDA, ADR-0023) e alertas prioritários. Tudo no
     escopo de órgão do usuário e a partir da última coleta (`ultima_coleta`, PBI-58)."""
     dao = PainelDao.de(db, user)
     hoje = pda.hoje_local()
@@ -140,7 +140,7 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     """US19 — tela Organizações: por órgão, o inventário do portal (datasets ativos, recursos e
     recursos em formato fechado) e as bases do PDA VIGENTE (previstas, vinculadas, publicadas,
     em atraso entre as vinculadas, próximas do prazo e atualização pela periodicidade do PDA —
-    ADR-0020). Respeita o escopo de órgão do usuário.
+    ADR-0023). Respeita o escopo de órgão do usuário.
     Indicadores que dependem de vínculo, de regra ainda não definida ou de outro módulo vêm como
     None."""
     dao = PainelDao.de(db, user)

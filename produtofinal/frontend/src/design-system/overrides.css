@@ -110,3 +110,44 @@ a.btn { text-decoration: none; }
 /* Abas de tipo de alerta da Visão Geral */
 .abas-alerta { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 18px 0; }
 .abas-alerta-n { font-variant-numeric: tabular-nums; opacity: .8; margin-left: 4px; }
+/* Abas dentro de um modal (importação do PDA: Carregar / Configuração) */
+.abas { display: flex; gap: 4px; border-bottom: 1px solid var(--gray-200); margin-bottom: 18px; }
+.aba { background: none; border: 1px solid transparent; border-bottom: none; margin-bottom: -1px;
+  padding: 7px 14px; font: inherit; font-size: 13px; color: var(--blue-500); cursor: pointer;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+.aba:hover { background: var(--gray-100); }
+.aba[aria-selected="true"] { color: var(--ink); border-color: var(--gray-200); background: var(--surface); }
+/* Painel de aba inativo: `hidden` vence o display das classes (ex.: .form-grid) */
+[role="tabpanel"][hidden] { display: none; }
+.secao-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--gray-200); }
+.secao-titulo h4 { font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 12px; }
+.secao-titulo + .form-grid { margin-bottom: 22px; }
+.btn-ajuda { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--gray-300);
+  background: var(--surface); color: var(--blue-500); font-weight: 700; font-size: 12px; cursor: pointer; }
+.form-grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .form-grid.cols-4 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .form-grid.cols-4 { grid-template-columns: 1fr; } }
+.campo-com-sufixo { display: flex; }
+.campo-com-sufixo .text-input { border-top-right-radius: 0; border-bottom-right-radius: 0; flex: 1; min-width: 0; }
+.campo-com-sufixo .sufixo { display: flex; align-items: center; padding: 0 12px; font-size: 13px;
+  color: var(--gray-700); background: var(--gray-100); border: 1px solid var(--gray-200); border-left: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.notas-rodape { font-size: 12px; font-style: italic; color: var(--gray-500); line-height: 1.6; margin-top: 16px; }
+
+/* Assistente: fontes consultadas abaixo da resposta do modelo */
+.msg-fontes { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--gray-100);
+  font-size: 11px; color: var(--gray-500); white-space: normal; }
+
+/* LGPD: trilha do score e histórico de decisões no modal do achado */
+.lgpd-explicacao { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--gray-700); }
+.lgpd-explicacao li { margin: 2px 0; }
+.inline-msg:not(.ok):not(.err) { background: var(--amber-100); color: var(--amber-600); }
+.modal.modal-largo { max-width: 1000px; width: calc(100vw - 48px); }
+.varredura-opcoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.varredura-opcao { border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--gray-50); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.varredura-opcao h4 { margin: 0; font-size: 14px; color: var(--ink); display: flex; gap: 8px; align-items: center; }
+.varredura-opcao h4 i { color: var(--blue-500); }
+.varredura-opcao p { margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.45; }
+.varredura-dataset { display: flex; gap: 8px; flex-wrap: wrap; }
+.varredura-dataset .text-input, .varredura-dataset select { flex: 1 1 200px; min-width: 0; }

@@ -4,7 +4,7 @@
 > Não edite à mão: altere o modelo (ou sua docstring), crie a migração e rode o script.
 > Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md) · [ADR-0019](../adr/0019-dao-exclusao-logica-e-auditoria.md).
 
-19 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, `created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), omitidas do diagrama e listadas no dicionário de dados.
+20 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, `created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), omitidas do diagrama e listadas no dicionário de dados.
 
 ## Diagrama
 
@@ -123,6 +123,7 @@ erDiagram
         bool possui_conteudo_sigiloso
         int dataset_id FK
         varchar dataset_name_planilha
+        varchar dataset_id_ckan_planilha
         int linha_planilha
         varchar classificacao
     }
@@ -149,14 +150,27 @@ erDiagram
         varchar prioridade
         varchar status
         varchar impressao_digital
+        text explicacao
     }
     lgpd_correcao {
         int id PK
         int recurso_id FK
+        varchar status
+        varchar solicitada_por
+        json itens
+        int celulas_alteradas
+        varchar nome_arquivo
+        varchar formato
+        varchar hash_original
+        varchar caminho_backup
+        varchar caminho_previa
         varchar aprovado_por
         datetime aprovado_em
-        varchar caminho_backup
-        varchar status
+        text justificativa
+        datetime publicada_em
+        varchar revertida_por
+        datetime revertida_em
+        text motivo_reversao
         text erro
     }
     lgpd_decisao {
@@ -166,6 +180,22 @@ erDiagram
         text justificativa
         varchar usuario
         datetime momento
+    }
+    lgpd_varredura {
+        int id PK
+        int recurso_id FK
+        varchar status
+        varchar origem
+        varchar solicitada_por
+        datetime solicitada_em
+        datetime iniciada_em
+        datetime finalizada_em
+        int linhas_analisadas
+        int chamadas_ia
+        int achados
+        varchar modelo
+        text aviso
+        text erro
     }
     ia_perfil_provedor {
         int id PK
@@ -225,6 +255,7 @@ erDiagram
     recurso ||--o{ lgpd_achado : "recurso_id"
     recurso ||--o{ lgpd_correcao : "recurso_id"
     lgpd_achado ||--o{ lgpd_decisao : "achado_id"
+    recurso ||--o{ lgpd_varredura : "recurso_id"
     ia_perfil_provedor |o--o{ ia_vinculo_tarefa : "perfil_id"
     ia_perfil_provedor |o--o{ ia_vinculo_tarefa : "perfil_fallback_id"
     dataset |o..o{ dataset_snapshot : "dataset_id (lógica)"
@@ -251,6 +282,7 @@ erDiagram
 | `lgpd_achado.recurso_id` | `recurso.id` | 1 : N | FK |  |
 | `lgpd_correcao.recurso_id` | `recurso.id` | 1 : N | FK |  |
 | `lgpd_decisao.achado_id` | `lgpd_achado.id` | 1 : N | FK |  |
+| `lgpd_varredura.recurso_id` | `recurso.id` | 1 : N | FK |  |
 | `ia_vinculo_tarefa.perfil_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
 | `ia_vinculo_tarefa.perfil_fallback_id` | `ia_perfil_provedor.id` | 0..1 : N | FK |  |
 | `dataset_snapshot.dataset_id` | `dataset.id` | — | referência lógica | Fotografia histórica: sem FK para não depender do estado atual do dataset. |
@@ -258,6 +290,9 @@ erDiagram
 | `coleta.solicitada_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `lgpd_decisao.usuario` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `lgpd_correcao.aprovado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
+| `lgpd_correcao.solicitada_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
+| `lgpd_correcao.revertida_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
+| `lgpd_varredura.solicitada_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `ia_vinculo_tarefa.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `parametro.alterado_por` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
 | `acesso_log.usuario` | `usuario.email` | — | referência lógica | Autoria congelada como e-mail. |
@@ -492,7 +527,7 @@ Documentação do módulo: [docs/modulos/pda.md](../modulos/pda.md)
 
 #### `pda_base_prevista`
 
-Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para `dataset.id`, que guarda o `id_ckan`. O `name` lido da planilha fica em `dataset_name_planilha` apenas para auditoria e para resolver vínculos.
+Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK para `dataset.id`, que guarda o `id_ckan`. O que a planilha informou fica para auditoria e para resolver vínculos pendentes: o ID do dataset no CKAN (coluna "ID_UNICO") em `dataset_id_ckan_planilha` e o `name` (link "Disponível no Portal") em `dataset_name_planilha`. `dataset_id` nulo com um dos dois preenchido = vínculo pendente.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
@@ -510,6 +545,7 @@ Linha do PDA. O vínculo com o CKAN é SEMPRE pelo ID do dataset (PBI-13): FK pa
 | `possui_conteudo_sigiloso` | bool | sim |  |  |  |
 | `dataset_id` | int | sim | FK | `dataset.id` |  |
 | `dataset_name_planilha` | varchar(200) | sim |  |  |  |
+| `dataset_id_ckan_planilha` | varchar(64) | sim |  |  |  |
 | `linha_planilha` | int | sim |  |  |  |
 | `classificacao` | varchar(20) | não |  |  | `'pda'` |
 | `deleted` | bool | não |  |  | `False` |
@@ -563,6 +599,7 @@ Possível dado pessoal localizado num recurso (local e tipo, nunca o valor).
 | `prioridade` | varchar(10) | não |  |  |  |
 | `status` | varchar(20) | não |  |  | `'revisar'` |
 | `impressao_digital` | varchar(64) | não |  |  |  |
+| `explicacao` | text | sim |  |  |  |
 | `deleted` | bool | não |  |  | `False` |
 | `created` | datetime | não |  |  | função |
 | `created_id` | int | sim |  |  |  |
@@ -573,16 +610,28 @@ Possível dado pessoal localizado num recurso (local e tipo, nunca o valor).
 
 #### `lgpd_correcao`
 
-Trilha da anonimização publicada no CKAN (PBI-92 a PBI-94).
+Anonimização de um recurso (US26, PBI-91 a PBI-94): prévia, aprovação, publicação e reversão. Os arquivos (cópia do original e versão anonimizada) ficam FORA do banco, em `GDA_LGPD_ARQUIVOS_DIR`, pela política de retenção da GEDA; aqui só os caminhos e o hash.
 
 | Coluna | Tipo | Nulo | Chave | Referência | Padrão |
 |---|---|:-:|---|---|---|
 | `id` | int | não | PK |  |  |
 | `recurso_id` | int | não | FK | `recurso.id` |  |
-| `aprovado_por` | varchar(200) | não |  |  |  |
-| `aprovado_em` | datetime | não |  |  |  |
-| `caminho_backup` | varchar(500) | não |  |  |  |
-| `status` | varchar(20) | não |  |  | `'pendente'` |
+| `status` | varchar(20) | não |  |  | `'gerando_previa'` |
+| `solicitada_por` | varchar(200) | sim |  |  |  |
+| `itens` | json | não |  |  | função |
+| `celulas_alteradas` | int | não |  |  | `0` |
+| `nome_arquivo` | varchar(500) | sim |  |  |  |
+| `formato` | varchar(20) | sim |  |  |  |
+| `hash_original` | varchar(64) | sim |  |  |  |
+| `caminho_backup` | varchar(500) | sim |  |  |  |
+| `caminho_previa` | varchar(500) | sim |  |  |  |
+| `aprovado_por` | varchar(200) | sim |  |  |  |
+| `aprovado_em` | datetime | sim |  |  |  |
+| `justificativa` | text | sim |  |  |  |
+| `publicada_em` | datetime | sim |  |  |  |
+| `revertida_por` | varchar(200) | sim |  |  |  |
+| `revertida_em` | datetime | sim |  |  |  |
+| `motivo_reversao` | text | sim |  |  |  |
 | `erro` | text | sim |  |  |  |
 | `deleted` | bool | não |  |  | `False` |
 | `created` | datetime | não |  |  | função |
@@ -611,6 +660,34 @@ Histórico imutável das decisões humanas (PBI-42).
 | `changed_id` | int | sim |  |  |  |
 
 Índices: `ix_lgpd_decisao_achado_id`
+
+#### `lgpd_varredura`
+
+Execução da varredura LGPD em um recurso (pedida na tela ou pelo job), com totais e erro.
+
+| Coluna | Tipo | Nulo | Chave | Referência | Padrão |
+|---|---|:-:|---|---|---|
+| `id` | int | não | PK |  |  |
+| `recurso_id` | int | não | FK | `recurso.id` |  |
+| `status` | varchar(20) | não |  |  | `'pendente'` |
+| `origem` | varchar(20) | não |  |  | `'manual'` |
+| `solicitada_por` | varchar(200) | sim |  |  |  |
+| `solicitada_em` | datetime | não |  |  | função |
+| `iniciada_em` | datetime | sim |  |  |  |
+| `finalizada_em` | datetime | sim |  |  |  |
+| `linhas_analisadas` | int | não |  |  | `0` |
+| `chamadas_ia` | int | não |  |  | `0` |
+| `achados` | int | não |  |  | `0` |
+| `modelo` | varchar(300) | sim |  |  |  |
+| `aviso` | text | sim |  |  |  |
+| `erro` | text | sim |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `ix_lgpd_varredura_recurso_id`
 
 ### Módulo `ia` — Modelos de IA
 Documentação do módulo: [docs/modulos/ia.md](../modulos/ia.md)

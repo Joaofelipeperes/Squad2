@@ -1,4 +1,4 @@
-"""Situação de atualização pela periodicidade do PDA vigente (PBI-27/28, ADR-0020)."""
+"""Situação de atualização pela periodicidade do PDA vigente (PBI-27/28, ADR-0023)."""
 from datetime import UTC, date, datetime, timedelta
 
 import pytest

@@ -16,7 +16,7 @@ export interface Organizacao {
   bases_publicadas: number;
   bases_em_atraso: number | null; // só entre as vinculadas; null = nenhuma base vinculada
   bases_proximas_do_prazo: number;
-  atualizacao_pct: number | null; // % das bases vinculadas com prazo que estão em dia (ADR-0020)
+  atualizacao_pct: number | null; // % das bases vinculadas com prazo que estão em dia (ADR-0023)
   atualizacoes_atrasadas: number | null;
   atualizacoes_avaliadas: number; // bases vinculadas com periodicidade de prazo definido
   riscos_lgpd: number | null;

@@ -29,6 +29,9 @@ class PerfilIn(BaseModel):
     max_tokens: int = Field(1024, ge=16, le=32768)
     timeout_s: float = Field(60, ge=5, le=600)
     ativo: bool = True
+    # Campos adicionais declarados pelo provedor em `fields()` (ex.: workspace da Anthropic).
+    # Não secretos; gravados em `extra`. Chave fora da lista do provedor é ignorada.
+    extra: dict[str, str] = Field(default_factory=dict)
 
 
 class PerfilOut(BaseModel):
@@ -44,6 +47,7 @@ class PerfilOut(BaseModel):
     max_tokens: int
     timeout_s: float
     ativo: bool
+    extra: dict[str, str] = {}
     atualizado_em: datetime
 
 
@@ -55,6 +59,7 @@ class TesteConexaoIn(BaseModel):
     base_url: str | None = None
     api_key: str | None = None
     perfil_id: int | None = None  # se informado e api_key vazio, reaproveita a chave salva
+    extra: dict[str, str] = Field(default_factory=dict)
 
 
 class TesteConexaoOut(BaseModel):
@@ -73,6 +78,7 @@ class TarefaOut(BaseModel):
     perfil_id: int | None
     perfil_fallback_id: int | None
     somente_local: bool  # verdadeiro quando a política exige perfil local
+    tipo: str = "chat"   # chat | embeddings
 
 
 class VinculoIn(BaseModel):

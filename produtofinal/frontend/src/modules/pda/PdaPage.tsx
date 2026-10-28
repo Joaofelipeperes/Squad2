@@ -445,7 +445,9 @@ function CelulaDataset({ b }: { b: BasePda }) {
   if (b.vinculo === "pendente") {
     return (
       <>
-        <span className="cell-muted">{b.dataset_name_planilha}</span>{" "}
+        <span className="cell-muted" title={b.dataset_id_ckan_planilha ?? undefined}>
+          {b.dataset_name_planilha ?? (b.dataset_id_ckan_planilha && abreviarId(b.dataset_id_ckan_planilha))}
+        </span>{" "}
         <span className="badge badge-amber">vínculo pendente</span>
       </>
     );

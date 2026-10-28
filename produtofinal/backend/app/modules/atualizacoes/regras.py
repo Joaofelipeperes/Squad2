@@ -62,7 +62,7 @@ def ultima_atualizacao_real(recursos: Iterable[object] | None) -> UltimaAtualiza
 
 
 # ------------------------------------------------------------------ situação por periodicidade
-# PBI-27/28 — regra decidida em 28/10/2026 (ADR-0020). A periodicidade que vale é a da base no PDA
+# PBI-27/28 — regra decidida em 28/10/2026 (ADR-0023). A periodicidade que vale é a da base no PDA
 # VIGENTE; "Mensal" = 30 dias, sem tolerância.
 ATUALIZADO = "Atualizado"
 PROXIMO_DO_VENCIMENTO = "Próximo do vencimento"

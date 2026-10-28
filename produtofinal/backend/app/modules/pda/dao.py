@@ -1,6 +1,6 @@
 """Acesso ao banco do módulo pda (ADR-0019). Toda consulta e gravação do módulo passa por aqui;
 as funções genéricas do `Dao` já excluem os registros com `deleted` e preenchem a auditoria."""
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.core.dao import Dao
@@ -9,6 +9,10 @@ from app.modules.inventario.models import Dataset, Organizacao
 from app.modules.pda.models import BasePrevista, PlanoPda
 
 _LOTE_IN = 500  # tamanho do lote em consultas IN (limite de parâmetros do SQLite/PostgreSQL)
+# Vínculo pendente: sem dataset, mas com o ID do CKAN ou o name informado (planilha/formulário)
+_PENDENTE = and_(BasePrevista.dataset_id.is_(None),
+                 or_(BasePrevista.dataset_id_ckan_planilha.is_not(None),
+                     BasePrevista.dataset_name_planilha.is_not(None)))
 
 
 class PdaDao(Dao):
@@ -39,11 +43,9 @@ class PdaDao(Dao):
     def contagens(self, user: UsuarioAtual | None, plano_ids: list[int] | None) -> list:
         """(plano_id, bases, vínculos resolvidos, vínculos pendentes) por plano; com `user`, no
         escopo de órgão dele."""
-        pendente = and_(BasePrevista.dataset_id.is_(None),
-                        BasePrevista.dataset_name_planilha.is_not(None))
         stmt = (select(BasePrevista.plano_id, func.count(BasePrevista.id),
                        func.count(BasePrevista.dataset_id),
-                       func.coalesce(func.sum(case((pendente, 1), else_=0)), 0))
+                       func.coalesce(func.sum(case((_PENDENTE, 1), else_=0)), 0))
                 .group_by(BasePrevista.plano_id))
         if user is not None:
             stmt = filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)
@@ -80,10 +82,9 @@ class PdaDao(Dao):
         return self.buscar_um(self._consulta_bases(user).where(BasePrevista.id == base_id))
 
     def bases_pendentes(self, plano_id: int) -> list[BasePrevista]:
-        """Bases sem dataset vinculado mas com name da planilha (vínculo pendente)."""
+        """Bases sem dataset vinculado mas com ID do CKAN ou name informado (vínculo pendente)."""
         return self.buscar_lista(select(BasePrevista).where(
-            BasePrevista.plano_id == plano_id, BasePrevista.dataset_id.is_(None),
-            BasePrevista.dataset_name_planilha.is_not(None)))
+            BasePrevista.plano_id == plano_id, _PENDENTE))
 
     def bases_sem_organizacao(self, plano_id: int) -> list[BasePrevista]:
         return self.buscar_lista(select(BasePrevista).where(
@@ -123,7 +124,7 @@ class PdaDao(Dao):
         return self.buscar_lista(stmt)
 
     def datasets_por_id_ckan(self, ids: set[str]) -> list[Dataset]:
-        """Datasets cujo ID do CKAN está em `ids` (em lotes) — importação de IDs em lote."""
+        """Datasets cujo `id_ckan` está em `ids` (em lotes)."""
         lista, encontrados = sorted(ids), []
         for i in range(0, len(lista), _LOTE_IN):
             encontrados += self.buscar_lista(

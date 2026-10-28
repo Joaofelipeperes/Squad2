@@ -62,6 +62,18 @@ class LinhaIgnoradaOut(BaseModel):
     motivo: str
 
 
+class ConfigImportacaoIn(BaseModel):
+    """Configuração da leitura enviada com a planilha (aba Configuração do modal, guardada no
+    navegador de quem importa). `colunas`: campo → nome da coluna no arquivo (campos: orgao, base,
+    orgao_nome, id_ckan, descricao, unidade, periodicidade, prazo, politicas, sigiloso, portal);
+    vazio = coluna reconhecida pelos nomes usuais. `linha_cabecalho`: linha dos nomes das colunas
+    (os dados começam na seguinte). `delimitador`: separador do CSV (vazio = detectar)."""
+
+    colunas: dict[str, str | None] = Field(default_factory=dict)
+    linha_cabecalho: int | None = None
+    delimitador: str | None = Field(default=None, max_length=5)
+
+
 class ImportacaoResumoOut(BaseModel):
     plano: PlanoOut
     bases_importadas: int
@@ -71,33 +83,10 @@ class ImportacaoResumoOut(BaseModel):
     sem_vinculo: int
     orgaos_sem_correspondencia: list[str]
     tem_coluna_prazo: bool  # sem a coluna "Prazo", as bases não publicadas ficam "Não publicado"
-    tem_coluna_portal: bool  # sem "Disponível no Portal", nenhuma base é vinculada na importação
+    tem_coluna_portal: bool  # link "Disponível no Portal" (o name só serve para achar o ID)
+    tem_coluna_id_ckan: bool  # ID do dataset no CKAN; sem ele e sem o link, nada é vinculado
+    avisos: list[LinhaIgnoradaOut]  # bases importadas com ressalva (ex.: ID não reconhecido)
     colunas_opcionais_ausentes: list[str]  # rótulos das colunas opcionais não encontradas
-
-
-class CampoPlanilhaOut(BaseModel):
-    campo: str  # orgao | base | descricao | unidade | periodicidade | prazo | politicas | ...
-    rotulo: str
-    obrigatorio: bool
-    sugestao: int | None  # índice da coluna pré-selecionada (nome igual ou muito parecido)
-
-
-class ColunasPlanilhaOut(BaseModel):
-    """Etapa de mapeamento da importação: cabeçalho lido, campos do sistema e prévia."""
-
-    aba: int  # 0-based (no CSV, a leitura por separador); devolvida no MapeamentoIn
-    linha: int  # 0-based; a linha na planilha é linha + 1
-    colunas: list[str]  # títulos ("" = coluna sem título)
-    campos: list[CampoPlanilhaOut]
-    previa: list[list[str | None]]  # até 5 linhas de dados, alinhadas a `colunas`
-
-
-class MapeamentoIn(BaseModel):
-    """Correspondência escolhida pelo usuário (campo → índice da coluna em ColunasPlanilhaOut)."""
-
-    aba: int = Field(ge=0, le=50)
-    linha: int = Field(ge=0, le=100)
-    colunas: dict[str, int]
 
 
 class VinculosOut(BaseModel):
@@ -157,6 +146,7 @@ class BaseOut(BaseModel):
     dataset_name: str | None
     dataset_titulo: str | None
     dataset_name_planilha: str | None
+    dataset_id_ckan_planilha: str | None  # ID do CKAN informado (sem dataset = vínculo pendente)
     dataset_ativo: bool | None
     data_publicacao: datetime | None  # metadata_created do dataset vinculado e ativo
     recursos_validos: int

@@ -116,7 +116,7 @@ export default function ModelosIAPage() {
               {perfis.data?.length === 0 && (
                 <tr><td colSpan={7}><div className="empty-state">
                   <i className="fa-solid fa-microchip" />
-                  <p>Nenhum perfil cadastrado. Crie um perfil local (Ollama) ou comercial (Gemini) para começar.</p>
+                  <p>Nenhum perfil cadastrado. Crie um perfil local (Ollama) ou comercial (Claude, Gemini) para começar.</p>
                 </div></td></tr>
               )}
               {perfis.data?.map((p) => (
@@ -203,7 +203,8 @@ function Playground({ tarefas, onUsado }: { tarefas: TarefaIA[]; onUsado: () => 
           <div className="form-field">
             <label htmlFor="pg-tarefa">Tarefa</label>
             <select id="pg-tarefa" value={tarefa} onChange={(e) => setTarefa(e.target.value)}>
-              {tarefas.map((t) => <option key={t.tarefa} value={t.tarefa}>{t.rotulo}</option>)}
+              {tarefas.filter((t) => t.tipo !== "embeddings")
+                .map((t) => <option key={t.tarefa} value={t.tarefa}>{t.rotulo}</option>)}
             </select>
           </div>
           <div className="form-field full">

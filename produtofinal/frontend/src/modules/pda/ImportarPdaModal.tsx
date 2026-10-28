@@ -1,11 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import type { ColunasPlanilha, ImportacaoResumo } from "./api";
+import type { ConfigImportacao, ImportacaoResumo } from "./api";
 import { TAMANHO_MAX_ARQUIVO, pdaApi } from "./api";
+import { ConfigImportacaoPainel, configSalva, validarConfig } from "./ConfigImportacao";
 import { plural } from "./formato";
-import type { Escolhas } from "./MapeamentoColunas";
-import { MapeamentoColunas, escolhasIniciais, pendentes } from "./MapeamentoColunas";
 import { ApiError } from "@/shared/api/client";
 import { Modal } from "@/shared/ui/Modal";
 
@@ -20,44 +19,38 @@ interface Props {
 
 const EXTENSOES = [".xlsx", ".csv"];
 const FORM_ID = "pda-importar-form";
+type Aba = "carregar" | "configuracao";
 
 /**
- * Importação da planilha do PDA (PBI-12) em etapas: dados do PDA e arquivo → mapeamento das colunas
- * (campo do sistema × coluna da planilha, com prévia) → resumo da importação. O arquivo é enviado de
- * novo na confirmação: o servidor não guarda a planilha.
+ * Importação da planilha do PDA (PBI-12): aba Carregar (nome, vigência e arquivo), aba Configuração
+ * (colunas do arquivo, linha do cabeçalho e delimitador, guardadas no navegador) e, após o envio, o
+ * resumo da importação. Com a coluna do ID do CKAN, as bases já chegam vinculadas aos datasets.
  */
 export function ImportarPdaModal({ aberto, primeiro, onFechar, onImportado }: Props) {
+  const [aba, setAba] = useState<Aba>("carregar");
   const [nome, setNome] = useState("");
   const [inicio, setInicio] = useState("");
   const [fim, setFim] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [definirVigente, setDefinirVigente] = useState(false);
+  const [config, setConfig] = useState<ConfigImportacao>(configSalva);
   const [erro, setErro] = useState<string | null>(null);
   const [resumo, setResumo] = useState<ImportacaoResumo | null>(null);
-  const [colunas, setColunas] = useState<ColunasPlanilha | null>(null);
-  const [escolhas, setEscolhas] = useState<Escolhas>({});
 
-  // Limpa o formulário ao fechar (o Modal não renderiza nada fechado; evita piscar o resumo anterior).
+  // Limpa o formulário ao fechar (o Modal não renderiza nada fechado; evita piscar o resumo anterior)
+  // e recarrega a configuração salva ao abrir (alterações não salvas valem só para esta importação).
   useEffect(() => {
-    if (aberto) return;
-    setNome(""); setInicio(""); setFim(""); setArquivo(null);
-    setDefinirVigente(false); setErro(null); setResumo(null); setColunas(null); setEscolhas({});
+    if (aberto) { setConfig(configSalva()); return; }
+    setAba("carregar"); setNome(""); setInicio(""); setFim(""); setArquivo(null);
+    setDefinirVigente(false); setErro(null); setResumo(null);
   }, [aberto]);
-
-  const erroDeEnvio = (e: Error) =>
-    e instanceof ApiError && e.status === 413 && e.message.startsWith("Erro ")
-      ? "Arquivo maior que o limite de 5 MB." : e.message;
-
-  const lerColunas = useMutation({
-    mutationFn: (f: File) => pdaApi.colunasPlanilha(f),
-    onSuccess: (c) => { setColunas(c); setEscolhas(escolhasIniciais(c)); setErro(null); },
-    onError: (e: Error) => setErro(erroDeEnvio(e)),
-  });
 
   const importar = useMutation({
     mutationFn: (form: FormData) => pdaApi.importar(form),
     onSuccess: (r) => { setResumo(r); onImportado(r); },
-    onError: (e: Error) => setErro(erroDeEnvio(e)),
+    onError: (e: Error) => setErro(
+      e instanceof ApiError && e.status === 413 && e.message.startsWith("Erro ")
+        ? "Arquivo maior que o limite de 5 MB." : e.message),
   });
 
   function validar(): string | null {
@@ -67,34 +60,25 @@ export function ImportarPdaModal({ aberto, primeiro, onFechar, onImportado }: Pr
     if (!EXTENSOES.some((ext) => nomeArq.endsWith(ext))) return "O arquivo deve ser .xlsx ou .csv.";
     if (arquivo.size > TAMANHO_MAX_ARQUIVO) return "Arquivo maior que o limite de 5 MB.";
     if (inicio && fim && fim < inicio) return "O fim da vigência não pode ser anterior ao início.";
-    return null;
+    return validarConfig(config);
   }
 
-  /** Etapa 1 → 2: lê o cabeçalho da planilha para o mapeamento. */
-  function continuar(e: FormEvent) {
+  function enviar(e: FormEvent) {
     e.preventDefault();
     const problema = validar();
     setErro(problema);
-    if (!problema && arquivo) lerColunas.mutate(arquivo);
-  }
-
-  /** Etapa 2: importa com as colunas escolhidas. */
-  function importarMapeado() {
-    if (!arquivo || !colunas || pendentes(colunas, escolhas).length > 0) return;
-    const mapa = Object.fromEntries(Object.entries(escolhas).filter(([, i]) => i != null));
+    if (problema || !arquivo) return;
     const form = new FormData();
     form.append("nome", nome.trim());
     if (inicio) form.append("vigencia_inicio", inicio);
     if (fim) form.append("vigencia_fim", fim);
     form.append("definir_vigente", primeiro || definirVigente ? "true" : "false");
+    form.append("config", JSON.stringify(config));
     form.append("arquivo", arquivo, arquivo.name);
-    form.append("mapeamento", JSON.stringify({ aba: colunas.aba, linha: colunas.linha, colunas: mapa }));
-    setErro(null);
     importar.mutate(form);
   }
 
-  const ocupado = importar.isPending || lerColunas.isPending;
-  const fechar = () => { if (!ocupado) onFechar(); };
+  const fechar = () => { if (!importar.isPending) onFechar(); };
 
   if (resumo) {
     return (
@@ -108,39 +92,31 @@ export function ImportarPdaModal({ aberto, primeiro, onFechar, onImportado }: Pr
     );
   }
 
-  if (colunas) {
-    const faltando = pendentes(colunas, escolhas).length;
-    return (
-      <Modal aberto={aberto} onFechar={fechar} titulo="Importar PDA · mapear colunas"
-        subtitulo={`${nome.trim()} · ${arquivo?.name ?? ""}`}
-        rodape={<>
-          <button type="button" className="btn btn-outline btn-sm" disabled={ocupado}
-            onClick={() => { setColunas(null); setErro(null); }}>
-            <i className="fa-solid fa-arrow-left" />Voltar
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" disabled={ocupado || faltando > 0}
-            title={faltando > 0 ? "Escolha a coluna dos campos obrigatórios" : undefined} onClick={importarMapeado}>
-            <i className="fa-solid fa-file-import" />{importar.isPending ? "Importando…" : "Importar"}
-          </button>
-        </>}>
-        <MapeamentoColunas colunas={colunas} escolhas={escolhas} onMudar={setEscolhas} />
-        {erro && <div className="inline-msg err" role="alert" style={{ marginTop: 10 }}>{erro}</div>}
-      </Modal>
-    );
-  }
-
   return (
-    <Modal aberto={aberto} onFechar={fechar} titulo="Importar PDA"
+    <Modal aberto={aberto} onFechar={fechar} titulo="Importar PDA" largo={aba === "configuracao"}
       subtitulo="Planilha do Plano de Dados Abertos (.xlsx ou .csv), com uma linha por base prevista."
       rodape={<>
-        <button type="button" className="btn btn-outline btn-sm" onClick={fechar} disabled={ocupado}>
+        <button type="button" className="btn btn-outline btn-sm" onClick={fechar} disabled={importar.isPending}>
           Cancelar
         </button>
-        <button type="submit" form={FORM_ID} className="btn btn-primary btn-sm" disabled={ocupado}>
-          <i className="fa-solid fa-arrow-right" />{lerColunas.isPending ? "Lendo colunas…" : "Continuar"}
+        <button type="submit" form={FORM_ID} className="btn btn-primary btn-sm" disabled={importar.isPending}>
+          <i className="fa-solid fa-file-import" />{importar.isPending ? "Importando…" : "Importar"}
         </button>
       </>}>
-      <form id={FORM_ID} className="form-grid" onSubmit={continuar} noValidate>
+      <div className="abas" role="tablist" aria-label="Importação do PDA">
+        {([["carregar", "Carregar"], ["configuracao", "Configuração"]] as const).map(([id, rotulo]) => (
+          <button key={id} type="button" role="tab" id={`pda-imp-aba-${id}`} className="aba"
+                  aria-selected={aba === id} aria-controls={`pda-imp-painel-${id}`} onClick={() => setAba(id)}>
+            {rotulo}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="pda-imp-painel-configuracao" aria-labelledby="pda-imp-aba-configuracao"
+           hidden={aba !== "configuracao"}>
+        <ConfigImportacaoPainel config={config} onMudar={setConfig} />
+      </div>
+      <form id={FORM_ID} className="form-grid" onSubmit={enviar} noValidate role="tabpanel"
+            aria-labelledby="pda-imp-aba-carregar" hidden={aba !== "carregar"}>
         <div className="form-field full">
           <label htmlFor="pda-imp-nome">Nome do PDA *</label>
           <input id="pda-imp-nome" className="text-input" value={nome} placeholder="PDA 2026-2027"
@@ -160,13 +136,12 @@ export function ImportarPdaModal({ aberto, primeiro, onFechar, onImportado }: Pr
         <div className="form-field full">
           <label htmlFor="pda-imp-arquivo">Arquivo (.xlsx, .csv) *</label>
           <input id="pda-imp-arquivo" className="text-input" type="file" accept=".xlsx,.csv"
-                 required onChange={(e) => { setArquivo(e.target.files?.[0] ?? null); setColunas(null); }} />
+                 required onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
           <span className="help">
-            Na próxima etapa você confere qual coluna da planilha corresponde a cada campo (Órgão e Base de
-            Dados são obrigatórios; Descrição, Unidade Responsável, Atualização, Meta/Prazo para abertura,
-            Políticas Públicas, Possui Conteúdo Sigiloso? e Disponível no Portal, opcionais). Prazo em mês/ano
-            (ex.: Março/2025, vale até o fim do mês) ou data. Limite de 5 MB. O arquivo não é guardado; só os
-            dados extraídos.
+            Colunas lidas pelo cabeçalho, com os nomes da aba Configuração (ou os usuais: Órgão, Base de Dados,
+            Atualização, Meta/Prazo para abertura…). Com a coluna do <strong>ID do dataset no CKAN</strong>
+            (ex.: ID_UNICO) cada base já é vinculada ao dataset do inventário; sem ela, vale o link “Disponível
+            no Portal”. Limite de 5 MB. O arquivo não é guardado; só os dados extraídos.
           </span>
         </div>
         <label className="check-line full">
@@ -178,8 +153,8 @@ export function ImportarPdaModal({ aberto, primeiro, onFechar, onImportado }: Pr
             {primeiro && " Por ser o primeiro PDA cadastrado, ele será o vigente."}
           </span>
         </label>
-        {erro && <div className="inline-msg err full" role="alert">{erro}</div>}
       </form>
+      {erro && <div className="inline-msg err" role="alert" style={{ marginTop: 14 }}>{erro}</div>}
     </Modal>
   );
 }
@@ -203,10 +178,11 @@ function ResumoImportacao({ resumo }: { resumo: ImportacaoResumo }) {
           aparecem como “Não publicado” e os filtros Ano e Prazo ficam vazios.
         </div>
       )}
-      {!r.tem_coluna_portal && (
+      {!r.tem_coluna_portal && !r.tem_coluna_id_ckan && (
         <div className="inline-msg err" style={{ marginTop: 10 }} role="alert">
-          A planilha não tem a coluna “Disponível no Portal”: nenhuma base foi vinculada a um dataset do
-          portal, então nenhuma aparece como publicada.
+          A planilha não tem a coluna do ID do dataset no CKAN (ex.: “ID_UNICO”) nem “Disponível no Portal”:
+          nenhuma base foi vinculada a um dataset do portal, então nenhuma aparece como publicada. Confira os
+          nomes das colunas na aba Configuração.
         </div>
       )}
       {outrasAusentes(r).length > 0 && (
@@ -230,9 +206,21 @@ function ResumoImportacao({ resumo }: { resumo: ImportacaoResumo }) {
       </div>
       {r.vinculos_pendentes > 0 && (
         <p className="help-texto" style={{ marginTop: 12 }}>
-          Vínculo pendente: a URL do portal informada na planilha não corresponde a nenhum dataset do inventário
-          atual. Depois da próxima coleta, use “Atualizar vínculos” na tela do PDA.
+          Vínculo pendente: o ID do CKAN (ou a URL do portal) informado na planilha não corresponde a nenhum
+          dataset do inventário atual. Depois da próxima coleta, use “Atualizar vínculos” na tela do PDA.
         </p>
+      )}
+      {r.avisos.length > 0 && (
+        <div className="def-item full" style={{ marginTop: 16 }}>
+          <label>Avisos (bases importadas com ressalva)</label>
+          <div className="lista-rolavel">
+            {r.avisos.map((l) => (
+              <div key={`${l.linha}-${l.motivo}`} className="hist-row">
+                <span className="date">Linha {l.linha}</span><span>{l.motivo}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
       {r.linhas_ignoradas.length > 0 && (
         <div className="def-item full" style={{ marginTop: 16 }}>

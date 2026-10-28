@@ -28,13 +28,13 @@ evolução temporal abaixo dos cards (PBI-75).
   (pé: nome do PDA vigente); Datasets publicados (ativos; pé: quantos saíram do portal); Recursos
   monitorados (atuais, sem dicionário); **Bases atrasadas** só entre as vinculadas ("—" e
   "aguardando vínculo" sem nenhuma vinculada); **Atualizações em atraso** (bases vinculadas
-  "Atrasado" pela periodicidade do PDA, ADR-0020); Datasets sem recurso (PBI-51). Possíveis dados
+  "Atrasado" pela periodicidade do PDA, ADR-0023); Datasets sem recurso (PBI-51). Possíveis dados
   pessoais aparece como "—", com o rodapé em branco (nunca 0).
 - **Cumprimento do PDA por situação**: barras horizontais com as 7 situações do PDA vigente (cor de
   status + rótulo; dica com quantidade e % ao passar o mouse ou com o teclado) e a nota de que
   "Prazo vencido" ainda não é atraso confirmado.
 - **Status das atualizações** (rosca do protótipo, `Rosca.tsx`): bases **vinculadas** do PDA vigente
-  por situação de atualização (ADR-0020) — Atualizado, Próximo do vencimento, Atrasado, Sem
+  por situação de atualização (ADR-0023) — Atualizado, Próximo do vencimento, Atrasado, Sem
   periodicidade definida (hachurado) e Sem informação; legenda fixa com ícone, rótulo, quantidade e
   %; centro com o total ou a fatia em foco. As bases sem vínculo ficam numa nota abaixo.
 - **Alertas prioritários** em abas **Todos / PDA / Atualização / Inventário** com o total de cada
@@ -54,7 +54,7 @@ evolução temporal abaixo dos cards (PBI-75).
   portal; **aguardando vínculo** quando o órgão não tem base vinculada, porque sem vínculo não há
   como saber se a base já foi publicada; com vínculo parcial, "N de M vinculada(s)") |
   **Atualização** (% das bases vinculadas com prazo definido que estão dentro da periodicidade do PDA
-  — Atualizado ou Próximo do vencimento, ADR-0020; badge verde sem atrasadas, âmbar ≥ 50%, vermelho
+  — Atualizado ou Próximo do vencimento, ADR-0023; badge verde sem atrasadas, âmbar ≥ 50%, vermelho
   abaixo; "aguardando vínculo" sem base vinculada; "sem prazo definido" quando só há Eventual,
   Estática ou bases sem data) | Riscos LGPD e Índice de atenção (**a definir**). Os pendentes
   aparecem como badge cinza, nunca 0.
@@ -151,6 +151,6 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `organizacao_id` inteiro e `chave` = `id` em texto; consultas juntam por `Dataset.id` | Victor |
 | 22/10/2026 | Banco só pelo `PainelDao` (ADR-0019): agregados da tela Organizações sem os registros excluídos | Victor |
 | 28/10/2026 | Dashboard (Visão Geral, US19/PBI-56): `GET /painel/visao-geral`, `service.visao_geral`/`kpis`/`faixa_de_idade`, `PainelDao.datasets_por_situacao`/`recursos_validos`; tela com cartões, PDA vigente por situação, idade da última atualização real, alertas prioritários e fluxo; pendentes como "—" com o motivo | Humberto |
-| 28/10/2026 | Dashboard: gráfico "Status das atualizações" (rosca) e cartão "Atualizações em atraso" pela periodicidade do PDA vigente (ADR-0020), no lugar da idade da última atualização; alerta "Atualização atrasada"; `situacoes_atualizacao` no lugar de `idade_atualizacao` | Humberto |
+| 28/10/2026 | Dashboard: gráfico "Status das atualizações" (rosca) e cartão "Atualizações em atraso" pela periodicidade do PDA vigente (ADR-0023), no lugar da idade da última atualização; alerta "Atualização atrasada"; `situacoes_atualizacao` no lugar de `idade_atualizacao` | Humberto |
 | 28/10/2026 | Dashboard: alertas em abas por tipo (Todos / PDA / Atualização / Inventário), até 10 de cada (`alertas_por_tipo`), para um tipo numeroso não esconder os outros | Humberto |
-| 28/10/2026 | Organizações: coluna **Atualização** (% em dia pela periodicidade do PDA, ADR-0020) e cartão "Atualizações atrasadas" no detalhe (`atualizacao_pct`, `atualizacoes_atrasadas`, `atualizacoes_avaliadas`) | Humberto |
+| 28/10/2026 | Organizações: coluna **Atualização** (% em dia pela periodicidade do PDA, ADR-0023) e cartão "Atualizações atrasadas" no detalhe (`atualizacao_pct`, `atualizacoes_atrasadas`, `atualizacoes_avaliadas`) | Humberto |

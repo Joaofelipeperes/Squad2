@@ -207,7 +207,7 @@ function Linha({ o, onAbrir }: { o: Organizacao; onAbrir: (o: Organizacao) => vo
   );
 }
 
-/** Coluna Atualização: % dentro do prazo pela periodicidade do PDA vigente (ADR-0020). */
+/** Coluna Atualização: % dentro do prazo pela periodicidade do PDA vigente (ADR-0023). */
 function Atualizacao({ o }: { o: Organizacao }) {
   if (o.atualizacao_pct == null) {
     return o.bases_vinculadas === 0

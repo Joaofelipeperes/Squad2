@@ -110,7 +110,8 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | é consumido por | rastreabilidade | `Coleta`, `DatasetSnapshot` (diff entre coletas) |
 | é consumido por | painel | `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` — telas Organizações e Dashboard; `ultima_coleta(db)` — data da coleta no Dashboard (PBI-58) |
 | é consumido por | metadados | `Dataset`, `Recurso` e `condicao_recurso_atual()` — `recursos_formato_fechado` (PBI-53) |
-| é consumido por | relatorios, assistente | contagens e última coleta |
+| é consumido por | relatorios | contagens e última coleta |
+| é consumido por | assistente | `ultima_coleta`, `recursos_atuais`, `regras.situacao_no_portal`; `Dataset` (sem `autor`/`autor_email`), `Recurso`, `Organizacao` — ficha do dataset citado na pergunta |
 | é consumido por | acesso, envio | `Organizacao` (escopo de órgão) |
 
 ## Jobs agendados
@@ -162,4 +163,5 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 18/10/2026 | Interações: painel (tela Organizações) e metadados (formato fechado) passam a consumir `condicao_recurso_atual()` | Humberto |
 | 21/10/2026 | Chave primária própria (ADR-0018): `organizacao`, `dataset` e `recurso` ganham `id` inteiro e o ID do CKAN vai para `id_ckan` (único, opcional); FKs e `dataset_snapshot.dataset_id` apontam para o `id` (migração `f6c3a8d2b1e7`, dados preservados); coleta casa pelo `id_ckan`; `GET /datasets/{id}` e `?orgao=<id>`; saídas com `id` e `id_ckan` | Victor |
 | 22/10/2026 | Banco só pelo `InventarioDao` (ADR-0019): service e router sem acesso direto à sessão; coleta grava com auditoria (`iniciar(..., usuario_id=)` registra quem pediu a coleta manual); excluídos somem da tela Datasets; data de criação do recurso no CKAN em `recurso.created_ckan` (JSON `created` mantido) | Victor |
+| 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
 | 28/10/2026 | Interações: o Dashboard (painel) usa as contagens do inventário e `ultima_coleta`; sem mudança de código neste módulo | Humberto |

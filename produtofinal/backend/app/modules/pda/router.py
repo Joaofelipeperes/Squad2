@@ -14,12 +14,11 @@ from app.modules.pda.schemas import (
     BaseIn,
     BaseOut,
     BasesOut,
-    ColunasPlanilhaOut,
+    ConfigImportacaoIn,
     DatasetOpcaoOut,
     FormularioOut,
     IdsCkanOut,
     ImportacaoResumoOut,
-    MapeamentoIn,
     PlanoIn,
     PlanoOut,
     VinculosOut,
@@ -46,6 +45,19 @@ def _data_form(valor: str | None, campo: str) -> date | None:
         raise HTTPException(422, f"{campo}: use o formato aaaa-mm-dd.") from None
 
 
+def _config_form(valor: str | None) -> regras.ConfigLeitura:
+    """Campo `config` do formulário (JSON) → configuração validada da leitura."""
+    if valor is None or not valor.strip():
+        return regras.SEM_CONFIG
+    try:
+        dados = ConfigImportacaoIn.model_validate_json(valor)
+        return regras.config_leitura(dados.colunas, dados.linha_cabecalho, dados.delimitador)
+    except ValidationError:
+        raise HTTPException(422, "Configuração da importação inválida.") from None
+    except regras.PlanilhaInvalida as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
 def _vazio(valor: str | None) -> str | None:
     return (valor.strip() or None) if valor is not None else None
 
@@ -58,16 +70,6 @@ def _conteudo(arquivo: UploadFile, o_que: str = "a planilha do PDA") -> bytes:
     if len(conteudo) > regras.TAMANHO_MAXIMO:
         raise HTTPException(413, "Arquivo maior que 5 MB.")
     return conteudo
-
-
-def _mapeamento(valor: str | None) -> regras.Mapeamento | None:
-    if valor is None or not valor.strip():
-        return None
-    try:
-        m = MapeamentoIn.model_validate_json(valor)
-    except ValidationError:
-        raise HTTPException(422, "Mapeamento de colunas inválido.") from None
-    return regras.Mapeamento(aba=m.aba, linha=m.linha, colunas=m.colunas)
 
 
 # ------------------------------------------------------------------ planos (PDAs)
@@ -87,30 +89,24 @@ def importar_plano(
     vigencia_inicio: Annotated[str | None, Form()] = None,
     vigencia_fim: Annotated[str | None, Form()] = None,
     definir_vigente: Annotated[bool, Form()] = False,
-    mapeamento: Annotated[str | None, Form()] = None,
+    config: Annotated[str | None, Form()] = None,
 ):
     """PBI-12 — importa a planilha de um PDA (.xlsx ou .csv, até 5 MB). multipart/form-data.
-    `mapeamento` (opcional) = JSON `MapeamentoIn` com as colunas escolhidas na etapa de mapeamento
-    (`POST /planilha/colunas`); sem ele, as colunas são achadas pelo cabeçalho."""
-    conteudo = _conteudo(arquivo)
-    mapa = _mapeamento(mapeamento)
+    `config` (opcional): JSON de `ConfigImportacaoIn` — colunas do arquivo, linha do cabeçalho e
+    delimitador (aba Configuração do modal)."""
+    if regras.extensao_valida(arquivo.filename) is None:
+        raise HTTPException(422, "Formato não suportado: envie a planilha do PDA em .xlsx ou .csv.")
+    conteudo = arquivo.file.read(regras.TAMANHO_MAXIMO + 1)
+    if len(conteudo) > regras.TAMANHO_MAXIMO:
+        raise HTTPException(413, "Arquivo maior que 5 MB.")
     inicio = _data_form(vigencia_inicio, "Início da vigência")
     fim = _data_form(vigencia_fim, "Fim da vigência")
+    leitura = _config_form(config)
     with _erros_http():
         return service.importar_plano(
             db, nome=nome, vigencia_inicio=inicio, vigencia_fim=fim,
             definir_vigente=definir_vigente, arquivo_nome=arquivo.filename or "",
-            conteudo=conteudo, importado_por=user.nome, user=user, mapeamento=mapa)
-
-
-@router.post("/planilha/colunas", response_model=ColunasPlanilhaOut,
-             dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def colunas_planilha(arquivo: Annotated[UploadFile, File()]):
-    """Etapa de mapeamento da importação: cabeçalho, coluna sugerida para cada campo e prévia.
-    Nada é gravado."""
-    conteudo = _conteudo(arquivo)
-    with _erros_http():
-        return service.colunas_planilha(conteudo, arquivo.filename or "")
+            conteudo=conteudo, importado_por=user.nome, user=user, config=leitura)
 
 
 @router.post("/planos/manual", response_model=PlanoOut, status_code=status.HTTP_201_CREATED)

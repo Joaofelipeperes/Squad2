@@ -23,7 +23,7 @@ const COR_SITUACAO: Record<string, string> = {
   "Sem recurso": "var(--amber-600)",
 };
 
-// Status das atualizações (ADR-0020): cor de status + ícone + rótulo; "não se aplica" hachurado
+// Status das atualizações (ADR-0023): cor de status + ícone + rótulo; "não se aplica" hachurado
 const FATIA_ATUALIZACAO: Record<string, Omit<Fatia, "rotulo" | "total">> = {
   "Atualizado": { cor: "var(--green-600)", icone: "fa-circle-check" },
   "Próximo do vencimento": { cor: "var(--amber-600)", icone: "fa-clock" },
@@ -95,7 +95,7 @@ const FLUXO: [string, string][] = [
 /**
  * Tela "Visão Geral" (US19/PBI-56) — referência visual: #screen-dashboard do Protótipo V1.
  * Cartões, bases do PDA vigente por situação, status das atualizações pela periodicidade do PDA
- * (ADR-0020) e alertas prioritários. Indicadores que dependem de regra ou módulo ainda não implementados
+ * (ADR-0023) e alertas prioritários. Indicadores que dependem de regra ou módulo ainda não implementados
  * aparecem como "—" com o motivo, nunca como 0.
  */
 export default function DashboardPage() {

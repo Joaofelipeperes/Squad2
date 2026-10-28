@@ -1,4 +1,4 @@
-# ADR-0020 — Situação de atualização calculada pela periodicidade do PDA vigente, sem tolerância
+# ADR-0023 — Situação de atualização calculada pela periodicidade do PDA vigente, sem tolerância
 
 | | |
 |---|---|
@@ -71,3 +71,4 @@ Apresentar à Paloma (GEDA) na próxima reunião; ajustes viram revisões desta 
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 28/10/2026 | Renumerada de ADR-0020 para ADR-0023 no merge com a `desenvolvimento` (a ADR-0020 de lá é a do Claude Haiku no Assistente; 0021 e 0022 também já existiam) | Humberto |

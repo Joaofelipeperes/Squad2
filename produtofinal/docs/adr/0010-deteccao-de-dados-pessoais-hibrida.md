@@ -70,3 +70,4 @@ Resultado da avaliação dos modelos (Luiza) e confirmação com a CGE-GO dos ti
 | Data | Revisão | Autor |
 |---|---|---|
 | 01/10/2026 | Estratégia confirmada pela sugestão do LIGO e pela recomendação do orientador; candidatos da Opção E incluídos | Victor |
+| 26/10/2026 | Estratégia implementada no sistema com o motor do `detector3.py` (regras + perfil de coluna + filtro semântico bge-m3 + modelo local para endereço), proposta na ADR-0021. Candidatos de modelo local nesta etapa: qwen2.5:7b-instruct, qwen3 e qwen3.5 (versões médias), trocáveis pela tela | Squad 2 |

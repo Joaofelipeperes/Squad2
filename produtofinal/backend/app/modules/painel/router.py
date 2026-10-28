@@ -20,5 +20,5 @@ def organizacoes(db: DbSession, user: Annotated[UsuarioAtual, Depends(require(P.
 @router.get("/visao-geral", response_model=VisaoGeralOut)
 def visao_geral(db: DbSession, user: Annotated[UsuarioAtual, Depends(require(P.PAINEL_ACESSAR))]):
     """US19/PBI-56 — Dashboard: cartões, PDA vigente por situação, status das atualizações pela
-    periodicidade do PDA (ADR-0020) e alertas prioritários."""
+    periodicidade do PDA (ADR-0023) e alertas prioritários."""
     return service.visao_geral(db, user)
