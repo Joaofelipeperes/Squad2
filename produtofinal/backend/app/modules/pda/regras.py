@@ -14,10 +14,12 @@ import io
 import re
 import unicodedata
 import zipfile
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from difflib import SequenceMatcher
 from itertools import chain, islice
+from typing import TypeVar
 from urllib.parse import unquote, urlsplit
 
 # ------------------------------------------------------------------ texto
@@ -775,3 +777,153 @@ def ler_planilha(conteudo: bytes, nome_arquivo: str,
         return _ler_linhas(_abas_xlsx(wb), config)
     finally:
         wb.close()
+
+T = TypeVar("T")
+
+
+def _com_abas(conteudo: bytes, nome_arquivo: str, ler: Callable[[Iterable[Aba]], T],
+              o_que: str = "a planilha do PDA") -> T:
+    """Abre o .csv (uma leitura por separador candidato) ou o .xlsx (uma por aba) e entrega as
+    abas a `ler`. Erros de leitura viram PlanilhaInvalida (422)."""
+    ext = extensao_valida(nome_arquivo)
+    if ext is None:
+        raise PlanilhaInvalida(f"Formato não suportado: envie {o_que} em .xlsx ou .csv.")
+    if ext == ".csv":
+        try:
+            return ler(_abas_csv(conteudo))
+        except csv.Error as exc:
+            raise PlanilhaInvalida(f"CSV ilegível: {exc}") from exc
+
+    from openpyxl import load_workbook
+
+    _verificar_zip(conteudo)
+    try:
+        wb = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
+    except Exception as exc:  # qualquer falha do openpyxl ao abrir = arquivo .xlsx inválido (422)
+        raise PlanilhaInvalida(_MSG_XLSX_INVALIDO) from exc
+    try:
+        return ler(_abas_xlsx(wb))
+    finally:
+        wb.close()
+
+
+_SEMELHANCA_MINIMA = 0.85
+
+
+def _chave_coluna(valor: object) -> str:
+    return _compacto(_texto(valor) or "")
+
+
+def sugerir_colunas(cabecalho: Sequence[object],
+                    sinonimos: dict[str, tuple[str, ...]]) -> dict[str, int]:
+    """Campo → índice da coluna com nome igual ou muito parecido, ignorando maiúsculas, acentos,
+    espaços, "_" e pontuação. Cada coluna vai para um campo só. Ordem: nome igual; nome parecido
+    (erro de digitação, plural); nome que começa ou termina com o esperado ("CPF_cliente")."""
+    chaves = [_chave_coluna(v) for v in cabecalho]
+    livres = [i for i, c in enumerate(chaves) if c]
+    sugestao: dict[str, int] = {}
+
+    def escolher(campo: str, i: int) -> None:
+        sugestao[campo] = i
+        livres.remove(i)
+
+    for campo, nomes in sinonimos.items():
+        i = next((i for n in nomes for i in livres if chaves[i] == n), None)
+        if i is not None:
+            escolher(campo, i)
+    for campo, nomes in sinonimos.items():
+        if campo in sugestao:
+            continue
+        notas = [(SequenceMatcher(None, chaves[i], n).ratio(), -i) for i in livres for n in nomes]
+        if notas and max(notas)[0] >= _SEMELHANCA_MINIMA:
+            escolher(campo, -max(notas)[1])
+    for campo, nomes in sinonimos.items():
+        if campo in sugestao:
+            continue
+        i = next((i for n in nomes if len(n) >= 3 for i in livres
+                  if chaves[i].startswith(n) or chaves[i].endswith(n)), None)
+        if i is not None:
+            escolher(campo, i)
+    return sugestao
+
+
+def _celulas_texto(linha: Sequence[object]) -> list[str | None]:
+    return [_texto(v, colapsar=False) for v in linha]
+
+
+# ------------------------------------------------------------------ CSV de IDs do CKAN
+# "Importar IDs do CKAN": vincula em lote as bases de um PDA JÁ importado (SIGLA + NOME_PDA
+# → ID). Na importação, o ID_UNICO da planilha já é lido direto (ADR-0022).
+
+# (campo, rótulo, obrigatório)
+CAMPOS_IDS: tuple[tuple[str, str, bool], ...] = (
+    ("sigla", "SIGLA", True),
+    ("nome_pda", "NOME_PDA", True),
+    ("nome_dataset", "NOME_DATASET", False),
+    ("id", "ID_DATASET", True),
+)
+_SINONIMOS_IDS: dict[str, tuple[str, ...]] = {
+    "sigla": ("sigla", "siglaorgao", "sigladoorgao", "orgaosigla", "orgao"),
+    "nome_pda": ("nomepda", "nomenopda", "basededados", "nomedabase", "nomeprevisto"),
+    "nome_dataset": ("nomedataset", "nomedabaseckan", "nomenoportal", "nomeckan", "titulo"),
+    "id": ("iddataset", "idunico", "idckan", "iddodataset", "datasetid", "id", "uuid"),
+}
+
+
+@dataclass
+class LinhaIdCkan:
+    linha: int
+    sigla: str | None
+    nome_pda: str | None
+    nome_dataset: str | None
+    id_informado: str | None  # texto da célula (aparado); None = sem ID
+
+
+def normalizar_uuid(valor: object) -> str | None:
+    """ID do CKAN (UUID) em minúsculas, ou None se o texto não for um UUID."""
+    t = (_texto(valor) or "").strip().lower()
+    return t if _UUID.fullmatch(t) else None
+
+
+def chave_base(sigla: object, nome: object) -> tuple[str, str]:
+    """SIGLA + nome da base para casar o CSV com o PDA, sem diferença de maiúsculas, acentos e
+    espaços extras."""
+    return normalizar_texto(sigla), normalizar_texto(nome)
+
+
+def _extrair_ids(linhas: Iterable[Sequence[object]], idx_cab: int, cabecalho: Sequence[object],
+                 col: dict[str, int]) -> list[LinhaIdCkan]:
+    def celula(ln: Sequence[object], campo: str) -> str | None:
+        i = col.get(campo)
+        return _texto(ln[i]) if i is not None and i < len(ln) else None
+
+    lidas: list[LinhaIdCkan] = []
+    titulos = _celulas_texto(cabecalho)
+    for numero, ln in enumerate(linhas, start=idx_cab + 2):
+        if all(_texto(v) is None for v in ln) or _celulas_texto(ln) == titulos:
+            continue
+        id_texto = celula(ln, "id")
+        lidas.append(LinhaIdCkan(
+            linha=numero, sigla=celula(ln, "sigla"), nome_pda=celula(ln, "nome_pda"),
+            nome_dataset=celula(ln, "nome_dataset"),
+            id_informado=None if normalizar_texto(id_texto) in _SEM_ID else id_texto))
+    return lidas
+
+
+def _ler_ids(abas: Iterable[Aba]) -> list[LinhaIdCkan]:
+    obrigatorios = [c for c, _, o in CAMPOS_IDS if o]
+    for aba in abas:
+        linhas = _linhas_limitadas(aba)
+        inicio = list(islice(linhas, _LINHAS_PROCURA_CABECALHO))
+        for idx, cab in enumerate(inicio):
+            col = sugerir_colunas(cab, _SINONIMOS_IDS)
+            if all(c in col for c in obrigatorios):
+                return _extrair_ids(chain(inicio[idx + 1:], linhas), idx, cab, col)
+    raise PlanilhaInvalida("Cabeçalho não encontrado: o arquivo precisa das colunas SIGLA, "
+                           "NOME_PDA e ID_DATASET (ou ID_UNICO); NOME_DATASET é opcional.")
+
+
+def ler_ids_ckan(conteudo: bytes, nome_arquivo: str) -> list[LinhaIdCkan]:
+    """CSV (ou .xlsx) com o ID do CKAN de cada base: SIGLA, NOME_PDA, NOME_DATASET, ID_DATASET.
+    Aceita UTF-8 ou Latin-1/Windows-1252 e separador ";" ou ","."""
+    return _com_abas(conteudo, nome_arquivo, _ler_ids, "o arquivo de IDs")

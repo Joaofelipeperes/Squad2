@@ -14,6 +14,7 @@ Acesso ao banco só pelo `PdaDao` (ADR-0019): excluir é exclusão lógica e tod
 o usuário que agiu (`created_id`/`changed_id`).
 """
 import re
+from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -39,7 +40,9 @@ from app.modules.pda.schemas import (
     BasesOut,
     DatasetOpcaoOut,
     FormularioOut,
+    IdsCkanOut,
     ImportacaoResumoOut,
+    LinhaIdCkanOut,
     LinhaIgnoradaOut,
     OpcaoOut,
     OpcoesOut,
@@ -438,6 +441,96 @@ def resolver_vinculos_pendentes(db: Session, plano_id: int, user: UsuarioAtual |
         _completar_orgao_por_evidencia(dao, plano_id)
     resolvidos = len(resolvidas)
     return {"vinculos_resolvidos": resolvidos, "vinculos_pendentes": len(pendentes) - resolvidos}
+
+
+# ------------------------------------------------------------------ IDs do CKAN em lote
+def importar_ids_ckan(db: Session, plano_id: int, conteudo: bytes, arquivo_nome: str,
+                      user: UsuarioAtual, *, aplicar: bool, sobrescrever: bool) -> IdsCkanOut:
+    """Grava o ID do dataset (o vínculo — ADR-0006) nas bases do PDA a partir de um CSV com
+    SIGLA, NOME_PDA, NOME_DATASET e ID_DATASET. Cada linha casa com UMA base pela SIGLA + nome da
+    base (sem diferença de maiúsculas, acentos e espaços extras). O ID precisa ser um UUID e
+    existir no inventário. `aplicar=False` só analisa; base que já tem OUTRO ID só é alterada com
+    `sobrescrever=True`. Bases fora do escopo de órgão do usuário não são vistas."""
+    dao = PdaDao.de(db, user)
+    plano = _plano_ou_404(dao, plano_id)
+    try:
+        linhas = regras.ler_ids_ckan(conteudo, arquivo_nome)
+    except regras.PlanilhaInvalida as exc:
+        raise Invalido(str(exc)) from exc
+    if not linhas:
+        raise Invalido("Nenhuma linha de dados no arquivo de IDs.")
+
+    por_chave: dict[tuple[str, str], list[BasePrevista]] = defaultdict(list)
+    for b in dao.bases_do_plano(plano.id, user):
+        por_chave[regras.chave_base(b.orgao_sigla, b.nome_previsto)].append(b)
+    uuids = {u for u in (regras.normalizar_uuid(ln.id_informado) for ln in linhas) if u}
+    datasets = {d.id_ckan: d for d in dao.datasets_por_id_ckan(uuids)}
+
+    sem_base: list[LinhaIdCkanOut] = []
+    invalidas: list[LinhaIdCkanOut] = []
+    candidatas: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    sem_id = 0
+    for ln in linhas:
+        uuid = regras.normalizar_uuid(ln.id_informado)
+        saida = LinhaIdCkanOut(linha=ln.linha, sigla=ln.sigla, nome_pda=ln.nome_pda,
+                               dataset_id=uuid or ln.id_informado)
+        if ln.id_informado is None:
+            sem_id += 1
+            continue
+        achadas = por_chave.get(regras.chave_base(ln.sigla, ln.nome_pda), [])
+        if not achadas:
+            sem_base.append(saida.model_copy(update={"motivo": "Nenhuma base do PDA com essa "
+                                                                "sigla e nome."}))
+        elif len(achadas) > 1:
+            sem_base.append(saida.model_copy(update={"motivo": f"{len(achadas)} bases do PDA com "
+                                                                "essa sigla e nome."}))
+        elif uuid is None:
+            invalidas.append(saida.model_copy(update={"motivo": "ID não é um UUID válido."}))
+        elif uuid not in datasets:
+            invalidas.append(saida.model_copy(update={
+                "motivo": "ID não encontrado no inventário do portal (rode a coleta)."}))
+        elif user.restrito_a_orgao and datasets[uuid].organizacao_id != user.orgao_id:
+            invalidas.append(saida.model_copy(update={"motivo": "Dataset de outro órgão."}))
+        else:
+            b = achadas[0]
+            atual = b.dataset.id_ckan if b.dataset is not None else None
+            candidatas.append((saida.model_copy(update={
+                "base_id": b.id, "base_nome": b.nome_previsto, "id_atual": atual}), b))
+
+    # Mesma base em mais de uma linha: com IDs diferentes, nenhuma é aplicada
+    ids_por_base: dict[int, set[str]] = defaultdict(set)
+    for saida, b in candidatas:
+        ids_por_base[b.id].add(saida.dataset_id or "")
+    atualizar: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    substituir: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    iguais = 0
+    vistas: set[int] = set()
+    for saida, b in candidatas:
+        if len(ids_por_base[b.id]) > 1:
+            invalidas.append(saida.model_copy(update={
+                "motivo": "A mesma base aparece em outra linha com outro ID."}))
+        elif b.id in vistas or b.dataset_id == datasets[saida.dataset_id or ""].id:
+            iguais += 1
+        elif b.dataset_id is None:
+            atualizar.append((saida, b))
+        else:
+            substituir.append((saida, b))
+        vistas.add(b.id)
+
+    gravar = atualizar + (substituir if sobrescrever else [])
+    if aplicar and gravar:
+        for saida, b in gravar:
+            ds = datasets[saida.dataset_id or ""]
+            b.dataset_id = ds.id
+            if ds.organizacao_id:  # o órgão do dataset vinculado prevalece (como no CRUD)
+                b.organizacao_id = ds.organizacao_id
+        with _transacao(dao):
+            dao.save_generic(*(b for _, b in gravar))
+            _completar_orgao_por_evidencia(dao, plano.id)
+    return IdsCkanOut(
+        aplicado=aplicar, total_linhas=len(linhas), atualizadas=len(gravar) if aplicar else 0,
+        atualizar=[s for s, _ in atualizar], substituir=[s for s, _ in substituir], iguais=iguais,
+        sem_id=sem_id, sem_base=sem_base, invalidas=sorted(invalidas, key=lambda s: s.linha))
 
 
 # ------------------------------------------------------------------ situação (PBI-15/19/22)

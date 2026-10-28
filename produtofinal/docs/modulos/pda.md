@@ -17,7 +17,7 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes (`pda.editar_vinculos`) |
+| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes, e **Importar IDs do CKAN** (`pda.editar_vinculos`) |
 
 - **Painel "PDA"** (acima dos filtros): select com os PDAs ("Nome (vigente)"), badge Vigente /
   Não vigente e a linha "N bases previstas · importado (ou criado manualmente) em dd/mm/aaaa por
@@ -57,6 +57,12 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
   CKAN não reconhecido —, vínculos resolvidos/pendentes, sem vínculo, órgãos sem correspondência),
   avisa quando falta a coluna "Prazo" ou quando não há nem coluna de ID do CKAN nem "Disponível no
   Portal" (e lista as demais colunas opcionais ausentes) e seleciona o PDA novo.
+- **Modal Importar IDs do CKAN** (`ImportarIdsModal.tsx`): arquivo CSV (ou .xlsx) com SIGLA,
+  NOME_PDA, NOME_DATASET e ID_DATASET (ou ID_UNICO) → **Analisar arquivo** (nada é gravado) → resumo:
+  bases sem ID que recebem, bases que já têm **outro** ID (lista atual → novo), já com o mesmo ID,
+  linhas sem base correspondente, linhas com problema no ID (não é UUID, fora do inventário, mesma
+  base com IDs diferentes) e linhas sem ID; caixa **Sobrescrever** (desmarcada) para as bases com
+  outro ID → **Gravar N IDs** → resumo final e recarga da tabela.
 - **Modal de detalhe** (`showDatasetDetails` do protótipo): nome, órgão, unidade, ID do dataset,
   dataset no portal, prazo, data de publicação (`metadata_created` do dataset vinculado e ativo;
   sem vínculo, "Não publicado"), periodicidade (+ original da planilha), última atualização real,
@@ -91,6 +97,7 @@ Referência visual: `#screen-pda` do Protótipo V1 (`renderPDA`, `getFilteredPDA
 | GET | `/formulario` | `pda.gerenciar_planos` | `FormularioOut`: organizações do portal visíveis ao usuário (`{valor: id, rotulo}`) e o domínio de periodicidade |
 | GET | `/formulario/datasets` | `pda.gerenciar_planos` | `?busca=` → `DatasetOpcaoOut[]` (até 20, ativos no portal primeiro): datasets do inventário por título ou name (contém, sem diferenciar maiúsculas), ID exato ou link do portal (name exato), no escopo de órgão do usuário. Menos de 2 caracteres → `[]` |
 | POST | `/planos/{id}/vincular` | `pda.editar_vinculos` | Tenta de novo os vínculos pendentes → `VinculosOut` (PBI-12/13); **404** |
+| POST | `/planos/{id}/ids-ckan` | `pda.editar_vinculos` | multipart: `arquivo` (CSV SIGLA, NOME_PDA, NOME_DATASET, ID_DATASET), `aplicar` (padrão false = só analisa), `sobrescrever` (padrão false) → `IdsCkanOut`. **404** plano; **413**; **422** formato, sem cabeçalho ou sem linhas |
 | GET | `/bases` | `pda.acessar` | `?plano_id=&orgao=&situacao=&periodicidade=&ano=&prazo=` → `BasesOut` (PBI-19 a 21). Sem `plano_id` usa o vigente; sem PDA → `plano=null` e listas vazias. **404** plano inexistente; **422** `ano` não numérico ou `prazo` diferente de `vencido`/`proximo` |
 | GET | `/bases/{id}` | `pda.acessar` | `BaseOut`; **404** se não existe ou é de outro órgão para usuário restrito |
 
@@ -108,6 +115,9 @@ Conflito de gravação em paralelo (nome ou vigente) também devolve 409. Contra
   linha_cabecalho (linha dos nomes das colunas; nulo = procurar nas 30 primeiras), delimitador
   (vazio = detectar).
 - `VinculosOut`: vinculos_resolvidos (nesta execução), vinculos_pendentes (que continuam pendentes).
+- `IdsCkanOut`: aplicado, total_linhas, atualizadas (0 na análise), atualizar, substituir (com
+  id_atual), iguais, sem_id, sem_base, invalidas — listas de `LinhaIdCkanOut` {linha, sigla,
+  nome_pda, dataset_id, base_id, base_nome, id_atual, motivo}.
 - `PlanoIn`: nome, vigencia_inicio, vigencia_fim, definir_vigente (só na criação).
 - `BaseIn`: orgao_sigla*, organizacao_id (vazio = pela sigla), nome_previsto*, descricao,
   unidade_responsavel, periodicidade (valor do domínio ou texto livre, normalizado),
@@ -149,6 +159,12 @@ de todas as bases). As funções genéricas do `Dao` ignoram registros excluído
 - `id_ckan_da_celula(valor) -> (id | None, reconhecido)` — UUID → ID minúsculo; vazio ou "Não
   encontrado" → sem ID; outro texto → sem ID e aviso. `chave_cabecalho(valor)` — nome de coluna
   comparável (sem acento, minúsculo, "_" como espaço).
+- `ler_ids_ckan(conteudo, nome_arquivo) -> list[LinhaIdCkan]` — "Importar IDs do CKAN" em
+  lote, para um PDA já importado: CSV/.xlsx de IDs (UTF-8 ou
+  Latin-1/Windows-1252, ";" ou ","); "Não encontrado" ou vazio = sem ID. `normalizar_uuid(valor)` e
+  `chave_base(sigla, nome)` (comparação sem maiúsculas, acentos e espaços extras).
+- `sugerir_colunas(cabecalho, sinonimos)` — acha as colunas do arquivo de IDs pelo nome
+  (igual, muito parecido ou que começa/termina com o esperado).
 - `normalizar_periodicidade(texto) -> str` — valor do domínio `DOMINIO_PERIODICIDADE`;
   `periodicidade_informada(texto)` — no cadastro manual, valor do domínio fica como está
   ("Múltipla", "Sem informação"), texto livre é normalizado.
@@ -171,6 +187,12 @@ de todas as bases). As funções genéricas do `Dao` ignoram registros excluído
   atômico; vincula pelo ID do CKAN da planilha (`_datasets_por_id_ckan`) e, sem ID, pelo name.
 - `resolver_vinculos_pendentes(db, plano_id, user=None) -> {"vinculos_resolvidos", "vinculos_pendentes"}`
   — PBI-12/13; pendente com ID é resolvido pelo ID, sem ID pelo name.
+- `importar_ids_ckan(db, plano_id, conteudo, arquivo_nome, user, *, aplicar, sobrescrever) -> IdsCkanOut`
+  — pelo `PdaDao` (`datasets_por_id_ckan`): acha o dataset pelo `id_ckan` e grava `dataset_id` (o vínculo, ADR-0006) nas bases casadas por SIGLA + nome (uma base só; mais
+  de uma = ambígua, não aplica). ID precisa ser UUID e existir no inventário; base com outro ID só
+  muda com `sobrescrever`; mesma base com IDs diferentes no arquivo não é aplicada; o órgão do
+  dataset vinculado prevalece e depois roda `_completar_orgao_por_evidencia`. Usuário restrito a
+  órgão só vê as próprias bases e só vincula datasets do próprio órgão.
 - `listar_planos(db, user=None) -> list[PlanoOut]` · `obter_plano(db, plano_id, user=None)` ·
   `definir_vigente(db, plano_id, user=None) -> PlanoOut` · `excluir_plano(db, plano_id, user=None) -> None`
   (exclusão lógica do plano e das bases). As gravações recebem o `user` que agiu (auditoria).
@@ -230,6 +252,7 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | consome | atualizacoes | `service.ultima_atualizacao_real(recursos)` → `UltimaAtualizacao(data, estimada)` (implementada em `atualizacoes/regras.py`) |
 | consome | acesso | `filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)` nas consultas de bases |
 | é consumido por | painel | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` — bases previstas, vinculadas, publicadas e metas por órgão na tela Organizações (US19); sempre o PDA vigente |
+| é consumido por | painel | `plano_vigente` + `bases_do_plano` e `regras` (situações) — cartões, gráfico por situação e alertas do Dashboard; `hoje_local()` |
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
 | é consumido por | assistente | `plano_vigente` + `bases_do_plano(db, plano.id, user)` — situação e prazo das bases (do órgão ou do dataset citado) e listas de atraso/prazo; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
@@ -399,7 +422,10 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 21/10/2026 | Vínculo base → dataset pela busca no inventário: `GET /formulario/datasets` (`buscar_datasets`), `BaseIn.dataset_id` (precede `dataset_link`; mesmo dataset mantém o name da planilha) e campo de busca `DatasetBusca` no `BaseFormModal` no lugar do link digitado; o órgão acompanha o do dataset escolhido. Sem mudança de tabela (FKs `dataset_id` → `dataset` e `dataset.organizacao_id` → `organizacao` já existiam) | Victor |
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `pda_base_prevista.organizacao_id` e `.dataset_id` passam a inteiros (`organizacao.id`, `dataset.id`); `BaseIn`, `BaseOut`, `DatasetOpcaoOut` e as opções de organização usam o `id`; `BaseOut.dataset_id_ckan` para o link do portal; `orgao_chave` = `id` em texto | Victor |
 | 22/10/2026 | DAO (ADR-0019): `PdaDao` em `dao.py` concentra todo acesso ao banco do módulo; exclusão de PDA e de base passa a ser lógica (`deleted`), com as bases do PDA excluídas junto; `total_bases` conta só as ativas; únicos do nome e do vigente só entre ativos (nome de PDA excluído pode ser reaproveitado); gravações registram o usuário em `created_id`/`changed_id` (rotas de editar, vigente, excluir e vincular passam a receber o usuário) | Victor |
+| 22/10/2026 | Importação do PDA com etapa de **mapeamento de colunas** (`POST /planilha/colunas`, `MapeamentoIn` em `POST /planos`, `regras.ler_cabecalho`/`sugerir_colunas`/`validar_mapeamento`, `MapeamentoColunas.tsx`) e **Importar IDs do CKAN** em lote por SIGLA + NOME_PDA com análise, confirmação para sobrescrever e resumo (`POST /planos/{id}/ids-ckan`, `regras.ler_ids_ckan`, `service.importar_ids_ckan`, `ImportarIdsModal.tsx`) | Humberto |
 | 23/10/2026 | Merge com `desenvolvimento`: o campo "ID do dataset no CKAN" do Humberto passa a `BaseIn.dataset_id_ckan` (`_vinculo_por_id_ckan`, mesma validação, agora pelo `PdaDao`), abaixo de `dataset_id` (busca) na prioridade; na tela, o ID do CKAN é colado no campo de busca `DatasetBusca`, que já o aceita, em vez de um campo separado | Victor |
 | 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
 | 23/10/2026 | Importação com o ID do CKAN da planilha (ADR-0022): coluna "ID_UNICO" vincula a base ao dataset do inventário na importação (pendente pelo ID se não coletado; `pda_base_prevista.dataset_id_ckan_planilha`, migração `b9d4e6f2a7c1`); Atualizar vínculos resolve pelo ID; órgão também pelo nome do órgão; leitura configurável (`ConfigLeitura`: colunas, linha do cabeçalho, delimitador; campo `config` no `POST /planos`); resumo com `tem_coluna_id_ckan` e `avisos`; modal Importar PDA com abas Carregar/Configuração (configuração salva no navegador); `BaseOut.dataset_id_ckan_planilha` no formulário, detalhe e tabela | Victor |
 | 28/10/2026 | Merge com `desenvolvimento` (LGPD): a ADR da importação configurável passa a ADR-0022 (o número 0020 já era da ADR do Claude Haiku) e a migração `b9d4e6f2a7c1` passa a vir depois de `9d583e5bd118` (LGPD), evitando duas pontas no Alembic; variante larga do `Modal` unificada com a da LGPD | Victor |
+| 28/10/2026 | Merge com `desenvolvimento`: mapeamento de colunas e Importar IDs do CKAN adaptados à chave própria (ADR-0018) e ao DAO (ADR-0019) — o ID do arquivo é procurado em `dataset.id_ckan` (`PdaDao.datasets_por_id_ckan`) e a base grava `dataset.id`; `importar_plano` recebe `user` e `mapeamento` | Humberto |
+| 28/10/2026 | Merge com `desenvolvimento` (#11): fica a importação configurável do Victor (ADR-0022, aba Configuração e ID_UNICO na própria importação); **sai a etapa de mapeamento de colunas** (`POST /planilha/colunas`, `MapeamentoIn`, `regras.ler_cabecalho`/`validar_mapeamento`, `MapeamentoColunas.tsx`); fica o **Importar IDs do CKAN** em lote para PDA já importado (`regras.ler_ids_ckan` sobre `_UUID`/`_SEM_ID` da ADR-0022) | Humberto |

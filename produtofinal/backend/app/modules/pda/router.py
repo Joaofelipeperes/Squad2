@@ -17,6 +17,7 @@ from app.modules.pda.schemas import (
     ConfigImportacaoIn,
     DatasetOpcaoOut,
     FormularioOut,
+    IdsCkanOut,
     ImportacaoResumoOut,
     PlanoIn,
     PlanoOut,
@@ -59,6 +60,16 @@ def _config_form(valor: str | None) -> regras.ConfigLeitura:
 
 def _vazio(valor: str | None) -> str | None:
     return (valor.strip() or None) if valor is not None else None
+
+
+def _conteudo(arquivo: UploadFile, o_que: str = "a planilha do PDA") -> bytes:
+    """Arquivo enviado (.xlsx ou .csv, até 5 MB) → bytes; 422 formato, 413 tamanho."""
+    if regras.extensao_valida(arquivo.filename) is None:
+        raise HTTPException(422, f"Formato não suportado: envie {o_que} em .xlsx ou .csv.")
+    conteudo = arquivo.file.read(regras.TAMANHO_MAXIMO + 1)
+    if len(conteudo) > regras.TAMANHO_MAXIMO:
+        raise HTTPException(413, "Arquivo maior que 5 MB.")
+    return conteudo
 
 
 # ------------------------------------------------------------------ planos (PDAs)
@@ -146,6 +157,23 @@ def vincular(plano_id: int, db: DbSession,
     """PBI-12/13 — tenta resolver de novo os vínculos pendentes do PDA."""
     with _erros_http():
         return service.resolver_vinculos_pendentes(db, plano_id, user)
+
+
+@router.post("/planos/{plano_id}/ids-ckan", response_model=IdsCkanOut)
+def importar_ids_ckan(
+    plano_id: int,
+    db: DbSession,
+    arquivo: Annotated[UploadFile, File()],
+    user: Annotated[UsuarioAtual, Depends(require(P.PDA_EDITAR_VINCULOS))],
+    aplicar: Annotated[bool, Form()] = False,
+    sobrescrever: Annotated[bool, Form()] = False,
+):
+    """Importa o ID do CKAN de cada base (CSV SIGLA, NOME_PDA, NOME_DATASET, ID_DATASET).
+    `aplicar=false` só analisa; `sobrescrever=true` troca IDs diferentes já gravados."""
+    conteudo = _conteudo(arquivo, "o arquivo de IDs")
+    with _erros_http():
+        return service.importar_ids_ckan(db, plano_id, conteudo, arquivo.filename or "", user,
+                                         aplicar=aplicar, sobrescrever=sobrescrever)
 
 
 # ------------------------------------------------------------------ bases previstas
