@@ -15,6 +15,7 @@ from app.modules.pda.schemas import (
     BaseOut,
     BasesOut,
     ColunasPlanilhaOut,
+    DatasetOpcaoOut,
     FormularioOut,
     IdsCkanOut,
     ImportacaoResumoOut,
@@ -99,7 +100,7 @@ def importar_plano(
         return service.importar_plano(
             db, nome=nome, vigencia_inicio=inicio, vigencia_fim=fim,
             definir_vigente=definir_vigente, arquivo_nome=arquivo.filename or "",
-            conteudo=conteudo, importado_por=user.nome, mapeamento=mapa)
+            conteudo=conteudo, importado_por=user.nome, user=user, mapeamento=mapa)
 
 
 @router.post("/planilha/colunas", response_model=ColunasPlanilhaOut,
@@ -117,7 +118,7 @@ def criar_plano(dados: PlanoIn, db: DbSession,
                 user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Cria um PDA vazio, sem planilha (as bases são incluídas uma a uma). JSON."""
     with _erros_http():
-        return service.criar_plano(db, dados, criado_por=user.nome)
+        return service.criar_plano(db, dados, criado_por=user.nome, user=user)
 
 
 @router.get("/planos/{plano_id}", response_model=PlanoOut)
@@ -128,37 +129,38 @@ def obter_plano(plano_id: int, db: DbSession,
         return service.obter_plano(db, plano_id, user)
 
 
-@router.put("/planos/{plano_id}", response_model=PlanoOut,
-            dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def atualizar_plano(plano_id: int, dados: PlanoIn, db: DbSession):
+@router.put("/planos/{plano_id}", response_model=PlanoOut)
+def atualizar_plano(plano_id: int, dados: PlanoIn, db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Edita nome e vigência do PDA (o vigente é trocado em /vigente)."""
     with _erros_http():
-        return service.atualizar_plano(db, plano_id, dados)
+        return service.atualizar_plano(db, plano_id, dados, user)
 
 
-@router.put("/planos/{plano_id}/vigente", response_model=PlanoOut,
-            dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def definir_vigente(plano_id: int, db: DbSession):
+@router.put("/planos/{plano_id}/vigente", response_model=PlanoOut)
+def definir_vigente(plano_id: int, db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Define o PDA vigente (rege a tela e os indicadores de gestão)."""
     with _erros_http():
-        return service.definir_vigente(db, plano_id)
+        return service.definir_vigente(db, plano_id, user)
 
 
 @router.delete("/planos/{plano_id}", status_code=status.HTTP_204_NO_CONTENT,
-               response_class=Response, dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def excluir_plano(plano_id: int, db: DbSession):
-    """Exclui um PDA e suas bases (o vigente só quando é o único PDA)."""
+               response_class=Response)
+def excluir_plano(plano_id: int, db: DbSession,
+                  user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Exclui (exclusão lógica) um PDA e suas bases (o vigente só quando é o único PDA)."""
     with _erros_http():
-        service.excluir_plano(db, plano_id)
+        service.excluir_plano(db, plano_id, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/planos/{plano_id}/vincular", response_model=VinculosOut,
-             dependencies=[Depends(require(P.PDA_EDITAR_VINCULOS))])
-def vincular(plano_id: int, db: DbSession):
+@router.post("/planos/{plano_id}/vincular", response_model=VinculosOut)
+def vincular(plano_id: int, db: DbSession,
+             user: Annotated[UsuarioAtual, Depends(require(P.PDA_EDITAR_VINCULOS))]):
     """PBI-12/13 — tenta resolver de novo os vínculos pendentes do PDA."""
     with _erros_http():
-        return service.resolver_vinculos_pendentes(db, plano_id)
+        return service.resolver_vinculos_pendentes(db, plano_id, user)
 
 
 @router.post("/planos/{plano_id}/ids-ckan", response_model=IdsCkanOut)
@@ -212,7 +214,7 @@ def obter_base(base_id: int, db: DbSession,
 
 
 @router.get("/datasets/{dataset_id}/bases", response_model=list[BaseOut])
-def bases_do_dataset(dataset_id: str, db: DbSession,
+def bases_do_dataset(dataset_id: int, db: DbSession,
                      user: Annotated[UsuarioAtual, Depends(require(P.PDA_ACESSAR))]):
     """Bases previstas vinculadas a um dataset do portal (vigente primeiro) — tela Datasets."""
     return [BaseOut.model_validate(b) for b in service.bases_do_dataset(db, dataset_id, user)]
@@ -223,6 +225,14 @@ def opcoes_formulario(db: DbSession,
                       user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Opções do formulário de base: organizações do portal e periodicidades."""
     return service.opcoes_formulario(db, user)
+
+
+@router.get("/formulario/datasets", response_model=list[DatasetOpcaoOut])
+def buscar_datasets(db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))],
+                    busca: str | None = None):
+    """Busca de datasets do inventário para vincular à base (título, name, ID do CKAN ou link)."""
+    return service.buscar_datasets(db, user, busca)
 
 
 @router.post("/planos/{plano_id}/bases", response_model=BaseOut,

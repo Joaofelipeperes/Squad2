@@ -7,7 +7,7 @@
 | **User stories** | US9 (PBI-23 a PBI-26, PBI-78, PBI-79, PBI-81), US10 (PBI-27 a PBI-30) |
 | **Backend** | `backend/app/modules/atualizacoes/` |
 | **Frontend** | `frontend/src/modules/atualizacoes/` |
-| **Última atualização** | 18/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Indica se cada dataset está de fato sendo atualizado conforme a periodicidade declarada, usando a
@@ -24,6 +24,8 @@ Referência visual: `#screen-updates` do Protótipo V1, incluindo o aviso sobre 
 Nenhum endpoint ainda. Previsto: `GET /api/v1/atualizacoes/datasets` (`atualizacoes.acessar`).
 
 ## Serviços e métodos
+Sem acesso ao banco (funções puras); não tem `dao.py`.
+
 `regras.py` (funções puras, reaproveitáveis numa extensão CKAN):
 - `ultima_atualizacao_real(recursos) -> UltimaAtualizacao` — PBI-23 a PBI-25.
   `UltimaAtualizacao(data: datetime | None, estimada: bool)` (NamedTuple). Considera só recursos
@@ -79,3 +81,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 30/09/2026 | Esqueleto: contratos e permissão | Victor |
 | 07/10/2026 | `regras.ultima_atualizacao_real` implementada com `UltimaAtualizacao(data, estimada)` (PBI-23 a PBI-25); `service.py` delega e o módulo pda a consome | Humberto |
 | 18/10/2026 | Interações: a tela Datasets (inventario) passa a consumir `regras.ultima_atualizacao_real`; sem mudança de código neste módulo | Humberto |
+| 22/10/2026 | `ultima_atualizacao_real`: a estimativa usa a data de criação no CKAN — `created_ckan` nos objetos do banco (o `created` deles é a auditoria, ADR-0019) e `created` nos payloads/dicts do CKAN | Victor |

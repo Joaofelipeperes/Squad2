@@ -7,7 +7,7 @@
 | **User stories** | US16 (PBI-48 a PBI-50), US17 (PBI-51 a PBI-53) |
 | **Backend** | `backend/app/modules/metadados/` |
 | **Frontend** | sem tela própria — resultados aparecem em Datasets, Organizações e Relatórios |
-| **Última atualização** | 18/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Mede o preenchimento dos metadados obrigatórios e identifica datasets sem recurso e recursos em
@@ -26,6 +26,8 @@ Nenhum endpoint ainda. Previsto: `GET /api/v1/metadados/completude` e `/formatos
 (`metadados.acessar`).
 
 ## Serviços e métodos
+`dao.py` — `MetadadosDao(Dao)` (ADR-0019): `recursos_validos_de_datasets_ativos` (base de `recursos_formato_fechado`). Só leitura; registros excluídos não contam.
+
 Contratos em `service.py`:
 - `completude(dataset, obrigatorios) -> float` — PBI-49.
 - `datasets_sem_recurso(db)` — PBI-51.
@@ -73,3 +75,5 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 |---|---|---|
 | 30/09/2026 | Esqueleto: contratos e permissão | Victor |
 | 18/10/2026 | Formato fechado (PBI-53): `regras.eh_formato_aberto`/`normalizar_formato` e `service.recursos_formato_fechado`, usados pela tela Organizações | Humberto |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): `recursos_formato_fechado` junta `Recurso` × `Dataset` por `Dataset.id`; sem mudança de comportamento | Victor |
+| 22/10/2026 | Banco só pelo `MetadadosDao` (ADR-0019); recursos excluídos não entram no formato fechado | Victor |

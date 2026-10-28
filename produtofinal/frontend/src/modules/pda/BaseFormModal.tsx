@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
-import type { BaseEntrada, BasePda, PlanoPda } from "./api";
+import type { BaseEntrada, BasePda, DatasetOpcao, PlanoPda } from "./api";
 import { pdaApi } from "./api";
+import { DatasetBusca } from "./DatasetBusca";
 import { Modal } from "@/shared/ui/Modal";
 
 interface Props {
@@ -24,14 +25,13 @@ interface Campos {
   prazo_abertura: string;
   politicas_publicas: string;
   sigiloso: "" | "sim" | "nao";
+  /** name da planilha ainda sem dataset no inventário (vínculo pendente); mantido ao salvar. */
   dataset_link: string;
-  dataset_id: string;
 }
 
 const VAZIO: Campos = {
   orgao_sigla: "", organizacao_id: "", nome_previsto: "", descricao: "", unidade_responsavel: "",
   periodicidade: "", prazo_abertura: "", politicas_publicas: "", sigiloso: "", dataset_link: "",
-  dataset_id: "",
 };
 
 function camposDaBase(b: BasePda): Campos {
@@ -45,18 +45,30 @@ function camposDaBase(b: BasePda): Campos {
     prazo_abertura: b.prazo_abertura ?? "",
     politicas_publicas: b.politicas_publicas ?? "",
     sigiloso: b.possui_conteudo_sigiloso == null ? "" : b.possui_conteudo_sigiloso ? "sim" : "nao",
-    // Endereço atual (vínculo resolvido) ou o informado na planilha (pendente)
-    dataset_link: b.dataset_name ?? b.dataset_name_planilha ?? "",
-    dataset_id: b.dataset_id ?? "",
+    dataset_link: b.dataset_id != null ? "" : b.dataset_name_planilha ?? "",
+  };
+}
+
+/** Dataset já vinculado à base, no formato da busca. */
+function datasetDaBase(b: BasePda): DatasetOpcao | null {
+  if (b.dataset_id == null) return null;
+  return {
+    id: b.dataset_id,
+    id_ckan: b.dataset_id_ckan,
+    name: b.dataset_name ?? String(b.dataset_id),
+    titulo: b.dataset_titulo ?? b.dataset_name ?? String(b.dataset_id),
+    organizacao_id: b.orgao_chave.startsWith("sigla:") ? null : Number(b.orgao_chave),
+    orgao_nome: b.orgao_nome,
+    ativo_no_portal: b.dataset_ativo ?? true,
   };
 }
 
 const ouNulo = (v: string) => (v.trim() ? v.trim() : null);
 
-function entrada(c: Campos): BaseEntrada {
+function entrada(c: Campos, dataset: DatasetOpcao | null): BaseEntrada {
   return {
     orgao_sigla: c.orgao_sigla.trim(),
-    organizacao_id: ouNulo(c.organizacao_id),
+    organizacao_id: c.organizacao_id ? Number(c.organizacao_id) : null,
     nome_previsto: c.nome_previsto.trim(),
     descricao: ouNulo(c.descricao),
     unidade_responsavel: ouNulo(c.unidade_responsavel),
@@ -64,8 +76,8 @@ function entrada(c: Campos): BaseEntrada {
     prazo_abertura: ouNulo(c.prazo_abertura),
     politicas_publicas: ouNulo(c.politicas_publicas),
     possui_conteudo_sigiloso: c.sigiloso === "" ? null : c.sigiloso === "sim",
-    dataset_link: ouNulo(c.dataset_link),
-    dataset_id: ouNulo(c.dataset_id),
+    dataset_id: dataset?.id ?? null,
+    dataset_link: dataset ? null : ouNulo(c.dataset_link),
   };
 }
 
@@ -74,23 +86,32 @@ const FORM_ID = "pda-base-form";
 /** Inclusão e edição manual de uma base prevista do PDA (mesmos campos da planilha). */
 export function BaseFormModal({ aberto, plano, base, onFechar, onSalva }: Props) {
   const [c, setC] = useState<Campos>(VAZIO);
+  const [dataset, setDataset] = useState<DatasetOpcao | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const opcoes = useQuery({ queryKey: ["pda", "formulario"], queryFn: pdaApi.formulario, enabled: aberto,
     staleTime: 5 * 60_000 });
 
   useEffect(() => {
     setC(aberto && base ? camposDaBase(base) : VAZIO);
+    setDataset(aberto && base ? datasetDaBase(base) : null);
     setErro(null);
   }, [aberto, base]);
 
   const salvar = useMutation({
-    mutationFn: () => (base ? pdaApi.atualizarBase(base.id, entrada(c)) : pdaApi.criarBase(plano.id, entrada(c))),
+    mutationFn: () => (base ? pdaApi.atualizarBase(base.id, entrada(c, dataset))
+      : pdaApi.criarBase(plano.id, entrada(c, dataset))),
     onSuccess: (b) => onSalva(b, !base),
     onError: (e: Error) => setErro(e.message),
   });
 
   const set = (campo: keyof Campos) => (e: { target: { value: string } }) =>
     setC((atual) => ({ ...atual, [campo]: e.target.value }));
+
+  /** O órgão da base acompanha o do dataset escolhido (o backend recusa órgãos incoerentes). */
+  function escolherDataset(d: DatasetOpcao | null) {
+    setDataset(d);
+    if (d) setC((atual) => ({ ...atual, dataset_link: "", organizacao_id: d.organizacao_id != null ? String(d.organizacao_id) : atual.organizacao_id }));
+  }
 
   function enviar(e: FormEvent) {
     e.preventDefault();
@@ -171,23 +192,21 @@ export function BaseFormModal({ aberto, plano, base, onFechar, onSalva }: Props)
                  onChange={set("politicas_publicas")} />
         </div>
         <div className="form-field full">
-          <label htmlFor="pda-base-link">Disponível no portal (endereço do dataset)</label>
-          <input id="pda-base-link" className="text-input" value={c.dataset_link} maxLength={500}
-                 placeholder="https://dadosabertos.go.gov.br/dataset/folha-de-pagamento"
-                 onChange={set("dataset_link")} />
+          <label htmlFor="pda-base-dataset">Dataset no portal</label>
+          <DatasetBusca id="pda-base-dataset" valor={dataset} onEscolher={escolherDataset} />
+          {!dataset && c.dataset_link && (
+            <span className="help">
+              <i className="fa-solid fa-triangle-exclamation" /> Vínculo pendente: o name <span className="mono">
+              {c.dataset_link}</span> não foi encontrado no inventário. Busque o dataset para vincular ou{" "}
+              <button type="button" className="link-btn" onClick={() => setC((a) => ({ ...a, dataset_link: "" }))}>
+                descarte o vínculo pendente
+              </button>.
+            </span>
+          )}
           <span className="help">
-            Link do dataset ou só o name. Serve para encontrar o ID do dataset, que é o vínculo gravado; deixe
-            vazio se a base ainda não foi publicada.
-          </span>
-        </div>
-        <div className="form-field full">
-          <label htmlFor="pda-base-dataset-id">ID do dataset no CKAN</label>
-          <input id="pda-base-dataset-id" className="text-input mono" value={c.dataset_id} maxLength={100}
-                 placeholder="ex.: 477fa23d-9bd3-4eba-bbf2-6d12376df25f" spellCheck={false}
-                 onChange={set("dataset_id")} />
-          <span className="help">
-            Use quando o nome no PDA é diferente do name no portal. O ID tem prioridade sobre o endereço e
-            precisa existir no inventário; está na tela Datasets (coluna ID CKAN).
+            Busque pelo título, name, link ou ID do CKAN (útil quando o nome no PDA é diferente do name no
+            portal; o ID está na tela Datasets). O vínculo gravado é o ID do dataset; deixe vazio se a base ainda
+            não foi publicada.
           </span>
         </div>
         {opcoes.isError && (

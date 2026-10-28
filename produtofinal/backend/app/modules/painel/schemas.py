@@ -13,8 +13,8 @@ class OrganizacaoOut(BaseModel):
     """Linha da tela Organizações (US19). Campos `None` = indicador ainda não calculável
     (a tela mostra "aguardando vínculo" / "a definir")."""
 
-    chave: str  # organizacao_id, ou 'sigla:<SIGLA>' para sigla do PDA sem organização no portal
-    organizacao_id: str | None
+    chave: str  # id da organização (texto), ou 'sigla:<SIGLA>' para sigla do PDA sem organização
+    organizacao_id: int | None
     nome: str
     siglas: list[str]  # siglas usadas no PDA vigente para este órgão
     # Inventário do portal

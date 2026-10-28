@@ -12,11 +12,12 @@ from app.modules.inventario.models import Coleta, Dataset, Organizacao, Recurso
 from app.modules.inventario.regras import eh_dicionario_de_dados
 from app.modules.pda import regras, service
 from app.modules.pda.regras import casar_orgao, normalizar_periodicidade
-from tests.conftest import SENHA, login
+from tests.conftest import SEDUC, SENHA, login
 
 API = "/api/v1/pda"
 URL = "https://dadosabertos.go.gov.br/dataset/"
 CAB = "Orgão;Base de Dados;Atualização;Disponível no Portal"
+ADM, FOLHA = 3, 1  # `id` próprio da organização e do dataset de `adm_com_dataset`
 
 # Organizações reais do portal (coleta de 07/10/2026)
 ORGAOS_REAIS = [
@@ -142,21 +143,21 @@ def adm_com_dataset():
     """Organização sem sigla reconhecível pela heurística ("administracao") com um dataset
     publicado: a sigla SEAD só casa pela evidência do vínculo por ID."""
     with SessionLocal() as db:
-        db.add(Organizacao(ckan_id="org-adm", name="administracao",
+        db.add(Organizacao(id=ADM, id_ckan="org-adm", name="administracao",
                            titulo="Secretaria da Administração"))
         db.add_all([Coleta(id=1, status="ok"), Coleta(id=2, status="ok")])
-        db.add(Dataset(ckan_id="ds-folha", name="folha-de-pagamento", titulo="Folha",
-                       organizacao_id="org-adm", ultima_coleta_id=2,
+        db.add(Dataset(id=FOLHA, id_ckan="ds-folha", name="folha-de-pagamento", titulo="Folha",
+                       organizacao_id=ADM, ultima_coleta_id=2,
                        metadata_created=datetime(2022, 9, 19, 12, 0, tzinfo=UTC)))
         db.add_all([
-            Recurso(ckan_id="r-atual", dataset_id="ds-folha", nome="folha.csv", formato="CSV",
+            Recurso(id=1, id_ckan="r-atual", dataset_id=FOLHA, nome="folha.csv", formato="CSV",
                     ultima_coleta_id=2, last_modified=datetime(2026, 9, 26, tzinfo=UTC)),
-            Recurso(ckan_id="r-xlsx", dataset_id="ds-folha", nome="folha.xlsx", formato="XLSX",
+            Recurso(id=2, id_ckan="r-xlsx", dataset_id=FOLHA, nome="folha.xlsx", formato="XLSX",
                     ultima_coleta_id=2, last_modified=datetime(2026, 9, 20, tzinfo=UTC)),
-            Recurso(ckan_id="r-dic", dataset_id="ds-folha", nome="Dicionário de dados",
+            Recurso(id=3, id_ckan="r-dic", dataset_id=FOLHA, nome="Dicionário de dados",
                     formato="PDF", eh_dicionario_dados=True, ultima_coleta_id=2),
             # apagado do CKAN: não veio na última coleta do dataset → não conta
-            Recurso(ckan_id="r-apagado", dataset_id="ds-folha", nome="antigo.csv",
+            Recurso(id=4, id_ckan="r-apagado", dataset_id=FOLHA, nome="antigo.csv",
                     formato="ODS", ultima_coleta_id=1,
                     last_modified=datetime(2026, 10, 5, tzinfo=UTC)),
         ])
@@ -170,7 +171,7 @@ def test_sigla_herda_organizacao_do_vinculo_por_id(client, gerente, adm_com_data
     assert r.status_code == 201, r.text
     assert "SEAD" not in r.json()["orgaos_sem_correspondencia"]
     corpo = client.get(f"{API}/bases", headers=gerente).json()
-    assert {b["orgao_chave"] for b in corpo["bases"]} == {"org-adm"}
+    assert {b["orgao_chave"] for b in corpo["bases"]} == {str(ADM)}
     assert len(corpo["opcoes"]["orgaos"]) == 1  # uma opção só para a sigla
 
 
@@ -219,7 +220,7 @@ def test_contagens_do_plano_respeitam_escopo_de_orgao(client, admin, gerente):
         "codigo": "pda_orgao", "nome": "PDA do órgão", "permissoes": ["pda.acessar"]}).json()
     client.post("/api/v1/acesso/usuarios", headers=admin, json={
         "email": "pda@seduc.go.gov.br", "nome": "PDA SEDUC", "senha": SENHA,
-        "papel_ids": [papel["id"]], "orgao_id": "org-seduc"})
+        "papel_ids": [papel["id"]], "orgao_id": SEDUC})
     h = login(client, "pda@seduc.go.gov.br")
     corpo = client.get(f"{API}/bases", headers=h).json()
     assert corpo["total_previstas"] == 2

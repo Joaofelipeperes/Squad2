@@ -99,7 +99,8 @@ export interface BasePda {
   possui_conteudo_sigiloso: boolean | null;
   prazo_abertura: string | null;
   vinculo: Vinculo;
-  dataset_id: string | null;
+  dataset_id: number | null;
+  dataset_id_ckan: string | null; // ID do dataset no CKAN (link do portal)
   dataset_name: string | null;
   dataset_titulo: string | null;
   dataset_name_planilha: string | null;
@@ -150,7 +151,7 @@ export interface PlanoEntrada {
 /** Inclusão (POST /pda/planos/{id}/bases) e edição (PUT /pda/bases/{id}) de uma base. */
 export interface BaseEntrada {
   orgao_sigla: string;
-  organizacao_id: string | null; // vazio = identificar pela sigla
+  organizacao_id: number | null; // vazio = identificar pela sigla
   nome_previsto: string;
   descricao: string | null;
   unidade_responsavel: string | null;
@@ -158,12 +159,24 @@ export interface BaseEntrada {
   prazo_abertura: string | null;
   politicas_publicas: string | null;
   possui_conteudo_sigiloso: boolean | null;
+  dataset_id: number | null; // escolhido na busca; tem precedência sobre dataset_link
   dataset_link: string | null; // link do portal ou name; serve só para achar o ID
-  dataset_id: string | null; // ID do dataset no CKAN (o vínculo); tem prioridade sobre o link
+  dataset_id_ckan?: string | null; // ID do dataset no CKAN digitado (a busca já aceita o ID)
 }
 
-/** Opções do formulário de base: organizações do portal (valor = ID CKAN) e periodicidades. */
+/** Opções do formulário de base: organizações do portal (valor = id) e periodicidades. */
 export interface FormularioPda { organizacoes: Opcao[]; periodicidades: string[] }
+
+/** Dataset do inventário encontrado pela busca do formulário de base (valor = ID CKAN). */
+export interface DatasetOpcao {
+  id: number;
+  id_ckan: string | null;
+  name: string;
+  titulo: string;
+  organizacao_id: number | null;
+  orgao_nome: string | null;
+  ativo_no_portal: boolean;
+}
 
 /** Limite de tamanho do arquivo aceito pelo backend (413 acima disso). */
 export const TAMANHO_MAX_ARQUIVO = 5 * 1024 * 1024;
@@ -196,6 +209,8 @@ export const pdaApi = {
   criarPlano: (dados: PlanoEntrada) => api.post<PlanoPda>("/pda/planos/manual", dados),
   atualizarPlano: (id: number, dados: PlanoEntrada) => api.put<PlanoPda>(`/pda/planos/${id}`, dados),
   formulario: () => api.get<FormularioPda>("/pda/formulario"),
+  buscarDatasets: (busca: string) =>
+    api.get<DatasetOpcao[]>(`/pda/formulario/datasets?${new URLSearchParams({ busca })}`),
   criarBase: (planoId: number, dados: BaseEntrada) => api.post<BasePda>(`/pda/planos/${planoId}/bases`, dados),
   atualizarBase: (id: number, dados: BaseEntrada) => api.put<BasePda>(`/pda/bases/${id}`, dados),
   excluirBase: (id: number) => api.del<void>(`/pda/bases/${id}`),

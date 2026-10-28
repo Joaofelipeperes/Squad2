@@ -7,7 +7,7 @@
 | **User stories** | US28 (PBI-96, PBI-97) |
 | **Backend** | `backend/app/modules/assistente/` |
 | **Frontend** | `frontend/src/modules/assistente/` (widget global) |
-| **Última atualização** | 08/10/2026 |
+| **Última atualização** | 22/10/2026 |
 
 ## Propósito
 Responde em linguagem natural perguntas sobre órgãos, bases, prazos e alertas, com base na última coleta.
@@ -25,6 +25,8 @@ Referência visual: `#chat-fab` e `#chat-panel` do Protótipo V1. É um `AppWidg
 | POST | `/perguntar` | `assistente.usar` | `{pergunta}` → `{resposta, modelo}`; 503 sem modelo vinculado, 502 se o provedor falhar |
 
 ## Serviços e métodos
+`dao.py` — `AssistenteDao(Dao)` (ADR-0019): `organizacoes_visiveis`, `datasets_ativos`, `recursos_validos` (contagens do contexto). Só leitura; registros excluídos não contam.
+
 - `montar_contexto(db, pergunta, user) -> str` — fatos determinísticos da última coleta; respeita o
   escopo de órgão (usuário restrito não recebe totais estaduais nem dados de outros órgãos).
 - `perguntar(db, pergunta, user)` — envia sistema + contexto + pergunta à tarefa `assistente`
@@ -68,3 +70,5 @@ Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-001
 | 30/09/2026 | Permissão `assistente.usar` e escopo de órgão no contexto | Victor |
 | 07/10/2026 | Interações: consumo previsto do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Humberto |
 | 08/10/2026 | Correção: o efeito de rolagem do chat devolvia a Promise de `scrollIntoView` (Chrome atual) e o React a chamava ao desmontar — sair ou sessão expirada deixava a tela em branco; contagem de recursos por órgão no contexto passa a usar só datasets ativos, recursos ainda no portal e sem dicionário de dados | Humberto |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): recorte por órgão filtra e junta por `Organizacao.id`; sem mudança de comportamento | Victor |
+| 22/10/2026 | Banco só pelo `AssistenteDao` (ADR-0019); contagens do contexto sem os registros excluídos | Victor |

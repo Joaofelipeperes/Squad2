@@ -465,7 +465,7 @@ function LinhaBase({ base: b, onAbrir }: { base: BasePda; onAbrir: (b: BasePda) 
       <td title={b.orgao_nome ?? undefined}>{b.orgao_sigla}</td>
       <td className="cell-strong">{b.nome_previsto}</td>
       <td><CelulaDataset b={b} /></td>
-      <td className="mono cell-muted" title={b.dataset_id ?? undefined}>{b.dataset_id ? abreviarId(b.dataset_id) : "—"}</td>
+      <td className="mono cell-muted" title={b.dataset_id_ckan ?? undefined}>{b.dataset_id_ckan ? abreviarId(b.dataset_id_ckan) : "—"}</td>
       <td className="cell-muted">{fmtData(b.prazo_abertura)}</td>
       <td title={periodicidadeOriginal}>{b.periodicidade}</td>
       <td className="cell-muted">

@@ -14,6 +14,7 @@ ID_CONV = "7383caee-1523-4eb7-8cf4-63157a1e1735"
 ID_TERC = "5e921182-f6bb-4e3d-b294-84ad243a2fc1"
 ID_OUTRO = "f495c5eb-5aed-4ac0-a3e7-cd1eb2d6061c"
 ID_FORA = "11111111-2222-4333-8444-555555555555"  # UUID válido que não está no inventário
+ABC = 3  # `id` próprio da organização ABC (1 e 2 vêm do conftest)
 
 # Formato da "TABELA_FATO_PDA" da GEDA: SIGLA e ORGAO (por extenso), nomes próprios das colunas
 TABELA_FATO = (
@@ -34,16 +35,16 @@ def _hoje(monkeypatch):
 def inventario():
     with SessionLocal() as db:
         db.add_all([
-            Organizacao(ckan_id="org-abc", name="abc", titulo="Agência Brasil Central"),
+            Organizacao(id=ABC, id_ckan="org-abc", name="abc", titulo="Agência Brasil Central"),
             Coleta(id=1, status="ok"),
         ])
         db.add_all([
-            Dataset(ckan_id=ID_CONV, name="convenios-recebidos-abc", titulo="Convênios - ABC",
-                    organizacao_id="org-abc", ultima_coleta_id=1),
-            Dataset(ckan_id=ID_TERC, name="terceirizados-abc", titulo="Terceirizados - ABC",
-                    organizacao_id="org-abc", ultima_coleta_id=1),
-            Dataset(ckan_id=ID_OUTRO, name="acordos-abc", titulo="Acordos - ABC",
-                    organizacao_id="org-abc", ultima_coleta_id=1),
+            Dataset(id=1, id_ckan=ID_CONV, name="convenios-recebidos-abc",
+                    titulo="Convênios - ABC", organizacao_id=ABC, ultima_coleta_id=1),
+            Dataset(id=2, id_ckan=ID_TERC, name="terceirizados-abc", titulo="Terceirizados - ABC",
+                    organizacao_id=ABC, ultima_coleta_id=1),
+            Dataset(id=3, id_ckan=ID_OUTRO, name="acordos-abc", titulo="Acordos - ABC",
+                    organizacao_id=ABC, ultima_coleta_id=1),
         ])
         db.commit()
 
@@ -123,7 +124,7 @@ def test_importar_com_mapeamento(client, gerente, inventario):
                        params={"plano_id": resumo["plano"]["id"]}).json()["bases"]
     conv = next(b for b in bases if b["nome_previsto"] == "Convênios Recebido")
     assert conv["orgao_sigla"] == "ABC" and conv["periodicidade"] == "Anual"
-    assert conv["prazo_abertura"] == "2025-12-01" and conv["orgao_chave"] == "org-abc"
+    assert conv["prazo_abertura"] == "2025-12-01" and conv["orgao_chave"] == str(ABC)
 
 
 @pytest.mark.parametrize("mapa,mensagem", [
@@ -150,7 +151,7 @@ def plano(client, gerente, inventario):
     p = r.json()
     url = f"{API}/planos/{p['id']}/bases"
     for nome, sigla, extra in [("Convênios Recebido", "ABC", {}),
-                               ("Terceirizados", "ABC", {"dataset_id": ID_OUTRO}),
+                               ("Terceirizados", "ABC", {"dataset_id_ckan": ID_OUTRO}),
                                ("Aluguel Social", "AGEHAB", {})]:
         assert client.post(url, headers=gerente, json={
             "orgao_sigla": sigla, "nome_previsto": nome, **extra}).status_code == 201
@@ -178,7 +179,7 @@ def test_analisar_ids_nao_grava(client, gerente, plano):
     assert [(x["nome_pda"], x["id_atual"], x["dataset_id"]) for x in a["substituir"]] == [
         ("Terceirizados", ID_OUTRO, ID_TERC)]
     assert a["sem_id"] == 1 and a["sem_base"] == [] and a["invalidas"] == []
-    assert _por_nome(client, gerente, plano["id"])["Convênios Recebido"]["dataset_id"] is None
+    assert _por_nome(client, gerente, plano["id"])["Convênios Recebido"]["dataset_id_ckan"] is None
 
 
 def test_aplicar_ids_sem_e_com_sobrescrever(client, gerente, plano):
@@ -187,15 +188,15 @@ def test_aplicar_ids_sem_e_com_sobrescrever(client, gerente, plano):
     a = _ids(client, gerente, plano["id"], texto, "latin-1", aplicar=True).json()
     assert a["aplicado"] is True and a["atualizadas"] == 1
     bases = _por_nome(client, gerente, plano["id"])
-    assert bases["Convênios Recebido"]["dataset_id"] == ID_CONV
+    assert bases["Convênios Recebido"]["dataset_id_ckan"] == ID_CONV
     assert bases["Convênios Recebido"]["vinculo"] == "resolvido"
-    assert bases["Convênios Recebido"]["orgao_chave"] == "org-abc"
-    assert bases["Terceirizados"]["dataset_id"] == ID_OUTRO  # sem confirmação, não sobrescreve
+    assert bases["Convênios Recebido"]["orgao_chave"] == str(ABC)
+    assert bases["Terceirizados"]["dataset_id_ckan"] == ID_OUTRO  # sem confirmação, não sobrescreve
 
     a = _ids(client, gerente, plano["id"], texto, "latin-1", aplicar=True,
              sobrescrever=True).json()
     assert a["atualizadas"] == 1 and a["iguais"] == 1
-    assert _por_nome(client, gerente, plano["id"])["Terceirizados"]["dataset_id"] == ID_TERC
+    assert _por_nome(client, gerente, plano["id"])["Terceirizados"]["dataset_id_ckan"] == ID_TERC
 
 
 def test_ids_comparacao_tolerante_e_problemas(client, gerente, plano):
