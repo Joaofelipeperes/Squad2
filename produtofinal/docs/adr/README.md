@@ -47,6 +47,7 @@ a fonte.
 | 21/10/2026 | Modo desenvolvimento no Docker: código montado do computador e recarga automática (`docker-compose.dev.yml`) | Técnica | Aceita | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
 | 21/10/2026 | Chave primária própria (`id`) nas tabelas espelhadas do CKAN, com o ID do CKAN em `id_ckan` | Técnica | Aceita | [ADR-0018](0018-chave-primaria-propria-e-id-ckan.md) |
 | 22/10/2026 | Banco só por DAOs (classe-pai `Dao`), `id` em toda tabela, exclusão lógica (`deleted`) e auditoria (`created`/`changed` + usuário) | Técnica | Aceita | [ADR-0019](0019-dao-exclusao-logica-e-auditoria.md) |
+| 23/10/2026 | Importação do PDA vinculando pelo ID do CKAN da planilha (`ID_UNICO`), com leitura configurável (colunas, linha do cabeçalho, delimitador) guardada no navegador | Técnica | Aceita | [ADR-0020](0020-importacao-do-pda-configuravel-com-id-do-ckan.md) |
 
 ## Decisões em aberto
 

@@ -32,7 +32,25 @@ export interface ImportacaoResumo {
   orgaos_sem_correspondencia: string[];
   tem_coluna_prazo: boolean;
   tem_coluna_portal: boolean;
+  tem_coluna_id_ckan: boolean;
+  avisos: LinhaIgnorada[]; // bases importadas com ressalva (ex.: ID do CKAN não reconhecido)
   colunas_opcionais_ausentes: string[];
+}
+
+/** Campos da planilha que a configuração da importação aponta para uma coluna do arquivo. */
+export type CampoImportacao =
+  | "orgao" | "base" | "orgao_nome" | "id_ckan" | "descricao" | "unidade" | "periodicidade" | "prazo"
+  | "politicas" | "sigiloso" | "portal";
+
+/**
+ * Configuração da leitura enviada com a planilha (campo `config` do POST /pda/planos), guardada no
+ * navegador de quem importa. Coluna vazia = reconhecida pelos nomes usuais; `linha_cabecalho` = linha
+ * dos nomes das colunas (os dados começam na seguinte); `delimitador` vazio = detectar (só .csv).
+ */
+export interface ConfigImportacao {
+  colunas: Partial<Record<CampoImportacao, string>>;
+  linha_cabecalho: number | null;
+  delimitador: string;
 }
 
 export interface VinculosResultado { vinculos_resolvidos: number; vinculos_pendentes: number }
@@ -64,6 +82,7 @@ export interface BasePda {
   dataset_name: string | null;
   dataset_titulo: string | null;
   dataset_name_planilha: string | null;
+  dataset_id_ckan_planilha: string | null; // ID do CKAN informado; sem dataset = vínculo pendente
   dataset_ativo: boolean | null;
   data_publicacao: string | null;
   recursos_validos: number;

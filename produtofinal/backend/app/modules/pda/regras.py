@@ -1,6 +1,8 @@
 """Regras puras do módulo pda (sem banco, sem FastAPI) — reutilizáveis numa extensão CKAN.
 
-- leitura da planilha do PDA (.xlsx/.csv) → linhas estruturadas (PBI-12);
+- leitura da planilha do PDA (.xlsx/.csv) → linhas estruturadas (PBI-12), com colunas, linha do
+  cabeçalho e delimitador opcionalmente configurados na importação (`ConfigLeitura`);
+- ID do dataset no CKAN lido da planilha (coluna "ID_UNICO") — vínculo direto (PBI-13);
 - normalização da periodicidade prevista;
 - extração do `name` a partir da URL "Disponível no Portal" (só para RESOLVER o ID — PBI-13);
 - casamento da sigla do órgão com as organizações do portal;
@@ -303,23 +305,40 @@ LINHAS_MAXIMO = 20_000           # linhas lidas da aba escolhida (incluindo as v
 COLUNAS_MAXIMO = 60              # a planilha do PDA tem ~10 colunas
 VAZIAS_CONSECUTIVAS_MAXIMO = 1_000  # após isso a aba é dada como terminada
 
-# cabeçalho normalizado → campo
-_CABECALHOS: dict[str, str] = {
-    "orgao": "orgao",
-    "base de dados": "base",
-    "descricao": "descricao",
-    "unidade responsavel": "unidade",
-    "atualizacao": "periodicidade",
-    "periodicidade": "periodicidade",
-    "politicas publicas": "politicas",
-    "possui conteudo sigiloso": "sigiloso",
-    "disponivel no portal": "portal",
-    "prazo": "prazo",
-    "prazo de abertura": "prazo",
-    "prazo para abertura": "prazo",
-    "meta/prazo para abertura": "prazo",  # planilha do PDA 2025-2027 exportada pela GEDA
-    "meta / prazo para abertura": "prazo",
+# cabeçalho normalizado (sem acento, minúsculo, "_" como espaço) → campos que a coluna pode
+# preencher, em ordem de preferência. "Órgão" é a sigla na planilha da GEDA; quando o arquivo
+# também tem "Sigla" (ex.: SIGLA;ORGAO;NOME_PDA;…;ID_UNICO), a sigla vem antes e "Órgão" passa a
+# ser o nome do órgão (só ajuda a achar a organização).
+_CABECALHOS: dict[str, tuple[str, ...]] = {
+    "sigla": ("orgao",),
+    "sigla do orgao": ("orgao",),
+    "orgao": ("orgao", "orgao_nome"),
+    "nome do orgao": ("orgao_nome",),
+    "base de dados": ("base",),
+    "nome pda": ("base",),
+    "nome no pda": ("base",),
+    "descricao": ("descricao",),
+    "unidade responsavel": ("unidade",),
+    "atualizacao": ("periodicidade",),
+    "periodicidade": ("periodicidade",),
+    "politicas publicas": ("politicas",),
+    "possui conteudo sigiloso": ("sigiloso",),
+    "disponivel no portal": ("portal",),
+    "id unico": ("id_ckan",),
+    "id ckan": ("id_ckan",),
+    "id do ckan": ("id_ckan",),
+    "id do dataset": ("id_ckan",),
+    "id do dataset no ckan": ("id_ckan",),
+    "prazo": ("prazo",),
+    "prazo de abertura": ("prazo",),
+    "prazo para abertura": ("prazo",),
+    "previsao de abertura": ("prazo",),
+    "meta/prazo para abertura": ("prazo",),  # planilha do PDA 2025-2027 exportada pela GEDA
+    "meta / prazo para abertura": ("prazo",),
 }
+# Campos que a configuração da importação pode apontar para uma coluna do arquivo
+CAMPOS: tuple[str, ...] = ("orgao", "base", "orgao_nome", "id_ckan", "descricao", "unidade",
+                           "periodicidade", "prazo", "politicas", "sigiloso", "portal")
 _OBRIGATORIOS = {"orgao": "Órgão", "base": "Base de Dados"}
 # Colunas opcionais (campo → rótulo mostrado ao usuário quando a coluna não é encontrada)
 COLUNAS_OPCIONAIS: dict[str, str] = {
@@ -331,10 +350,68 @@ _LINHAS_PROCURA_CABECALHO = 30
 # Rodapés do relatório exportado: "Total", "Nenhum filtro aplicado", "Filtros aplicados:Ano é 2025"
 _RODAPE = re.compile(r"^(total\b|nenhum filtro aplicado|filtros? aplicados?\b)")
 _MSG_XLSX_INVALIDO = "Arquivo .xlsx ilegível ou corrompido."
+# Delimitador do CSV como digitado na configuração → caractere
+DELIMITADORES = {";": ";", ",": ",", "|": "|", "\\t": "\t", "tab": "\t"}
+LINHA_CABECALHO_MAXIMA = 1_000
+# ID de dataset do CKAN (UUID). Marcadores de ausência ("Não encontrado") = base sem ID.
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+_SEM_ID = {"", "-", "--", "n/a", "na", "nao", "nao encontrado", "nao encontrada", "nao localizado",
+           "nao localizada", "nao publicado", "nao publicada", "sem id", "inexistente"}
 
 
 class PlanilhaInvalida(ValueError):
     """Arquivo ilegível ou fora do formato esperado — a importação inteira é recusada."""
+
+
+@dataclass(frozen=True)
+class ConfigLeitura:
+    """Configuração da importação (aba Configuração do modal, guardada no navegador).
+
+    `colunas`: campo → nome da coluna no arquivo (ex.: {"orgao": "SIGLA", "id_ckan": "ID_UNICO"}).
+    Campo sem nome configurado, ou cuja coluna não está no arquivo, é procurado pelos nomes usuais
+    (`_CABECALHOS`). `linha_cabecalho`: linha (1-based) onde estão os nomes das colunas; os dados
+    começam na seguinte (None = procurar nas 30 primeiras). `delimitador`: separador do CSV
+    (None = detectar entre ";" e ",")."""
+
+    colunas: dict[str, str] = field(default_factory=dict)
+    linha_cabecalho: int | None = None
+    delimitador: str | None = None
+
+
+SEM_CONFIG = ConfigLeitura()
+
+
+def config_leitura(colunas: dict[str, str | None] | None = None,
+                   linha_cabecalho: int | None = None,
+                   delimitador: str | None = None) -> ConfigLeitura:
+    """Valida a configuração recebida na importação (campos conhecidos, linha, delimitador)."""
+    desconhecidos = sorted(set(colunas or {}) - set(CAMPOS))
+    if desconhecidos:
+        raise PlanilhaInvalida(f"Campo de configuração desconhecido: {', '.join(desconhecidos)}.")
+    limpas = {c: n.strip() for c, n in (colunas or {}).items() if n and n.strip()}
+    if linha_cabecalho is not None and not 1 <= linha_cabecalho <= LINHA_CABECALHO_MAXIMA:
+        raise PlanilhaInvalida(
+            f"Início da leitura: informe a linha do cabeçalho (de 1 a {LINHA_CABECALHO_MAXIMA}).")
+    sep = None
+    if delimitador is not None and delimitador.strip(" "):
+        sep = DELIMITADORES.get(delimitador.strip(" ").lower())
+        if sep is None:
+            raise PlanilhaInvalida('Delimitador não suportado: use ";", ",", "|" ou "\\t" (tab).')
+    return ConfigLeitura(colunas=limpas, linha_cabecalho=linha_cabecalho, delimitador=sep)
+
+
+def id_ckan_da_celula(valor: object) -> tuple[str | None, bool]:
+    """Célula da coluna de ID → (ID do dataset no CKAN, reconhecido). UUID (sem diferenciar
+    maiúsculas, espaços ignorados) → (id minúsculo, True); vazio ou marcador de ausência
+    ("Não encontrado", "-") → (None, True); outro texto → (None, False), para avisar sem recusar
+    a base."""
+    texto = _texto(valor)
+    if texto is None:
+        return None, True
+    ident = texto.replace(" ", "").lower()
+    if _UUID.fullmatch(ident):
+        return ident, True
+    return None, normalizar_texto(texto) in _SEM_ID
 
 
 @dataclass
@@ -349,12 +426,15 @@ class LinhaPda:
     possui_conteudo_sigiloso: bool | None = None
     disponivel_no_portal: str | None = None
     prazo: date | None = None
+    dataset_id_ckan: str | None = None  # ID do dataset no CKAN informado na planilha
+    orgao_nome: str | None = None  # nome do órgão (só ajuda a achar a organização)
 
 
 @dataclass
 class PlanilhaLida:
     linhas: list[LinhaPda] = field(default_factory=list)
     ignoradas: list[tuple[int, str]] = field(default_factory=list)
+    avisos: list[tuple[int, str]] = field(default_factory=list)  # base importada, com ressalva
     colunas: frozenset[str] = frozenset()  # campos encontrados no cabeçalho
 
     @property
@@ -363,8 +443,14 @@ class PlanilhaLida:
 
     @property
     def tem_coluna_portal(self) -> bool:
-        """Sem "Disponível no Portal" nenhuma base é vinculada na importação (PBI-13)."""
+        """Coluna "Disponível no Portal" (link do dataset; o name só serve para achar o ID)."""
         return "portal" in self.colunas
+
+    @property
+    def tem_coluna_id_ckan(self) -> bool:
+        """Coluna com o ID do dataset no CKAN ("ID_UNICO"). Sem ela e sem "Disponível no Portal",
+        nenhuma base é vinculada na importação (PBI-13)."""
+        return "id_ckan" in self.colunas
 
     @property
     def colunas_opcionais_ausentes(self) -> list[str]:
@@ -462,12 +548,18 @@ def _decodificar(conteudo: bytes) -> str:
 Aba = Iterable[Sequence[object]]  # linhas de uma aba (ou de uma leitura do CSV), sob demanda
 
 
-def _abas_csv(conteudo: bytes) -> Iterator[Aba]:
+def _abas_csv(conteudo: bytes, delimitador: str | None = None) -> Iterator[Aba]:
     """Uma leitura por separador candidato (";" e ","), a mais provável primeiro; vale a
-    primeira em que o cabeçalho for encontrado (título acima do cabeçalho não atrapalha)."""
+    primeira em que o cabeçalho for encontrado (título acima do cabeçalho não atrapalha).
+    Delimitador configurado → só ele."""
     texto = _decodificar(conteudo)
     primeira = next((ln for ln in texto.splitlines() if ln.strip()), "")
-    separadores = [";", ","] if primeira.count(";") >= primeira.count(",") else [",", ";"]
+    if delimitador:
+        separadores = [delimitador]
+    elif primeira.count(";") >= primeira.count(","):
+        separadores = [";", ","]
+    else:
+        separadores = [",", ";"]
     for sep in separadores:
         yield csv.reader(io.StringIO(texto, newline=""), delimiter=sep)
 
@@ -546,37 +638,64 @@ def _linhas_limitadas(linhas: Aba) -> Iterator[list[object]]:
         yield valores
 
 
-def _mapear_cabecalho(linha: Sequence[object]) -> dict[str, int]:
-    colunas: dict[str, int] = {}
+def chave_cabecalho(valor: object) -> str:
+    """Nome de coluna comparável: sem acento, minúsculo, "_" como espaço ('ID_UNICO' → 'id unico',
+    'Orgão' → 'orgao')."""
+    return normalizar_texto(str(valor).replace("_", " ")) if valor is not None else ""
+
+
+def _mapear_cabecalho(linha: Sequence[object], config: ConfigLeitura = SEM_CONFIG
+                      ) -> dict[str, int]:
+    """Linha candidata a cabeçalho → {campo: índice da coluna}. Campo a campo, na ordem de
+    `CAMPOS` (obrigatórios primeiro): a coluna configurada e, se ela não estiver no arquivo, os
+    nomes usuais (`_CABECALHOS`). Uma coluna preenche um campo só — assim, com a configuração
+    "SIGLA"/"ORGAO", a planilha da GEDA (sem "Sigla") continua com "Órgão" como a sigla."""
+    indices: dict[str, int] = {}
     for i, valor in enumerate(linha):
-        campo = _CABECALHOS.get(normalizar_texto(valor))
-        if campo and campo not in colunas:
+        indices.setdefault(chave_cabecalho(valor), i)
+    indices.pop("", None)
+    colunas: dict[str, int] = {}
+    for campo in CAMPOS:
+        candidatos = [chave for chave, campos in _CABECALHOS.items() if campo in campos]
+        if config.colunas.get(campo):
+            candidatos.insert(0, chave_cabecalho(config.colunas[campo]))
+        i = next((indices[c] for c in candidatos
+                  if c in indices and indices[c] not in colunas.values()), None)
+        if i is not None:
             colunas[campo] = i
     return colunas
 
 
-def _localizar_cabecalho(abas: Iterable[Aba]):
-    """Primeira aba cujo cabeçalho (nas 30 primeiras linhas) tem os campos obrigatórios →
-    (linhas seguintes ao cabeçalho, sob demanda; índice 0-based do cabeçalho; colunas). Só as
-    30 primeiras linhas de cada aba são lidas até o cabeçalho aparecer."""
+def _localizar_cabecalho(abas: Iterable[Aba], config: ConfigLeitura = SEM_CONFIG):
+    """Primeira aba cujo cabeçalho (nas 30 primeiras linhas, ou exatamente na linha configurada)
+    tem os campos obrigatórios → (linhas seguintes ao cabeçalho, sob demanda; índice 0-based do
+    cabeçalho; colunas). Só as linhas até o cabeçalho são lidas antes de ele aparecer."""
     parcial: dict[str, int] = {}
+    fixa = config.linha_cabecalho
     for aba in abas:
         linhas = _linhas_limitadas(aba)
-        inicio = list(islice(linhas, _LINHAS_PROCURA_CABECALHO))
-        for idx, linha in enumerate(inicio):
-            colunas = _mapear_cabecalho(linha)
+        inicio = list(islice(linhas, fixa or _LINHAS_PROCURA_CABECALHO))
+        if fixa:
+            candidatas = [fixa - 1] if len(inicio) == fixa else []
+        else:
+            candidatas = range(len(inicio))
+        for idx in candidatas:
+            colunas = _mapear_cabecalho(inicio[idx], config)
             if all(c in colunas for c in _OBRIGATORIOS):
                 return chain(inicio[idx + 1:], linhas), idx, colunas
             if len(colunas) > len(parcial):
                 parcial = colunas
-    faltando = ", ".join(f'"{r}"' for c, r in _OBRIGATORIOS.items() if c not in parcial)
+    nomes = {c: config.colunas.get(c) or r for c, r in _OBRIGATORIOS.items()}
+    faltando = ", ".join(f'"{nomes[c]}"' for c in _OBRIGATORIOS if c not in parcial)
+    onde = f" na linha {fixa} (início da leitura)" if fixa else ""
     raise PlanilhaInvalida(
-        f"Cabeçalho obrigatório ausente: {faltando}. A planilha do PDA precisa das colunas "
-        '"Órgão" e "Base de Dados" (demais colunas são opcionais).')
+        f"Cabeçalho obrigatório ausente{onde}: {faltando}. A planilha do PDA precisa das colunas "
+        "do órgão e do nome da base (demais colunas são opcionais); confira a configuração da "
+        "importação.")
 
 
-def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
-    linhas, idx_cab, col = _localizar_cabecalho(abas)
+def _ler_linhas(abas: Iterable[Aba], config: ConfigLeitura = SEM_CONFIG) -> PlanilhaLida:
+    linhas, idx_cab, col = _localizar_cabecalho(abas, config)
 
     def celula(linha: Sequence[object], campo: str) -> object:
         i = col.get(campo)
@@ -587,7 +706,7 @@ def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
     for numero, linha in enumerate(linhas, start=idx_cab + 2):
         if all(_texto(v) is None for v in linha):
             continue
-        if _mapear_cabecalho(linha) == col:  # planilhas concatenadas ou convertidas de PDF
+        if _mapear_cabecalho(linha, config) == col:  # planilhas concatenadas ou de PDF
             lida.ignoradas.append((numero, "Cabeçalho repetido."))
             continue
         # Rodapé só na coluna Órgão: uma base cujo nome começa com "Total" é uma base de verdade
@@ -604,6 +723,11 @@ def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
         except ValueError:
             prazos_invalidos.append(f"linha {numero} ({_texto(celula(linha, 'prazo'))!r})")
             continue
+        id_ckan, reconhecido = id_ckan_da_celula(celula(linha, "id_ckan"))
+        if not reconhecido:
+            valor = _texto(celula(linha, "id_ckan"))
+            lida.avisos.append(
+                (numero, f"ID do CKAN não reconhecido ({valor!r}): base importada sem o ID."))
         lida.linhas.append(LinhaPda(
             linha=numero, orgao_sigla=orgao, nome_previsto=base,
             descricao=_texto(celula(linha, "descricao"), colapsar=False),
@@ -613,6 +737,8 @@ def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
             possui_conteudo_sigiloso=interpretar_sim_nao(celula(linha, "sigiloso")),
             disponivel_no_portal=_texto(celula(linha, "portal")),
             prazo=prazo,
+            dataset_id_ckan=id_ckan,
+            orgao_nome=_texto(celula(linha, "orgao_nome")),
         ))
     if prazos_invalidos:
         lista = "; ".join(prazos_invalidos[:10]) + ("; …" if len(prazos_invalidos) > 10 else "")
@@ -623,16 +749,18 @@ def _ler_linhas(abas: Iterable[Aba]) -> PlanilhaLida:
     return lida
 
 
-def ler_planilha(conteudo: bytes, nome_arquivo: str) -> PlanilhaLida:
+def ler_planilha(conteudo: bytes, nome_arquivo: str,
+                 config: ConfigLeitura = SEM_CONFIG) -> PlanilhaLida:
     """PBI-12 — lê a planilha do PDA (uma linha por base prevista). Colunas localizadas pelo
-    cabeçalho normalizado, não pela posição. `linha` = número da linha na planilha (1-based).
-    A leitura é sob demanda e limitada (abas, colunas, linhas e tamanho descompactado)."""
+    cabeçalho (nomes configurados ou usuais), não pela posição. `linha` = número da linha na
+    planilha (1-based). A leitura é sob demanda e limitada (abas, colunas, linhas e tamanho
+    descompactado). O delimitador configurado só vale para .csv."""
     ext = extensao_valida(nome_arquivo)
     if ext is None:
         raise PlanilhaInvalida("Formato não suportado: envie a planilha do PDA em .xlsx ou .csv.")
     if ext == ".csv":
         try:
-            return _ler_linhas(_abas_csv(conteudo))
+            return _ler_linhas(_abas_csv(conteudo, config.delimitador), config)
         except csv.Error as exc:
             raise PlanilhaInvalida(f"CSV ilegível: {exc}") from exc
 
@@ -644,6 +772,6 @@ def ler_planilha(conteudo: bytes, nome_arquivo: str) -> PlanilhaLida:
     except Exception as exc:  # qualquer falha do openpyxl ao abrir = arquivo .xlsx inválido (422)
         raise PlanilhaInvalida(_MSG_XLSX_INVALIDO) from exc
     try:
-        return _ler_linhas(_abas_xlsx(wb))
+        return _ler_linhas(_abas_xlsx(wb), config)
     finally:
         wb.close()

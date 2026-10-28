@@ -9,6 +9,8 @@ interface Props {
   onFechar: () => void;
   children: ReactNode;
   rodape?: ReactNode;
+  /** Versão larga (formulários com muitas colunas, ex.: configuração da importação do PDA). */
+  largo?: boolean;
 }
 
 const FOCAVEIS =
@@ -24,7 +26,7 @@ const pilha: object[] = [];
  * Acessibilidade de teclado: ao abrir, o foco vai para o primeiro campo do modal; Tab e Shift+Tab
  * ficam presos dentro dele; Esc fecha só o do topo; ao fechar, o foco volta ao elemento que o abriu.
  */
-export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape }: Props) {
+export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape, largo }: Props) {
   const dialogo = useRef<HTMLDivElement>(null);
   const fechar = useRef(onFechar);
   fechar.current = onFechar;
@@ -77,7 +79,7 @@ export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape }:
   if (!aberto) return null;
   return createPortal(
     <div className="modal-overlay open" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={titulo} ref={dialogo} tabIndex={-1}>
+      <div className={largo ? "modal modal-largo" : "modal"} role="dialog" aria-modal="true" aria-label={titulo} ref={dialogo} tabIndex={-1}>
         <div className="modal-head">
           <div>
             <h3>{titulo}</h3>

@@ -27,11 +27,14 @@ interface Campos {
   sigiloso: "" | "sim" | "nao";
   /** name da planilha ainda sem dataset no inventário (vínculo pendente); mantido ao salvar. */
   dataset_link: string;
+  /** ID do CKAN da planilha ainda sem dataset no inventário (vínculo pendente); mantido ao salvar. */
+  dataset_id_ckan: string;
 }
 
 const VAZIO: Campos = {
   orgao_sigla: "", organizacao_id: "", nome_previsto: "", descricao: "", unidade_responsavel: "",
   periodicidade: "", prazo_abertura: "", politicas_publicas: "", sigiloso: "", dataset_link: "",
+  dataset_id_ckan: "",
 };
 
 function camposDaBase(b: BasePda): Campos {
@@ -46,6 +49,7 @@ function camposDaBase(b: BasePda): Campos {
     politicas_publicas: b.politicas_publicas ?? "",
     sigiloso: b.possui_conteudo_sigiloso == null ? "" : b.possui_conteudo_sigiloso ? "sim" : "nao",
     dataset_link: b.dataset_id != null ? "" : b.dataset_name_planilha ?? "",
+    dataset_id_ckan: b.dataset_id != null ? "" : b.dataset_id_ckan_planilha ?? "",
   };
 }
 
@@ -78,6 +82,7 @@ function entrada(c: Campos, dataset: DatasetOpcao | null): BaseEntrada {
     possui_conteudo_sigiloso: c.sigiloso === "" ? null : c.sigiloso === "sim",
     dataset_id: dataset?.id ?? null,
     dataset_link: dataset ? null : ouNulo(c.dataset_link),
+    dataset_id_ckan: dataset ? null : ouNulo(c.dataset_id_ckan),
   };
 }
 
@@ -110,7 +115,7 @@ export function BaseFormModal({ aberto, plano, base, onFechar, onSalva }: Props)
   /** O órgão da base acompanha o do dataset escolhido (o backend recusa órgãos incoerentes). */
   function escolherDataset(d: DatasetOpcao | null) {
     setDataset(d);
-    if (d) setC((atual) => ({ ...atual, dataset_link: "", organizacao_id: d.organizacao_id != null ? String(d.organizacao_id) : atual.organizacao_id }));
+    if (d) setC((atual) => ({ ...atual, dataset_link: "", dataset_id_ckan: "", organizacao_id: d.organizacao_id != null ? String(d.organizacao_id) : atual.organizacao_id }));
   }
 
   function enviar(e: FormEvent) {
@@ -194,7 +199,18 @@ export function BaseFormModal({ aberto, plano, base, onFechar, onSalva }: Props)
         <div className="form-field full">
           <label htmlFor="pda-base-dataset">Dataset no portal</label>
           <DatasetBusca id="pda-base-dataset" valor={dataset} onEscolher={escolherDataset} />
-          {!dataset && c.dataset_link && (
+          {!dataset && c.dataset_id_ckan && (
+            <span className="help">
+              <i className="fa-solid fa-triangle-exclamation" /> Vínculo pendente: o ID do CKAN <span className="mono">
+              {c.dataset_id_ckan}</span> informado na planilha ainda não está no inventário (rode a coleta e use
+              “Atualizar vínculos”). Busque o dataset para vincular ou{" "}
+              <button type="button" className="link-btn"
+                      onClick={() => setC((a) => ({ ...a, dataset_id_ckan: "", dataset_link: "" }))}>
+                descarte o vínculo pendente
+              </button>.
+            </span>
+          )}
+          {!dataset && !c.dataset_id_ckan && c.dataset_link && (
             <span className="help">
               <i className="fa-solid fa-triangle-exclamation" /> Vínculo pendente: o name <span className="mono">
               {c.dataset_link}</span> não foi encontrado no inventário. Busque o dataset para vincular ou{" "}
