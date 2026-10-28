@@ -9,8 +9,7 @@ interface Props {
   onFechar: () => void;
   children: ReactNode;
   rodape?: ReactNode;
-  /** Versão larga (formulários com muitas colunas, ex.: configuração da importação do PDA). */
-  largo?: boolean;
+  largo?: boolean; // janelas com tabelas ou muitas colunas (ex.: prévia da anonimização, importação do PDA)
 }
 
 const FOCAVEIS =

@@ -13,3 +13,6 @@ __pycache__/
 venv/
 frontend/node_modules/
 frontend/dist/
+
+# Anonimização LGPD: cópias de originais com dado pessoal (nunca versionar)
+backend/dados_lgpd/

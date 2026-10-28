@@ -54,3 +54,4 @@ Teste com perguntas reais da GEDA quando o Eixo 1 estiver integrado.
 | Data | Revisão | Autor |
 |---|---|---|
 | 30/09/2026 | Contexto passa a respeitar o escopo de órgão do usuário | Victor |
+| 23/10/2026 | Contexto ampliado sem mudar a decisão: o backend identifica o dataset citado (título, `name` ou nome de arquivo) por comparação de palavras e envia a ficha dele (recursos, última atualização real, vínculo com o PDA vigente, contagem de achados LGPD); listas por intenção como no Protótipo V1 (atraso, prazo, sem recurso, LGPD); continuações curtas usam a pergunta anterior; o navegador envia as últimas 6 mensagens, que não são gravadas. Autor e e-mail do dataset ficam fora do contexto. Function calling continua como evolução possível | Squad 2 |

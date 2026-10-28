@@ -35,6 +35,7 @@ class P(StrEnum):
     # Eixo 2
     LGPD_ACESSAR = "lgpd.acessar"
     LGPD_TRIAR = "lgpd.triar"
+    LGPD_VARRER = "lgpd.varrer"
     LGPD_APROVAR_CORRECAO = "lgpd.aprovar_correcao"
     METADADOS_ACESSAR = "metadados.acessar"
     # Saídas
@@ -88,6 +89,9 @@ META: dict[P, MetaPermissao] = {
     P.LGPD_TRIAR: MetaPermissao("lgpd", "Triar achados LGPD",
                                 "Marcar achado como confirmado, falso positivo ou tratado.",
                                 sensivel=True),
+    P.LGPD_VARRER: MetaPermissao("lgpd", "Executar varredura LGPD",
+                                 "Pedir a varredura de recursos em busca de dados pessoais (baixa "
+                                 "os arquivos e usa o modelo local).", sensivel=True),
     P.LGPD_APROVAR_CORRECAO: MetaPermissao("lgpd", "Aprovar anonimização",
                                            "Aprovar a publicação do recurso anonimizado no CKAN "
                                            "de produção.", sensivel=True),
@@ -149,7 +153,7 @@ PAPEIS_PADRAO: list[PapelPadrao] = [
     PapelPadrao("gerente_geda", "Gerência de Dados Abertos",
                 "Monitoramento completo, triagem LGPD e aprovação de anonimização.",
                 _VISUALIZACAO_GEDA | {P.INVENTARIO_COLETAR, P.PDA_EDITAR_VINCULOS,
-                                      P.PDA_GERENCIAR_PLANOS, P.LGPD_TRIAR,
+                                      P.PDA_GERENCIAR_PLANOS, P.LGPD_TRIAR, P.LGPD_VARRER,
                                       P.LGPD_APROVAR_CORRECAO, P.RELATORIOS_EXPORTAR,
                                       P.PARAMETROS_EDITAR, P.ACESSO_GERENCIAR_USUARIOS}),
     PapelPadrao("analista_geda", "Equipe GEDA",

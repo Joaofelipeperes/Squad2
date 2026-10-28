@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CampoImportacao, ConfigImportacao } from "./api";
 
-/** Chave no localStorage: a configuração fica no navegador de quem importa (ADR-0020). */
+/** Chave no localStorage: a configuração fica no navegador de quem importa (ADR-0022). */
 const CHAVE = "pda.importacao.config";
 
 interface DefCampo {

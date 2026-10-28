@@ -14,7 +14,7 @@ class PerfilProvedorIA(Base):
     __table_args__ = (unico_entre_ativos("ia_perfil_provedor", "nome"),)
 
     nome: Mapped[str] = mapped_column(String(120))
-    tipo: Mapped[str] = mapped_column(String(40))            # gemini | ollama | openai_compat | mock
+    tipo: Mapped[str] = mapped_column(String(40))            # anthropic | gemini | ollama | openai_compat | mock
     modelo: Mapped[str] = mapped_column(String(200))
     base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     api_key_cifrada: Mapped[str | None] = mapped_column(Text, nullable=True)

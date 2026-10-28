@@ -1,7 +1,7 @@
 """pda: ID do dataset no CKAN informado na planilha
 
 Revision ID: b9d4e6f2a7c1
-Revises: a8e2f5c1d9b4
+Revises: 9d583e5bd118
 Create Date: 2026-10-23 10:00:00.000000
 
 Acrescenta `pda_base_prevista.dataset_id_ckan_planilha` (varchar(64), opcional): o ID do dataset
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'b9d4e6f2a7c1'
-down_revision: Union[str, Sequence[str], None] = 'a8e2f5c1d9b4'
+down_revision: Union[str, Sequence[str], None] = '9d583e5bd118'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

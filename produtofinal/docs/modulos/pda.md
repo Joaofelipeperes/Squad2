@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 23/10/2026 |
+| **Última atualização** | 28/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -42,7 +42,7 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
   atualização | Situação. Vínculo pendente mostra o name da planilha (ou o ID do CKAN abreviado) + badge "vínculo pendente";
   dataset inativo recebe badge "fora do portal"; ID abreviado (8 caracteres) com o completo no
   `title`; data estimada pela criação leva "(est.)". Contador "N base(s) encontrada(s) de M previstas".
-- **Modal Importar PDA** (ADR-0020), em duas abas:
+- **Modal Importar PDA** (ADR-0022), em duas abas:
   - **Carregar**: nome*, início e fim da vigência, arquivo .xlsx/.csv* (até 5 MB), "Definir como
     vigente" (marcado e travado quando é o primeiro PDA);
   - **Configuração** (`ConfigImportacao.tsx`, modal largo): "Colunas da Tabela" — nome de cada
@@ -210,7 +210,7 @@ ambientes); o downgrade apaga as bases previstas. Desde a ADR-0019 nada é apaga
 `PlanoPda.bases` não tem cascata e `PdaDao.excluir_plano` marca o plano e as bases como
 excluídos (`deleted`), registrando quem e quando (`changed`/`changed_id`). Migração `c3f8a2d15e70` (sobre
 `b7e2c41d9a63`): índice único `uq_pda_plano_nome_ci` em `lower(nome)`; não altera dados. Migração
-`b9d4e6f2a7c1` (sobre `a8e2f5c1d9b4`): acrescenta `pda_base_prevista.dataset_id_ckan_planilha`
+`b9d4e6f2a7c1` (sobre `9d583e5bd118`): acrescenta `pda_base_prevista.dataset_id_ckan_planilha`
 (opcional; bases já importadas ficam vazias).
 
 ## Permissões
@@ -231,7 +231,7 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | consome | acesso | `filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)` nas consultas de bases |
 | é consumido por | painel | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` — bases previstas, vinculadas, publicadas e metas por órgão na tela Organizações (US19); sempre o PDA vigente |
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
-| é consumido por | assistente | idem, só agregados e com `user` para respeitar o escopo de órgão |
+| é consumido por | assistente | `plano_vigente` + `bases_do_plano(db, plano.id, user)` — situação e prazo das bases (do órgão ou do dataset citado) e listas de atraso/prazo; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
 | é consumido por | inventario (tela Datasets) | `GET /datasets/{id}/bases` — prazo, periodicidade e situação PDA no detalhe do dataset |
 
@@ -241,7 +241,7 @@ pendentes só são refeitos pelo botão Atualizar vínculos (não automaticament
 
 ## Regras de negócio e decisões
 Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md),
-[ADR-0020](../adr/0020-importacao-do-pda-configuravel-com-id-do-ckan.md).
+[ADR-0022](../adr/0022-importacao-do-pda-configuravel-com-id-do-ckan.md).
 
 - **Vários PDAs, um vigente** (decisão de 07/10/2026, Humberto/Eixo 1 — pendente de validação da
   GEDA). Nome obrigatório e único (espaços colapsados, sem diferenciar maiúsculas). A unicidade vale
@@ -250,7 +250,7 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   transação (desmarca todos, marca o escolhido, flush). O vigente só pode ser excluído quando é o
   único PDA cadastrado (havendo outros, defina outro como vigente antes; 13/10/2026). Outros
   PDAs podem ser consultados na tela, mas indicadores e relatórios usam sempre o vigente.
-- **ID do CKAN na planilha** (23/10/2026, ADR-0020): a coluna do ID do dataset no CKAN
+- **ID do CKAN na planilha** (23/10/2026, ADR-0022): a coluna do ID do dataset no CKAN
   ("ID_UNICO" na tabela fato do PDA) tem prioridade — ID → `Dataset.id_ckan` do inventário →
   grava o `Dataset.id` (resolvido); ID sem dataset no inventário → pendente, guardado em
   `dataset_id_ckan_planilha` e resolvido pelo ID em Atualizar vínculos; com ID informado o link
@@ -355,7 +355,7 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   das 410 bases do arquivo de exemplo, 345 têm ID e todas foram vinculadas no inventário local; as
   65 restantes ("Não encontrado") ficam sem vínculo. Confirmar com a GEDA que a tabela fato é o
   formato oficial de envio. PDA já importado sem ID não é revinculado: reimportar com a coluna.
-- A configuração da importação fica no navegador (ADR-0020): cada pessoa e cada máquina tem a sua.
+- A configuração da importação fica no navegador (ADR-0022): cada pessoa e cada máquina tem a sua.
   Se a equipe precisar de uma configuração única, levar para o banco (nova ADR).
 - Validar com a GEDA que a meta em mês/ano vale até o último dia do mês.
 - Validar com a GEDA a regra de vários PDAs com um vigente (decisão de 07/10/2026).
@@ -400,4 +400,6 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `pda_base_prevista.organizacao_id` e `.dataset_id` passam a inteiros (`organizacao.id`, `dataset.id`); `BaseIn`, `BaseOut`, `DatasetOpcaoOut` e as opções de organização usam o `id`; `BaseOut.dataset_id_ckan` para o link do portal; `orgao_chave` = `id` em texto | Victor |
 | 22/10/2026 | DAO (ADR-0019): `PdaDao` em `dao.py` concentra todo acesso ao banco do módulo; exclusão de PDA e de base passa a ser lógica (`deleted`), com as bases do PDA excluídas junto; `total_bases` conta só as ativas; únicos do nome e do vigente só entre ativos (nome de PDA excluído pode ser reaproveitado); gravações registram o usuário em `created_id`/`changed_id` (rotas de editar, vigente, excluir e vincular passam a receber o usuário) | Victor |
 | 23/10/2026 | Merge com `desenvolvimento`: o campo "ID do dataset no CKAN" do Humberto passa a `BaseIn.dataset_id_ckan` (`_vinculo_por_id_ckan`, mesma validação, agora pelo `PdaDao`), abaixo de `dataset_id` (busca) na prioridade; na tela, o ID do CKAN é colado no campo de busca `DatasetBusca`, que já o aceita, em vez de um campo separado | Victor |
-| 23/10/2026 | Importação com o ID do CKAN da planilha (ADR-0020): coluna "ID_UNICO" vincula a base ao dataset do inventário na importação (pendente pelo ID se não coletado; `pda_base_prevista.dataset_id_ckan_planilha`, migração `b9d4e6f2a7c1`); Atualizar vínculos resolve pelo ID; órgão também pelo nome do órgão; leitura configurável (`ConfigLeitura`: colunas, linha do cabeçalho, delimitador; campo `config` no `POST /planos`); resumo com `tem_coluna_id_ckan` e `avisos`; modal Importar PDA com abas Carregar/Configuração (configuração salva no navegador); `BaseOut.dataset_id_ckan_planilha` no formulário, detalhe e tabela | Victor |
+| 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
+| 23/10/2026 | Importação com o ID do CKAN da planilha (ADR-0022): coluna "ID_UNICO" vincula a base ao dataset do inventário na importação (pendente pelo ID se não coletado; `pda_base_prevista.dataset_id_ckan_planilha`, migração `b9d4e6f2a7c1`); Atualizar vínculos resolve pelo ID; órgão também pelo nome do órgão; leitura configurável (`ConfigLeitura`: colunas, linha do cabeçalho, delimitador; campo `config` no `POST /planos`); resumo com `tem_coluna_id_ckan` e `avisos`; modal Importar PDA com abas Carregar/Configuração (configuração salva no navegador); `BaseOut.dataset_id_ckan_planilha` no formulário, detalhe e tabela | Victor |
+| 28/10/2026 | Merge com `desenvolvimento` (LGPD): a ADR da importação configurável passa a ADR-0022 (o número 0020 já era da ADR do Claude Haiku) e a migração `b9d4e6f2a7c1` passa a vir depois de `9d583e5bd118` (LGPD), evitando duas pontas no Alembic; variante larga do `Modal` unificada com a da LGPD | Victor |

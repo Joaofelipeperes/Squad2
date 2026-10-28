@@ -1,4 +1,4 @@
-# ADR-0020 — Importar o PDA vinculando pelo ID do CKAN da planilha, com leitura configurável guardada no navegador
+# ADR-0022 — Importar o PDA vinculando pelo ID do CKAN da planilha, com leitura configurável guardada no navegador
 
 | | |
 |---|---|

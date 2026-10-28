@@ -13,6 +13,9 @@ services:
     env_file: .env
     depends_on: { db: { condition: service_healthy } }
     ports: ["8000:8000"]
+    # Anonimização LGPD (US26): cópia do original e prévia ficam fora do banco, neste volume
+    # (contém dado pessoal; retenção definida pela GEDA — ADR-0008)
+    volumes: [lgpd_arquivos:/app/dados_lgpd]
 
   worker:
     build: ./backend
@@ -35,3 +38,4 @@ services:
 volumes:
   pgdata:
   ollama:
+  lgpd_arquivos:
