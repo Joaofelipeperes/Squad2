@@ -203,7 +203,7 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | consome | acesso | `filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)` nas consultas de bases |
 | é consumido por | painel | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` — bases previstas, vinculadas, publicadas e metas por órgão na tela Organizações (US19); sempre o PDA vigente |
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
-| é consumido por | assistente | idem, só agregados e com `user` para respeitar o escopo de órgão |
+| é consumido por | assistente | `plano_vigente` + `bases_do_plano(db, plano.id, user)` — situação e prazo das bases (do órgão ou do dataset citado) e listas de atraso/prazo; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
 | é consumido por | inventario (tela Datasets) | `GET /datasets/{id}/bases` — prazo, periodicidade e situação PDA no detalhe do dataset |
 
@@ -356,3 +356,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `pda_base_prevista.organizacao_id` e `.dataset_id` passam a inteiros (`organizacao.id`, `dataset.id`); `BaseIn`, `BaseOut`, `DatasetOpcaoOut` e as opções de organização usam o `id`; `BaseOut.dataset_id_ckan` para o link do portal; `orgao_chave` = `id` em texto | Victor |
 | 22/10/2026 | DAO (ADR-0019): `PdaDao` em `dao.py` concentra todo acesso ao banco do módulo; exclusão de PDA e de base passa a ser lógica (`deleted`), com as bases do PDA excluídas junto; `total_bases` conta só as ativas; únicos do nome e do vigente só entre ativos (nome de PDA excluído pode ser reaproveitado); gravações registram o usuário em `created_id`/`changed_id` (rotas de editar, vigente, excluir e vincular passam a receber o usuário) | Victor |
 | 23/10/2026 | Merge com `desenvolvimento`: o campo "ID do dataset no CKAN" do Humberto passa a `BaseIn.dataset_id_ckan` (`_vinculo_por_id_ckan`, mesma validação, agora pelo `PdaDao`), abaixo de `dataset_id` (busca) na prioridade; na tela, o ID do CKAN é colado no campo de busca `DatasetBusca`, que já o aceita, em vez de um campo separado | Victor |
+| 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |

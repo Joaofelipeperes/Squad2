@@ -6,13 +6,21 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
 from app.integrations.ai.base import AIProviderError, ChatMessage, ChatRequest
-from app.integrations.ai.policy import PoliticaIAViolada, TarefaIA
+from app.integrations.ai.policy import TAREFAS, PoliticaIAViolada, TarefaIA
 from app.modules.ia import service
 from app.modules.ia.gateway import AIGateway, IANaoConfigurada
 from app.modules.ia.models import PerfilProvedorIA
 from app.modules.ia.schemas import (
-    PerfilIn, PerfilOut, PlaygroundIn, PlaygroundOut, TarefaOut, TesteConexaoIn,
-    TesteConexaoOut, TipoProvedorOut, UsoOut, VinculoIn,
+    PerfilIn,
+    PerfilOut,
+    PlaygroundIn,
+    PlaygroundOut,
+    TarefaOut,
+    TesteConexaoIn,
+    TesteConexaoOut,
+    TipoProvedorOut,
+    UsoOut,
+    VinculoIn,
 )
 
 router = APIRouter(dependencies=[Depends(require(P.IA_CONFIGURAR))])
@@ -96,6 +104,9 @@ def uso(db: DbSession, limite: int = 50):
 
 @router.post("/playground", response_model=PlaygroundOut)
 def playground(body: PlaygroundIn, db: DbSession):
+    if TAREFAS[body.tarefa].tipo != "chat":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Tarefa de embeddings: use o botão Testar do "
+                                                      "perfil vinculado a ela.")
     try:
         resp, perfil, fb = AIGateway(db).chat(body.tarefa, ChatRequest(
             messages=[ChatMessage(role="user", content=body.mensagem)]))

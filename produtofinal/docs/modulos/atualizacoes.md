@@ -57,7 +57,8 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 | consome | pda | indicador separado PDA × espontânea (PBI-82) |
 | é consumido por | pda | `service.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da base |
 | é consumido por | inventario | `regras.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da tela Datasets |
-| é consumido por | painel, relatorios, assistente | situação de atualização por dataset e órgão |
+| é consumido por | painel, relatorios | situação de atualização por dataset e órgão |
+| é consumido por | assistente | `regras.ultima_atualizacao_real` (já); situação por periodicidade quando implementada |
 
 ## Jobs agendados
 Nenhum.
@@ -82,3 +83,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 07/10/2026 | `regras.ultima_atualizacao_real` implementada com `UltimaAtualizacao(data, estimada)` (PBI-23 a PBI-25); `service.py` delega e o módulo pda a consome | Humberto |
 | 18/10/2026 | Interações: a tela Datasets (inventario) passa a consumir `regras.ultima_atualizacao_real`; sem mudança de código neste módulo | Humberto |
 | 22/10/2026 | `ultima_atualizacao_real`: a estimativa usa a data de criação no CKAN — `created_ckan` nos objetos do banco (o `created` deles é a auditoria, ADR-0019) e `created` nos payloads/dicts do CKAN | Victor |
+| 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
