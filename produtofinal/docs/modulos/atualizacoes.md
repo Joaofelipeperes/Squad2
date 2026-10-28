@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | Parcial: última atualização real implementada (PBI-23 a PBI-25); tela, API e situação por periodicidade em esqueleto |
+| **Status** | Parcial: última atualização real (PBI-23 a PBI-25) e situação por periodicidade (PBI-27/28, ADR-0020) implementadas; tela e API próprias em esqueleto |
 | **Responsável** | Humberto (Eixo 1) |
 | **User stories** | US9 (PBI-23 a PBI-26, PBI-78, PBI-79, PBI-81), US10 (PBI-27 a PBI-30) |
 | **Backend** | `backend/app/modules/atualizacoes/` |
 | **Frontend** | `frontend/src/modules/atualizacoes/` |
-| **Última atualização** | 22/10/2026 |
+| **Última atualização** | 28/10/2026 |
 
 ## Propósito
 Indica se cada dataset está de fato sendo atualizado conforme a periodicidade declarada, usando a
@@ -36,8 +36,16 @@ Sem acesso ao banco (funções puras); não tem `dao.py`.
 
 `service.py` (ponto de uso pelos outros módulos):
 - `ultima_atualizacao_real(recursos) -> UltimaAtualizacao` — delega para `regras`.
-- `situacao_periodicidade(periodicidade, ultima, hoje) -> str` — contrato (`NotImplementedError`):
-  "Atualizado" | "Próximo do vencimento" | "Atrasado" | "Sem informação" (PBI-27/28).
+- `situacao_periodicidade(periodicidade, ultima, hoje, original=None) -> str` — PBI-27/28
+  (ADR-0020), delega para `regras.situacao_periodicidade`: "Atualizado" | "Próximo do vencimento" |
+  "Atrasado" | "Sem informação" | "Sem periodicidade definida".
+
+`regras.py` (funções puras): `DIAS_POR_PERIODICIDADE` (Mensal 30, Anual 365…), `prazo_em_dias(
+periodicidade, original)` (Múltipla = menor periodicidade citada no texto original),
+`vencimento_atualizacao(periodicidade, ultima, original)` e `situacao_periodicidade`: `d` = dias
+desde a última atualização real; `d > prazo` → Atrasado; `d ≥ 80% do prazo` (`FRACAO_ALERTA`) →
+Próximo do vencimento; senão Atualizado. Eventual/Estática → Sem periodicidade definida; sem prazo
+ou sem data → Sem informação. Testes em `tests/test_atualizacoes_periodicidade.py`.
 
 Recomendação: implementar `situacao_periodicidade` também em `regras.py`.
 
@@ -58,12 +66,14 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 | é consumido por | pda | `service.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da base |
 | é consumido por | inventario | `regras.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da tela Datasets |
 | é consumido por | painel, relatorios, assistente | situação de atualização por dataset e órgão |
+| é consumido por | painel | `regras.situacao_periodicidade` e `vencimento_atualizacao` — gráfico "Status das atualizações", cartão "Atualizações em atraso" e alertas do Dashboard |
 
 ## Jobs agendados
 Nenhum.
 
 ## Regras de negócio e decisões
 Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
+- Situação por periodicidade: ver [ADR-0020](../adr/0020-situacao-de-atualizacao-pela-periodicidade-do-pda.md). A periodicidade que vale é a da base no **PDA vigente**; Mensal = 30 dias, **sem tolerância**.
 
 - `metadata_modified` **nunca** é indicador de atualização.
 - Ressalva do recurso parcial (17/09): dataset anual atualizado no meio do ano (PBI-78).
@@ -72,6 +82,8 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 
 ## Pendências
 - Domínio de valores de periodicidade praticado no portal (PBI-27, PBI-29).
+- Situação por periodicidade ainda não considera recurso parcial (PBI-78) nem correções por
+  anonimização (PBI-79); validar a regra da ADR-0020 com a GEDA (tolerância).
 - O PBI-25 pode pedir o fallback por recurso (`created` de cada recurso sem `last_modified`), não
   só quando nenhum tem — validar com a GEDA e o time.
 
@@ -82,3 +94,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 07/10/2026 | `regras.ultima_atualizacao_real` implementada com `UltimaAtualizacao(data, estimada)` (PBI-23 a PBI-25); `service.py` delega e o módulo pda a consome | Humberto |
 | 18/10/2026 | Interações: a tela Datasets (inventario) passa a consumir `regras.ultima_atualizacao_real`; sem mudança de código neste módulo | Humberto |
 | 22/10/2026 | `ultima_atualizacao_real`: a estimativa usa a data de criação no CKAN — `created_ckan` nos objetos do banco (o `created` deles é a auditoria, ADR-0019) e `created` nos payloads/dicts do CKAN | Victor |
+| 28/10/2026 | Situação por periodicidade (PBI-27/28, ADR-0020): `regras.situacao_periodicidade`, `prazo_em_dias`, `vencimento_atualizacao`; contrato `service.situacao_periodicidade` implementado; usado pelo Dashboard | Humberto |

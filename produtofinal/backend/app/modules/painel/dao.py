@@ -29,5 +29,17 @@ class PainelDao(Dao):
                    Recurso.eh_dicionario_dados.is_(False), condicao_recurso_atual())
             .group_by(Dataset.organizacao_id)))
 
+    def datasets_por_situacao(self, user: UsuarioAtual) -> dict[bool, int]:
+        """ativo_no_portal → quantidade de datasets no escopo de órgão do usuário."""
+        stmt = select(Dataset.ativo_no_portal, func.count()).group_by(Dataset.ativo_no_portal)
+        return dict(self.buscar_linhas(filtrar_por_orgao(stmt, Dataset.organizacao_id, user)))
+
+    def recursos_validos(self, user: UsuarioAtual) -> list[Recurso]:
+        """Recursos atuais, sem dicionário de dados, de datasets ativos, no escopo do usuário."""
+        stmt = (select(Recurso).join(Dataset, Dataset.id == Recurso.dataset_id)
+                .where(Dataset.ativo_no_portal.is_(True), Recurso.eh_dicionario_dados.is_(False),
+                       condicao_recurso_atual()))
+        return self.buscar_lista(filtrar_por_orgao(stmt, Dataset.organizacao_id, user))
+
     def orgao_de_cada_dataset(self) -> dict[int, int | None]:
         return dict(self.buscar_linhas(select(Dataset.id, Dataset.organizacao_id)))

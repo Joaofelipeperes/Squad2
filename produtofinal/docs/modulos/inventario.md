@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 22/10/2026 |
+| **Última atualização** | 28/10/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -108,7 +108,7 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | é consumido por | atualizacoes, metadados | `Dataset`, `Recurso` |
 | é consumido por | lgpd | `Recurso` (varredura, url_type para anonimização) |
 | é consumido por | rastreabilidade | `Coleta`, `DatasetSnapshot` (diff entre coletas) |
-| é consumido por | painel | `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` — tela Organizações |
+| é consumido por | painel | `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` — telas Organizações e Dashboard; `ultima_coleta(db)` — data da coleta no Dashboard (PBI-58) |
 | é consumido por | metadados | `Dataset`, `Recurso` e `condicao_recurso_atual()` — `recursos_formato_fechado` (PBI-53) |
 | é consumido por | relatorios, assistente | contagens e última coleta |
 | é consumido por | acesso, envio | `Organizacao` (escopo de órgão) |
@@ -162,3 +162,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 18/10/2026 | Interações: painel (tela Organizações) e metadados (formato fechado) passam a consumir `condicao_recurso_atual()` | Humberto |
 | 21/10/2026 | Chave primária própria (ADR-0018): `organizacao`, `dataset` e `recurso` ganham `id` inteiro e o ID do CKAN vai para `id_ckan` (único, opcional); FKs e `dataset_snapshot.dataset_id` apontam para o `id` (migração `f6c3a8d2b1e7`, dados preservados); coleta casa pelo `id_ckan`; `GET /datasets/{id}` e `?orgao=<id>`; saídas com `id` e `id_ckan` | Victor |
 | 22/10/2026 | Banco só pelo `InventarioDao` (ADR-0019): service e router sem acesso direto à sessão; coleta grava com auditoria (`iniciar(..., usuario_id=)` registra quem pediu a coleta manual); excluídos somem da tela Datasets; data de criação do recurso no CKAN em `recurso.created_ckan` (JSON `created` mantido) | Victor |
+| 28/10/2026 | Interações: o Dashboard (painel) usa as contagens do inventário e `ultima_coleta`; sem mudança de código neste módulo | Humberto |

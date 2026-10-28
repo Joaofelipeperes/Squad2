@@ -2,7 +2,7 @@
 citados."""
 from sqlalchemy.orm import Session
 
-from app.modules.inventario.models import Recurso
+from app.modules.inventario.models import Dataset, Recurso
 from app.modules.metadados import regras
 from app.modules.metadados.dao import MetadadosDao
 
@@ -12,9 +12,10 @@ def completude(dataset, obrigatorios: list[str]) -> float:
     raise NotImplementedError
 
 
-def datasets_sem_recurso(db):
-    """PBI-51"""
-    raise NotImplementedError
+def datasets_sem_recurso(db: Session) -> list[Dataset]:
+    """PBI-51 — datasets ATIVOS no portal sem recurso válido: criados sem arquivo, ou só com o
+    dicionário de dados (que não conta como recurso). Recurso apagado do CKAN também não conta."""
+    return MetadadosDao(db).datasets_ativos_sem_recurso()
 
 
 def recursos_formato_fechado(db: Session, formatos_abertos: list[str]) -> list[Recurso]:

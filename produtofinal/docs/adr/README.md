@@ -47,6 +47,7 @@ a fonte.
 | 21/10/2026 | Modo desenvolvimento no Docker: código montado do computador e recarga automática (`docker-compose.dev.yml`) | Técnica | Aceita | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
 | 21/10/2026 | Chave primária própria (`id`) nas tabelas espelhadas do CKAN, com o ID do CKAN em `id_ckan` | Técnica | Aceita | [ADR-0018](0018-chave-primaria-propria-e-id-ckan.md) |
 | 22/10/2026 | Banco só por DAOs (classe-pai `Dao`), `id` em toda tabela, exclusão lógica (`deleted`) e auditoria (`created`/`changed` + usuário) | Técnica | Aceita | [ADR-0019](0019-dao-exclusao-logica-e-auditoria.md) |
+| 28/10/2026 | Situação de atualização pela periodicidade do PDA vigente: Mensal = 30 dias sem tolerância, "próximo do vencimento" a partir de 80% do prazo; Eventual/Estática sem prazo; Múltipla = menor periodicidade | Negócio | Aceita (validar com a GEDA) | [ADR-0020](0020-situacao-de-atualizacao-pela-periodicidade-do-pda.md) |
 
 ## Decisões em aberto
 

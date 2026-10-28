@@ -68,3 +68,45 @@ a.btn { text-decoration: none; }
 
 /* Diálogo recebe foco programático (Modal.tsx) — sem contorno no contêiner */
 .modal:focus { outline: none; }
+
+/* Gráfico de barras horizontais da Visão Geral (BarrasHorizontais.tsx): barra fina (≤ 20px),
+   ponta arredondada e reta na linha de base, valor na ponta, dica ao passar o mouse/foco. */
+.barras { display: flex; flex-direction: column; gap: 10px; }
+.barras-linha { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; align-items: center;
+  gap: 10px; font-size: 12.5px; outline: none; border-radius: var(--radius-sm); }
+.barras-linha:focus-visible { box-shadow: 0 0 0 2px var(--blue-500); }
+.barras-rotulo { color: var(--gray-700); }
+.barras-trilho { position: relative; display: flex; align-items: center; gap: 6px; min-height: 22px;
+  border-left: 1px solid var(--gray-200); }
+.barras-barra { display: block; height: 18px; border-radius: 0 4px 4px 0; min-width: 0; }
+.barras-valor { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.barras-dica { position: absolute; left: 8px; bottom: calc(100% + 4px); z-index: 5;
+  background: var(--navy-900); color: #fff; font-size: 11.5px; padding: 5px 8px;
+  border-radius: var(--radius-sm); white-space: nowrap; box-shadow: var(--shadow-2);
+  pointer-events: none; }
+.kpi-value.pendente { color: var(--gray-500); }
+.kpi-foot.neutro { color: var(--gray-500); }
+
+/* Rosca da Visão Geral (Rosca.tsx): anel fino, legenda fixa com ícone, rótulo, valor e %. */
+.rosca { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.rosca-svg { width: 180px; height: 180px; flex: none; }
+.rosca-svg circle { transition: stroke-width .12s, opacity .12s; cursor: default; }
+.rosca-numero { font-size: 26px; font-weight: 800; fill: var(--navy-900); }
+.rosca-sub { font-size: 11.5px; fill: var(--gray-500); }
+.rosca-legenda { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 200px;
+  display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.rosca-legenda li { display: grid; grid-template-columns: 12px 16px 1fr auto 48px; align-items: center;
+  gap: 7px; padding: 3px 6px; border-radius: var(--radius-sm); outline: none; }
+.rosca-legenda li.ativa, .rosca-legenda li:focus-visible { background: var(--gray-50); }
+.rosca-legenda li:focus-visible { box-shadow: 0 0 0 2px var(--blue-500); }
+.rosca-legenda i { color: var(--gray-700); font-size: 12px; text-align: center; }
+.rosca-amostra { width: 12px; height: 12px; border-radius: 3px; }
+.rosca-amostra.hachurada { background: repeating-linear-gradient(45deg, var(--gray-500) 0 2px,
+  var(--surface) 2px 4px); border: 1px solid var(--gray-500); }
+.rosca-rotulo { color: var(--gray-700); }
+.rosca-valor { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.rosca-pct { color: var(--gray-500); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Abas de tipo de alerta da Visão Geral */
+.abas-alerta { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 18px 0; }
+.abas-alerta-n { font-variant-numeric: tabular-nums; opacity: .8; margin-left: 4px; }

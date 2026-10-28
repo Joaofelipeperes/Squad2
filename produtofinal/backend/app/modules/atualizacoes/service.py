@@ -14,7 +14,10 @@ def ultima_atualizacao_real(recursos) -> UltimaAtualizacao:
     return regras.ultima_atualizacao_real(recursos)
 
 
-def situacao_periodicidade(periodicidade: str, ultima, hoje) -> str:
-    """PBI-27/28 — 'Atualizado' | 'Próximo do vencimento' | 'Atrasado' | 'Sem informação'.
-    Considerar a ressalva do recurso parcial (PBI-78) e ignorar correções por anonimização (PBI-79)."""
-    raise NotImplementedError
+def situacao_periodicidade(periodicidade: str | None, ultima, hoje, original: str | None = None
+                           ) -> str:
+    """PBI-27/28 — 'Atualizado' | 'Próximo do vencimento' | 'Atrasado' | 'Sem informação' |
+    'Sem periodicidade definida' (ADR-0020). Implementado em `regras.situacao_periodicidade`
+    (função pura); a periodicidade é a da base no PDA vigente. Ainda não considera a ressalva do
+    recurso parcial (PBI-78) nem as correções por anonimização (PBI-79)."""
+    return regras.situacao_periodicidade(periodicidade, ultima, hoje, original)

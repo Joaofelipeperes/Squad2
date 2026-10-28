@@ -238,6 +238,7 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | consome | atualizacoes | `service.ultima_atualizacao_real(recursos)` → `UltimaAtualizacao(data, estimada)` (implementada em `atualizacoes/regras.py`) |
 | consome | acesso | `filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)` nas consultas de bases |
 | é consumido por | painel | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` — bases previstas, vinculadas, publicadas e metas por órgão na tela Organizações (US19); sempre o PDA vigente |
+| é consumido por | painel | `plano_vigente` + `bases_do_plano` e `regras` (situações) — cartões, gráfico por situação e alertas do Dashboard; `hoje_local()` |
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
 | é consumido por | assistente | idem, só agregados e com `user` para respeitar o escopo de órgão |
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |

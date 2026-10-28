@@ -1,5 +1,5 @@
 """Contrato JSON do módulo painel (o frontend segue exatamente estes nomes)."""
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -41,3 +41,52 @@ class OrganizacoesOut(BaseModel):
     hoje: date
     formatos_abertos: list[str]
     organizacoes: list[OrganizacaoOut]
+
+
+class KpisOut(BaseModel):
+    """Cartões da Visão Geral (PBI-56). `None` = indicador ainda não calculável."""
+
+    orgaos_monitorados: int  # organizações do inventário no escopo do usuário
+    orgaos_no_pda: int  # órgãos com ao menos uma base no PDA vigente
+    bases_previstas: int
+    bases_vinculadas: int
+    bases_publicadas: int
+    bases_em_atraso: int | None  # só entre as vinculadas; None = nenhuma base vinculada
+    bases_prazo_vencido: int  # sem vínculo e com prazo vencido: atraso NÃO confirmado
+    datasets_publicados: int  # ativos no portal
+    datasets_fora_do_portal: int  # excluídos ou privados depois de coletados
+    recursos_monitorados: int  # atuais, sem dicionário, de datasets ativos
+    datasets_sem_recurso: int  # PBI-51
+    atualizacoes_em_atraso: int | None = None  # entre as vinculadas (ADR-0020); None = nenhuma
+    possiveis_dados_pessoais: int | None = None  # módulo lgpd
+
+
+class ContagemOut(BaseModel):
+    rotulo: str
+    total: int
+
+
+class AlertaOut(BaseModel):
+    tipo: str  # "PDA" | "Atualização" | "Inventário"
+    orgao: str | None
+    item: str  # base prevista ou dataset
+    situacao: str
+    prazo: date | None  # PDA: meta de abertura; Atualização: vencimento pela periodicidade
+    destino: str  # rota da tela onde o item é tratado
+
+
+class VisaoGeralOut(BaseModel):
+    """Tela Visão Geral (Dashboard)."""
+
+    plano: PlanoResumoOut | None  # PDA vigente
+    hoje: date
+    ultima_coleta: datetime | None  # fim da última coleta concluída (PBI-58)
+    kpis: KpisOut
+    situacoes_pda: list[ContagemOut]  # bases do PDA vigente por situação (ordem do filtro)
+    # bases do PDA vigente por situação de atualização (periodicidade do PDA, ADR-0020), mais
+    # "Aguardando vínculo" para as bases sem dataset
+    situacoes_atualizacao: list[ContagemOut]
+    atualizacao_estimada: int  # bases vinculadas cuja data veio da criação (sem last_modified)
+    alertas: list[AlertaOut]  # os mais prioritários de cada tipo (até 10 por tipo)
+    total_alertas: int
+    alertas_por_tipo: dict[str, int]  # "PDA" | "Atualização" | "Inventário" → total
