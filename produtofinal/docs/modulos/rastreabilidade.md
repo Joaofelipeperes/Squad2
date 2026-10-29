@@ -7,7 +7,7 @@
 | **User stories** | US14 (PBI-43 a PBI-45, PBI-85), US29 (PBI-69, PBI-70) |
 | **Backend** | `backend/app/modules/rastreabilidade/` |
 | **Frontend** | `frontend/src/modules/rastreabilidade/` |
-| **Última atualização** | 23/10/2026 |
+| **Última atualização** | 29/10/2026 |
 
 ## Propósito
 Registra inclusões, alterações, privações e exclusões de datasets, recursos e do cadastro dos
@@ -44,11 +44,16 @@ removida), coluna, valor antes e depois, lida do CKAN no momento do clique (ver 
 ## API
 | Método | Rota (`/api/v1/rastreabilidade`) | Permissão | Descrição |
 |---|---|---|---|
-| GET | `/eventos?busca=&tipo=&orgao=&dataset=&desde=&ate=&ordem=recentes&limite=300` | `rastreabilidade.acessar` | Linha do tempo, opções dos filtros e última sincronização. `tipo` aceita o código ou o rótulo; `desde`/`ate` em ISO 8601; `ordem` = `recentes` ou `antigos`; `limite` até 2000. Escopo de órgão aplicado |
+| GET | `/eventos?busca=&tipo=&orgao=&dataset=&desde=&ate=&ordem=recentes&limite=300` | `rastreabilidade.acessar` | Linha do tempo, opções dos filtros e última sincronização. `tipo` aceita o código ou o rótulo; `desde`/`ate` em ISO 8601; `ordem` = `recentes` ou `antigos`; `limite` até 2000; `orgao` = `id` do órgão no produto (ADR-0018). Escopo de órgão aplicado. Cada evento traz `dataset_id_ckan`, `organizacao_id` (`id` do órgão no inventário, vazio se ele não estiver lá), `organizacao_id_ckan` e `recurso_id_ckan` |
 | GET | `/eventos/{id}/diff` | `rastreabilidade.acessar` | Diff linha a linha do evento, lido do CKAN na hora (não gravado). 404 = evento inexistente ou de outro órgão; 409 = evento sem diff, token não configurado ou falha ao ler o CKAN |
 
 ## Serviços e métodos
-`service.py`:
+`dao.py` — `RastreabilidadeDao(Dao)` (ADR-0019): todo acesso ao banco do módulo (sincronizações,
+eventos, fotografias dos órgãos e as leituras do inventário de que a sincronização precisa). O
+órgão do evento é ligado ao `Organizacao.id` pelo `organizacao_id_ckan`, o que serve ao filtro
+`?orgao=` e ao escopo de órgão (`filtrar_por_orgao`).
+
+`service.py` (sem acesso direto à sessão):
 - `sincronizar(client=None, orgaos=None) -> int` — (1) se `orgaos` vier da coleta, compara o
   cadastro de cada órgão com a última fotografia (`_comparar_orgaos`), sem depender de token;
   (2) para cada dataset do inventário (inclusive os que saíram do portal), lê `dsaudit_activity_list` da mais recente para a mais antiga e grava as atividades
@@ -130,8 +135,8 @@ limit, offset, resource_id=None, activity_type=None)`, `atividades_orgao(org_id,
 ## Modelo de dados
 | Tabela | Descrição |
 |---|---|
-| `rastreabilidade_evento` | Um evento da linha do tempo: `origem` (`auditoria_ckan` ou `comparacao_coletas`); na auditoria, atividade (`ckan_activity_id`) e parte dela (`sequencia`, únicos juntos); na comparação, a fotografia do órgão (`orgao_snapshot_id`, FK, único); data, tipo, `activity_type` do CKAN (`organization` na comparação), dataset (ID e título na data; vazio em evento de órgão), órgão, recurso, usuário do CKAN (vazio na comparação), resumo, `detalhes` (JSON) e `tem_diff`. Somente inserção; `dataset_id` e `organizacao_id` sem FK (referências lógicas) |
-| `rastreabilidade_orgao_snapshot` | Fotografia do cadastro de um órgão (`payload` achatado, `hash_conteudo`, `ativo`), gravada só quando muda. Somente inserção; `organizacao_id` sem FK |
+| `rastreabilidade_evento` | Um evento da linha do tempo: `origem` (`auditoria_ckan` ou `comparacao_coletas`); na auditoria, atividade (`ckan_activity_id`) e parte dela (`sequencia`, únicos juntos); na comparação, a fotografia do órgão (`orgao_snapshot_id`, FK, único); data, tipo, `activity_type` do CKAN (`organization` na comparação), dataset (ID e título na data; vazio em evento de órgão), órgão, recurso, usuário do CKAN (vazio na comparação), resumo, `detalhes` (JSON) e `tem_diff`. Somente inserção; `dataset_id_ckan`, `organizacao_id_ckan` e `recurso_id_ckan` guardam IDs do CKAN, sem FK (referências lógicas a `id_ckan` do inventário) |
+| `rastreabilidade_orgao_snapshot` | Fotografia do cadastro de um órgão (`payload` achatado, `hash_conteudo`, `ativo`), gravada só quando muda. Somente inserção; `organizacao_id_ckan` sem FK |
 | `rastreabilidade_sincronizacao` | Cada leitura: status (`executando`, `ok`, `erro`, `ignorada`), órgãos comparados, datasets lidos, sem permissão, não encontrados, eventos novos, erro e `atividades_nativas_ate` (até quando as atividades nativas já foram lidas) |
 
 Migrações `56cbf1b07f2c` (tabelas), `7a3d9e2b4c61` (`sequencia`, `tem_diff` e unicidade por
@@ -139,7 +144,9 @@ atividade + parte), `b8e4c1f07d25` (dados: apaga os eventos gravados com a regra
 sincronização relê a auditoria inteira do CKAN) e `c2d7f4a8e913` (fotografia dos órgãos, `origem`,
 `orgao_snapshot_id`, dataset opcional, `orgaos_consultados`; eventos existentes ficam com origem
 `auditoria_ckan`) e `d5e1a9c3b742` (`atividades_nativas_ate`; eventos da origem
-`atividade_nativa` usam as colunas existentes).
+`atividade_nativa` usam as colunas existentes) e `e7a4c2f9b315` (une as duas linhas de migração do
+merge com `desenvolvimento`: `id` próprio e colunas de auditoria `deleted`/`created`/`changed` nas
+três tabelas, colunas de ID do CKAN renomeadas para `*_id_ckan` e unicidades só entre ativos).
 
 **Privacidade:** de arquivos e do DataStore são guardados só contagens de linhas e nomes de
 colunas, nunca valores de linhas (que podem conter dado pessoal; continuam apenas no CKAN). O diff
@@ -190,7 +197,7 @@ colunas vêm preenchidas:
 | `ckan_activity_id`, `sequencia` | ID da atividade da extensão e parte | ID da atividade nativa e parte | vazio, 0 |
 | `orgao_snapshot_id` | vazio | vazio | fotografia em que a diferença foi detectada |
 | `ocorrido_em` | data da alteração no CKAN | data da atividade nativa | data da última alteração do órgão no CKAN (atividade nativa); sem ela, data da coleta que detectou |
-| `dataset_id`, `dataset_titulo` | preenchidos | preenchidos | vazios |
+| `dataset_id_ckan`, `dataset_titulo` | preenchidos | preenchidos | vazios |
 | `usuario` | usuário do CKAN | usuário do CKAN | usuário(s) das atividades nativas do órgão no período; vazio se não houver token ou acesso |
 | `activity_type` | tipo da atividade da extensão | `new/changed/deleted package` | `organization` |
 | `detalhes[].escopo` | `dataset`, `resource` ou vazio (arquivo/DataStore) | `dataset`/`resource` e uma observação | `orgao` |
@@ -217,7 +224,7 @@ local). Para testar com permissão mínima, gere o token de um editor e defina
 | Direção | Módulo | O quê |
 |---|---|---|
 | consome | CKAN (integração) | `dsaudit_activity_list` (sincronização e diff sob demanda), `package_activity_list` e `activity_data_show` (ações fora da auditoria), `organization_activity_list` (autoria das mudanças em órgãos) e `user_show`, com token de editor |
-| consome | inventario | `Dataset` (datasets lidos, título e órgão), `Recurso` (nome do recurso), `Organizacao` (nome do órgão); `Coleta`, `DatasetSnapshot` para o diff futuro |
+| consome | inventario | `Dataset` (datasets lidos, título e órgão, pelo `id_ckan`), `Recurso` (nome do recurso), `Organizacao` (nome do órgão e `id` para o escopo); `Coleta`, `DatasetSnapshot` para o diff futuro — tudo lido pelo `RastreabilidadeDao` |
 | é acionado por | inventario | `sincronizar(orgaos=...)` ao fim de cada coleta concluída, com a lista de órgãos que a coleta acabou de baixar (`organization_list` com campos extras) |
 | consome | pda | destacar mudança em base do PDA já cumprida (PBI-45) — pendente |
 | é consumido por | relatorios | mudanças do período por órgão (PBI-44) — pendente |
@@ -265,3 +272,4 @@ Decisões registradas: [ADR-0009](../adr/0009-fonte-da-rastreabilidade.md) (Acei
 | 23/10/2026 | Autoria das mudanças em órgãos: usuário e data lidos das atividades nativas do CKAN (`organization_activity_list`) entre a fotografia anterior e a atual, com o token de editor; sem schema novo | João |
 | 23/10/2026 | Ações fora da edição auditada (Make public/Make private/Delete em lote na organização, package_patch): atividades nativas do CKAN sem par na extensão (±2 s) viram eventos `atividade_nativa`, com o que mudou pelas versões guardadas pelo CKAN (`activity_data_show`); marca `atividades_nativas_ate` (migração `d5e1a9c3b742`); etiqueta "Fora da auditoria" | João |
 | 23/10/2026 | Correção: Make private em lote aparecia como "tornado público" (e vice-versa). Na ação em lote o CKAN 2.9 guarda a versão de antes da ação (cache do Solr); identificada por `metadata_modified` anterior à atividade (`regras.versao_anterior_a_acao`), o estado depois vem da atividade seguinte ou da visibilidade atual; exclusão em lote reconhecida pelo tipo da atividade. Sem schema novo | João |
+| 29/10/2026 | Merge de `desenvolvimento`: banco só pelo `RastreabilidadeDao` (ADR-0019); `id` próprio, exclusão lógica e auditoria nas três tabelas; IDs do CKAN em `dataset_id_ckan`, `organizacao_id_ckan` e `recurso_id_ckan` (ADR-0018); `?orgao=` e escopo pelo `id` do órgão; migração `e7a4c2f9b315` (une as duas linhas do Alembic) | Victor |
