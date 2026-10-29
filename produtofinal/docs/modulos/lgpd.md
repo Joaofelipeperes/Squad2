@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 28/10/2026 |
+| **Última atualização** | 29/10/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -31,7 +31,7 @@ coluna e a linha para conferir no arquivo.
 | GET | `/achados/{id}` | `lgpd.acessar` | Detalhe + explicação do score + histórico de decisões |
 | POST | `/achados/{id}/decisao` | `lgpd.triar` | `{decisao: confirmado\|falso_positivo\|tratado\|revisar, justificativa?}` (PBI-40/42) |
 | GET | `/varreduras?limite=30` | `lgpd.acessar` | Últimas varreduras e quantas estão em andamento |
-| POST | `/varreduras` | `lgpd.varrer` | `{escopo: pendentes\|dataset\|recurso, id?}` (`id` próprio do dataset ou recurso, ADR-0018) → 202; varre em segundo plano; `pendentes` limitado a `GDA_LGPD_VARREDURA_MAX_RECURSOS` (200) por pedido |
+| POST | `/varreduras` | `lgpd.varrer` | `{escopo: pendentes\|dataset\|recurso, id?}` (`id` próprio do dataset ou recurso, ADR-0018) → 202; só enfileira — o worker executa em até 1 min (ADR-0025); `pendentes` limitado a `GDA_LGPD_VARREDURA_MAX_RECURSOS` (200) por pedido |
 | POST | `/varreduras/cancelar` | `lgpd.varrer` | Cancela as varreduras que ainda não começaram |
 
 | GET | `/correcoes?limite=` | `lgpd.acessar` | Anonimizações + `escrita_habilitada`, operadores e alcances |
@@ -63,15 +63,20 @@ tarefa de IA). Achado que some do arquivo é excluído logicamente (`delete_gene
 
 `service.py`:
 - `listar_achados`, `obter_achado`, `decidir` — tela e triagem, no escopo de órgão.
-- `solicitar(db, escopo, id, user)` → varreduras `pendente` (sem duplicar recurso na fila);
+- `solicitar(db, escopo, id, user)` → varreduras `pendente` (sem duplicar recurso na fila); a API
+  só enfileira, quem executa é o worker (ADR-0025);
   `recursos_do_escopo` (pendentes = CSV/XLSX nunca varridos ou com `last_modified` posterior à
   última varredura).
-- `executar_fila(ids)` / `executar_varredura(db, v)` — baixa (`CkanClient.url_download` +
-  `baixar`, até `tamanho_maximo_recurso_lgpd_mb`), lê, roda o motor coluna a coluna, agrega e grava.
+- `job_executar_fila()` — job do worker, único executor da fila: `_retomar_interrompidas` (varredura
+  ainda em `executando` no início do ciclo vira erro e o recurso volta à fila uma vez) e depois as
+  pendentes, a mais antiga primeiro, até a fila esvaziar.
+- `executar_varredura(db, v)` — baixa (`CkanClient.url_download` + `baixar`, até
+  `tamanho_maximo_recurso_lgpd_mb`; intervalo por host e espera no HTTP 429), lê, roda o motor
+  coluna a coluna, agrega e grava.
 - `montar_motor(db)` — limiar = `confianca_minima_lgpd`/100; tarefa `classificacao_dp` (modelo
   local de chat, ex.: qwen2.5:7b-instruct, qwen3:8b, qwen3.5:9b) e `embeddings_dp` (ex.: bge-m3),
   margem `margem_embeddings_lgpd`.
-- `job_varredura_incremental()` — job do worker.
+- `job_varredura_incremental()` — job do worker; só enfileira.
 - `classificar_colunas_ambiguas` — classificação por coluna anterior; não usada pela varredura.
 
 Anonimização — `anonimizacao.py` (puro): operadores `mascara_cpf` (regra da GEDA: oculta 3 primeiros
@@ -114,7 +119,7 @@ Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`
 | consome | inventario | `Recurso` (url, url_type, formato, last_modified), `Dataset` (órgão, ativo), `recursos_atuais` |
 | consome | ia | `AIGateway.chat(TarefaIA.CLASSIFICACAO_DADO_PESSOAL)` e `AIGateway.embed(TarefaIA.EMBEDDINGS_DADO_PESSOAL)` — sensíveis, só modelo local |
 | consome | parametros | `tipos_dado_pessoal`, `confianca_minima_lgpd`, `margem_embeddings_lgpd`, `tamanho_maximo_recurso_lgpd_mb` |
-| consome | CKAN (integração) | `CkanClient.url_download` + `baixar` (leitura dos arquivos); `CkanWriter.replace_resource_file` (publicação e reversão da anonimização) — única escrita do sistema |
+| consome | CKAN (integração) | `CkanClient.url_download` + `baixar` (leitura dos arquivos, com intervalo mínimo por host e espera no HTTP 429 — ADR-0025); `CkanWriter.replace_resource_file` (publicação e reversão da anonimização) — única escrita do sistema |
 | é consumido por | painel | ranking de exposição por órgão (US27) e indicador de risco (PBI-57) |
 | é consumido por | atualizacoes | correções publicadas não contam como atualização (PBI-79) |
 | é consumido por | relatorios | relatório priorizado (PBI-38) |
@@ -123,10 +128,11 @@ Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`
 ## Jobs agendados
 | Job | Quando | O quê |
 |---|---|---|
-| `lgpd.varredura_incremental` | `GDA_LGPD_VARREDURA_CRON` (padrão 05:00) | Recursos novos ou alterados, até `GDA_LGPD_VARREDURA_MAX_RECURSOS` (200) por execução (PBI-34) |
+| `lgpd.varredura_incremental` | `GDA_LGPD_VARREDURA_CRON` (padrão 05:00) | Enfileira recursos novos ou alterados, até `GDA_LGPD_VARREDURA_MAX_RECURSOS` (200) por execução (PBI-34) |
+| `lgpd.fila_varredura` | `GDA_LGPD_FILA_CRON` (padrão a cada minuto) | Executa a fila: retoma a interrompida (uma vez por recurso) e varre as pendentes até esvaziar (ADR-0025) |
 
 ## Regras de negócio e decisões
-Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-ckan.md) · [ADR-0010](../adr/0010-deteccao-de-dados-pessoais-hibrida.md) · [ADR-0021](../adr/0021-varredura-lgpd-com-motor-do-detector3.md) (proposta).
+Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-ckan.md) · [ADR-0010](../adr/0010-deteccao-de-dados-pessoais-hibrida.md) · [ADR-0021](../adr/0021-varredura-lgpd-com-motor-do-detector3.md) (proposta) · [ADR-0025](../adr/0025-fila-da-varredura-lgpd-executada-pelo-worker.md).
 
 - **Não retenção** (PBI-35): o achado guarda localização, tipo e a trilha do score — nunca o valor.
   A tela mostra onde conferir (coluna e linha) em vez do valor mascarado do protótipo.
@@ -144,6 +150,11 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
   montado com o `id_ckan` do dataset e do recurso
   (`GDA_CKAN_BASE_URL`), não pela URL pública gravada — no Docker, `localhost:5000` não é o CKAN.
 - Sinaliza, não bloqueia a publicação (PBI-39).
+- **Fila no banco, executada pelo worker** (ADR-0025): reiniciar a API ou o worker não perde a fila.
+  Varredura interrompida no meio vira erro ("Varredura interrompida…") e o recurso volta à fila uma
+  vez; se for interrompido de novo, fica só o erro (arquivo que derruba o processo não prende a fila).
+- Downloads espaçados por host (`GDA_CKAN_DOWNLOAD_INTERVALO_S`, padrão 2 s); no HTTP 429 espera o
+  `Retry-After` ou 60 s, 2 min, 4 min… até `GDA_CKAN_DOWNLOAD_ESPERAS_429` vezes (padrão 5).
 - **Anonimização** (ADR-0008): só achados *confirmados*; só recursos `upload` (link externo → acionar o
   órgão); prévia obrigatória; publica exatamente o arquivo da prévia e só se o original no portal
   ainda tiver o mesmo hash; escrita exige `GDA_CKAN_WRITE_ENABLED=true` e token da GEDA.
@@ -162,6 +173,9 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 - Lista objetiva de tipos de dado pessoal e regras de anonimização por tipo (CGE-GO).
 - Política de retenção do original (GEDA). Credencial de escrita e autorização formal (PBI-95).
 - Servidor para modelo local em produção (SECTI).
+- Prévia da anonimização ainda roda em segundo plano na API e se perde num reinício (aplicar a
+  solução da ADR-0025).
+- Tempo máximo por varredura: um modelo local travado já prendeu a fila por 5 h (29/10).
 
 ## Histórico de alterações
 | Data | Alteração | Autor |
@@ -178,3 +192,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 26/10/2026 | Painel de varredura com as duas opções explicadas (todo o portal × um dataset específico); detecção: CPF/CNPJ com máscara completa não é descartado pela regra de coincidência (colunas de códigos) | Luiza |
 | 27/10/2026 | Merge com `desenvolvimento` (ADR-0018/0019): `LgpdDao` concentra o acesso ao banco; `lgpd_achado`, `lgpd_varredura` e `lgpd_correcao` apontam para `recurso.id` e herdam `id`/`deleted`/auditoria da `Base`; API e tela usam o `id` próprio de dataset e recurso; download e publicação no CKAN pelo `id_ckan`; migrações refeitas numa só (`9d583e5bd118`, sobre `a8e2f5c1d9b4`) | Luiza |
 | 28/10/2026 | Migração `9d583e5bd118`: `lgpd_varredura.deleted` com `server_default=sa.false()` (era `sa.text('0')`, aceito no SQLite e recusado no PostgreSQL — a API não subia no Docker) | Victor |
+| 29/10/2026 | Fila executada pelo worker (ADR-0025): `POST /varreduras` só enfileira; job `lgpd.fila_varredura` a cada minuto retoma a interrompida (uma vez por recurso) e varre as pendentes; `executar_fila` e a liberação após 12 h removidos; job incremental só enfileira; download com intervalo por host e espera no HTTP 429 | Victor |

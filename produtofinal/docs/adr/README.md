@@ -59,6 +59,9 @@ a fonte.
 | 26/10/2026 | Embeddings no contrato de IA e Qwen3 sem raciocínio no Ollama | Técnica | Revisão da ADR-0002 | [ADR-0002](0002-camada-ia-plugavel.md) |
 | 28/10/2026 | Situação de atualização pela periodicidade do PDA vigente: Mensal = 30 dias sem tolerância, "próximo do vencimento" a partir de 80% do prazo; Eventual/Estática sem prazo; Múltipla = menor periodicidade | Negócio | Aceita (validar com a GEDA) | [ADR-0023](0023-situacao-de-atualizacao-pela-periodicidade-do-pda.md) |
 | 28/10/2026 | CKAN lido escolhido pelo `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local do Docker), `GDA_CKAN_BASE_URL` opcional para forçar outro | Técnica | Aceita | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
+| 29/10/2026 | Fila da varredura LGPD executada pelo worker (a API só enfileira; interrompida volta à fila uma vez) e downloads espaçados por host, com espera no HTTP 429 do portal | Técnica | Aceita | [ADR-0025](0025-fila-da-varredura-lgpd-executada-pelo-worker.md) |
+| 29/10/2026 | Varredura deixa de rodar em segundo plano na API (desdobramento revisto pela ADR-0025) | Técnica | Revisão da ADR-0021 | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
+| 29/10/2026 | Worker passa a executar também a fila da varredura LGPD, a cada minuto | Técnica | Revisão da ADR-0012 | [ADR-0012](0012-agendamento-em-worker-proprio.md) |
 
 ## Decisões em aberto
 

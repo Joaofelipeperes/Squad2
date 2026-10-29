@@ -5,6 +5,7 @@ Regras de projeto já decididas e que este cliente respeita:
 - `last_modified` do RECURSO é o indicador de atualização; `metadata_modified` do dataset não.
 """
 import logging
+import threading
 import time
 from collections.abc import Iterator
 from typing import Any
@@ -30,6 +31,38 @@ class CkanNaoEncontrado(CkanError):
     """HTTP 404: objeto inexistente (ou removido definitivamente) no CKAN."""
 
 
+class CkanLimiteDeRequisicoes(CkanError):
+    """HTTP 429 ao baixar arquivo: o servidor pediu para esperar (`espera_s`, do Retry-After)."""
+
+    def __init__(self, mensagem: str, espera_s: float | None = None) -> None:
+        super().__init__(mensagem, 429)
+        self.espera_s = espera_s
+
+
+def _segundos(retry_after: str | None) -> float | None:
+    try:
+        return max(float(retry_after), 0.0) if retry_after else None
+    except ValueError:  # Retry-After em formato de data: usa a espera padrão
+        return None
+
+
+# Download de arquivos: intervalo mínimo por host, comum a todos os clientes do processo (o
+# worker executa a fila de varredura e a API gera prévias; cada processo respeita o seu).
+_proximo_download: dict[str, float] = {}
+_trava_downloads = threading.Lock()
+
+
+def _aguardar_vez(host: str, intervalo_s: float) -> None:
+    if intervalo_s <= 0:
+        return
+    with _trava_downloads:
+        agora = time.monotonic()
+        inicio = max(agora, _proximo_download.get(host, 0.0))
+        _proximo_download[host] = inicio + intervalo_s
+    if inicio > agora:
+        time.sleep(inicio - agora)
+
+
 class CkanClient:
     def __init__(
         self,
@@ -39,10 +72,14 @@ class CkanClient:
         max_retries: int | None = None,
         transport: httpx.BaseTransport | None = None,  # injetável nos testes
         api_token: str | None = None,  # só para actions que exigem login (auditoria)
+        intervalo_download_s: float | None = None,
     ) -> None:
         s = get_settings()
         self.base_url = (base_url or s.ckan_base_url).rstrip("/")
         self.max_retries = max_retries if max_retries is not None else s.ckan_max_retries
+        self.intervalo_download_s = (intervalo_download_s if intervalo_download_s is not None
+                                     else s.ckan_download_intervalo_s)
+        self.esperas_429 = s.ckan_download_esperas_429
         headers = {"User-Agent": "monitor-dados-abertos-go/0.1 (CGE-GO/GEDA)"}
         if api_token:
             headers["Authorization"] = api_token
@@ -182,7 +219,24 @@ class CkanClient:
         return url
 
     def baixar(self, url: str, limite_bytes: int) -> bytes:
-        """Baixa um arquivo (para a varredura LGPD), parando se passar de `limite_bytes`."""
+        """Baixa um arquivo (para a varredura LGPD), parando se passar de `limite_bytes`.
+        Respeita o intervalo mínimo entre downloads do mesmo host e, se o servidor responder
+        HTTP 429, espera (Retry-After ou 60 s, 2 min, 4 min…) e tenta de novo (ADR-0025)."""
+        host = httpx.URL(url).host
+        for tentativa in range(self.esperas_429 + 1):
+            _aguardar_vez(host, self.intervalo_download_s)
+            try:
+                return self._baixar_uma_vez(url, limite_bytes)
+            except CkanLimiteDeRequisicoes as exc:
+                if tentativa == self.esperas_429:
+                    raise
+                pausa = exc.espera_s or min(60 * 2 ** tentativa, 900)
+                log.warning("HTTP 429 de %s; nova tentativa em %.0f s (%s de %s)", host, pausa,
+                            tentativa + 1, self.esperas_429)
+                time.sleep(pausa)
+        raise AssertionError("inalcançável")
+
+    def _baixar_uma_vez(self, url: str, limite_bytes: int) -> bytes:
         partes, total = [], 0
         # Sem o token da auditoria: a URL pode ser um link externo ao portal.
         headers = {k: v for k, v in self._http.headers.items() if k.lower() != "authorization"}
@@ -190,6 +244,9 @@ class CkanClient:
             with httpx.Client(transport=self._transport, timeout=self._http.timeout,
                               follow_redirects=True, headers=headers) as http, \
                     http.stream("GET", url) as resp:
+                if resp.status_code == 429:
+                    raise CkanLimiteDeRequisicoes(
+                        f"HTTP 429 ao baixar {url}", _segundos(resp.headers.get("Retry-After")))
                 if resp.status_code >= 400:
                     raise CkanError(f"HTTP {resp.status_code} ao baixar {url}", resp.status_code)
                 for pedaco in resp.iter_bytes():

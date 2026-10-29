@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     ckan_timeout_s: float = 30.0
     ckan_page_size: int = 500
     ckan_max_retries: int = 3
+    # Download de arquivos dos recursos (ADR-0025): o portal oficial responde HTTP 429 a rajadas
+    ckan_download_intervalo_s: float = 2.0  # mínimo entre downloads do mesmo host
+    ckan_download_esperas_429: int = 5  # novas tentativas após 429 (Retry-After ou 60 s, 2, 4 min…)
     # CKAN — leitura da auditoria (extensão ckanext-dsaudit, ADR-0009). A API
     # dsaudit_activity_list exige permissão de EDITOR no dataset: use o token de um usuário
     # editor das organizações monitoradas (nunca de sysadmin em produção). Vazio = a
@@ -69,6 +72,8 @@ class Settings(BaseSettings):
     # Varredura LGPD incremental (PBI-34): recursos novos ou alterados, depois da coleta
     lgpd_varredura_cron: str = "0 5 * * *"
     lgpd_varredura_max_recursos: int = 200  # por execução (o modelo local é lento em CPU)
+    # Fila da varredura LGPD (ADR-0025): o worker executa as pendentes; a API só enfileira
+    lgpd_fila_cron: str = "* * * * *"
     # Anonimização (US26): cópia do original e prévia ficam FORA do banco, nesta pasta (no Docker,
     # um volume). Contém dado pessoal: nunca versionar; retenção definida pela GEDA.
     lgpd_arquivos_dir: str = "dados_lgpd"
