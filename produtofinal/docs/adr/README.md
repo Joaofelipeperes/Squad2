@@ -58,6 +58,7 @@ a fonte.
 | 26/10/2026 | Varredura LGPD com o motor do detector3 portado para o backend, IA (chat e embeddings) pelo gateway | Técnica | Proposta | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
 | 26/10/2026 | Embeddings no contrato de IA e Qwen3 sem raciocínio no Ollama | Técnica | Revisão da ADR-0002 | [ADR-0002](0002-camada-ia-plugavel.md) |
 | 28/10/2026 | Situação de atualização pela periodicidade do PDA vigente: Mensal = 30 dias sem tolerância, "próximo do vencimento" a partir de 80% do prazo; Eventual/Estática sem prazo; Múltipla = menor periodicidade | Negócio | Aceita (validar com a GEDA) | [ADR-0023](0023-situacao-de-atualizacao-pela-periodicidade-do-pda.md) |
+| 28/10/2026 | CKAN lido escolhido pelo `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local do Docker), `GDA_CKAN_BASE_URL` opcional para forçar outro | Técnica | Aceita | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
 
 ## Decisões em aberto
 

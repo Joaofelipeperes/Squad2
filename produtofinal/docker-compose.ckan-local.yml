@@ -1,8 +1,9 @@
 # Liga o produto final ao CKAN local deste repositório (docker-compose.yml da raiz).
 #
 # Os dois ambientes são projetos Compose separados; de dentro do container da API,
-# "localhost:5000" NÃO é o CKAN. Este arquivo coloca a API e o worker também na rede do CKAN
-# e aponta a coleta para o container dele.
+# "localhost:5000" NÃO é o CKAN. Este arquivo coloca a API e o worker também na rede do CKAN.
+# Qual CKAN a coleta lê vem do GDA_ENVIRONMENT do .env (ADR-0024): em homologacao e dev, o
+# container do CKAN local; em producao, o portal oficial. GDA_CKAN_BASE_URL no .env força outro.
 #
 # Uso (em produtofinal/, com o CKAN da raiz já no ar):
 #   docker compose -f docker-compose.yml -f docker-compose.ckan-local.yml up -d --build
@@ -27,14 +28,12 @@ services:
 
   api:
     environment:
-      GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
       GDA_CKAN_AUDITORIA_API_TOKEN: ${CKAN_AUDITORIA_API_TOKEN:-${CKAN_API_KEY:-}}
       GDA_DATABASE_URL: postgresql+psycopg://gda:gda@gda-db:5432/gda
     networks: [default, ckan]
 
   worker:
     environment:
-      GDA_CKAN_BASE_URL: ${CKAN_LOCAL_URL:-http://ckansquad2-ckan-1:5000}
       GDA_CKAN_AUDITORIA_API_TOKEN: ${CKAN_AUDITORIA_API_TOKEN:-${CKAN_API_KEY:-}}
       GDA_DATABASE_URL: postgresql+psycopg://gda:gda@gda-db:5432/gda
     networks: [default, ckan]

@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 28/10/2026 |
+| **Última atualização** | 29/10/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -124,8 +124,9 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 ## Ambiente de testes com o CKAN local
 O CKAN em Docker da raiz do repositório serve de portal de testes. Para a coleta enxergá-lo, suba
-o produto final com `docker-compose.ckan-local.yml` (coloca `api` e `worker` na rede do CKAN e
-define `GDA_CKAN_BASE_URL=http://ckansquad2-ckan-1:5000`). Os dados devem ser carregados com
+o produto final com `docker-compose.ckan-local.yml` (coloca `api` e `worker` na rede do CKAN) e
+`GDA_ENVIRONMENT=homologacao` ou `dev`, que leem por padrão `http://ckansquad2-ckan-1:5000`; em
+`producao` o padrão é o portal oficial (ADR-0024). Os dados devem ser carregados com
 `importar_ckan_goias.py`, que preserva os IDs e o `last_modified` dos recursos do portal.
 
 ## Regras de negócio e decisões
@@ -171,3 +172,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
 | 28/10/2026 | Interações: o Dashboard (painel) usa as contagens do inventário e `ultima_coleta`; sem mudança de código neste módulo | Humberto |
 | 28/10/2026 | Merge de `desenvolvimento` na rastreabilidade: sincronização pós-coleta mantida sobre o `InventarioDao` | Victor |
+| 29/10/2026 | Ambiente de testes: o CKAN coletado vem do `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local), `GDA_CKAN_BASE_URL` opcional (ADR-0024); `docker-compose.ckan-local.yml` só liga a rede | Victor |
