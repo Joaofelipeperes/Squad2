@@ -59,12 +59,7 @@ docker compose exec api python -c "from app.integrations.ckan.client import Ckan
 ```
 
 A rede do CKAN é `<pasta da raiz>_default` (ex.: `squad2_default`); se for outra, defina
-`CKAN_NETWORK` antes de subir.
-
-O CKAN lido depende do `GDA_ENVIRONMENT` do `.env` (ADR-0024): `producao` lê o portal oficial
-(`https://dadosabertos.go.gov.br`); `homologacao` e `dev` leem o CKAN local
-(`http://ckansquad2-ckan-1:5000`). Para forçar outro, preencha `GDA_CKAN_BASE_URL` (ex.:
-`http://localhost:5000` com a API rodando fora do Docker). `GET /api/v1/saude` mostra qual está em uso. Depois, o botão **Atualizar dados** coleta do CKAN local e, em
+`CKAN_NETWORK` antes de subir. Depois, o botão **Atualizar dados** coleta do CKAN local e, em
 seguida, lê a auditoria da extensão `ckanext-dsaudit` para a tela **Rastreabilidade** (ADR-0009). O
 token dessa leitura vem de `CKAN_AUDITORIA_API_TOKEN` ou, na falta dele, do `CKAN_API_KEY` deixado
 pelo `subir_ambiente.ps1`; em produção use o token de um usuário **editor**

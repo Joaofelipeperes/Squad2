@@ -91,7 +91,7 @@ def create_app() -> FastAPI:
 
     @app.get(f"{s.api_prefix}/saude", tags=["Sistema"], dependencies=[Depends(publico)])
     def saude():
-        return {"status": "ok", "ambiente": s.environment, "ckan": s.ckan_base_url,
+        return {"status": "ok", "ambiente": s.environment,
                 "modulos": [{"nome": m.name, "user_stories": m.user_stories} for m in modulos]}
 
     return app
