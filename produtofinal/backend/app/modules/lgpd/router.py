@@ -78,17 +78,15 @@ def cancelar_fila(db: DbSession, user: UsuarioAtual = Depends(require(P.LGPD_VAR
 
 
 @router.post("/varreduras", response_model=PedidoVarreduraOut, status_code=http.HTTP_202_ACCEPTED)
-def pedir_varredura(body: PedidoVarreduraIn, bg: BackgroundTasks, db: DbSession,
+def pedir_varredura(body: PedidoVarreduraIn, db: DbSession,
                     user: UsuarioAtual = Depends(require(P.LGPD_VARRER))):
-    """Coloca os recursos do escopo na fila e varre em segundo plano (pode levar minutos)."""
+    """Coloca os recursos do escopo na fila; o worker varre em até um minuto (ADR-0025)."""
     try:
         # "pendentes" pode pegar o portal inteiro: no máximo N por pedido (como o job)
         limite = get_settings().lgpd_varredura_max_recursos if body.escopo == "pendentes" else None
         criadas, ja = service.solicitar(db, body.escopo, body.id, user, limite=limite)
     except service.ErroLgpd as exc:
         raise _erro(exc)
-    if criadas:
-        bg.add_task(service.executar_fila, [v.id for v in criadas])
     return service.pedido_out(db, criadas, ja)
 
 

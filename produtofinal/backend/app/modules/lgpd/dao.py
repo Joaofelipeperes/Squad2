@@ -1,8 +1,9 @@
 """Acesso ao banco do módulo lgpd (ADR-0019): achados, decisões, varreduras e anonimizações.
 
 Toda consulta passa pelas buscas genéricas de `Dao` (registros excluídos nunca aparecem) e toda
-gravação por `save_generic`/`delete_generic` (auditoria preenchida). Varredura e prévia rodam em
-segundo plano como ação do sistema (`usuario_id` None); o pedido guarda quem o fez.
+gravação por `save_generic`/`delete_generic` (auditoria preenchida). Varredura (no worker,
+ADR-0025) e prévia (em segundo plano na API) rodam como ação do sistema (`usuario_id` None); o
+pedido guarda quem o fez.
 """
 from datetime import datetime
 
@@ -134,6 +135,19 @@ class LgpdDao(Dao):
 
     def em_fila(self) -> list[Varredura]:
         return self.buscar_lista(select(Varredura).where(Varredura.status.in_(EM_FILA)))
+
+    def proxima_pendente(self) -> Varredura | None:
+        """A pendente mais antiga: o worker executa a fila em ordem de pedido (ADR-0025)."""
+        return self.buscar_um(select(Varredura).where(Varredura.status == "pendente")
+                              .order_by(Varredura.id).limit(1))
+
+    def executando(self) -> list[Varredura]:
+        return self.buscar_lista(select(Varredura).where(Varredura.status == "executando"))
+
+    def interrupcoes_do_recurso(self, recurso_id: int, mensagem: str) -> int:
+        return self.buscar_valor(select(func.count(Varredura.id)).where(
+            Varredura.recurso_id == recurso_id, Varredura.status == "erro",
+            Varredura.erro == mensagem)) or 0
 
     def varredura(self, varredura_id: int) -> Varredura | None:
         return self.obter(Varredura, varredura_id)
