@@ -14,6 +14,16 @@ log = logging.getLogger(__name__)
 
 SECRET_KEY_MIN_BYTES = 32
 
+AMBIENTES = ("dev", "homologacao", "producao")
+# CKAN lido quando GDA_CKAN_BASE_URL não é informado (ADR-0024): o portal oficial só em produção;
+# fora dela, o CKAN local do Docker da raiz (container_name fixo no docker-compose.yml da raiz).
+CKAN_PORTAL_OFICIAL = "https://dadosabertos.go.gov.br"
+CKAN_LOCAL_DOCKER = "http://ckansquad2-ckan-1:5000"
+
+
+def ckan_padrao(ambiente: str) -> str:
+    return CKAN_PORTAL_OFICIAL if ambiente == "producao" else CKAN_LOCAL_DOCKER
+
 
 def chave_fraca(chave: str) -> bool:
     """Chave padrão ou de exemplo (ambas começam com "troque") ou com menos de 32 bytes."""
@@ -36,8 +46,9 @@ class Settings(BaseSettings):
     encryption_key: SecretStr | None = None  # chave Fernet para cifrar segredos (chaves de IA)
     jwt_expire_minutes: int = 480
 
-    # CKAN — leitura pela API pública
-    ckan_base_url: str = "https://dadosabertos.go.gov.br"
+    # CKAN — leitura pela API pública. Vazio = padrão do ambiente (ckan_padrao): portal oficial
+    # em produção, CKAN local do Docker em homologação e dev.
+    ckan_base_url: str | None = None
     ckan_timeout_s: float = 30.0
     ckan_page_size: int = 500
     ckan_max_retries: int = 3
@@ -67,6 +78,15 @@ class Settings(BaseSettings):
     # IA — política de dados sensíveis
     # False (padrão): tarefas que tocam dado pessoal só podem usar provedor marcado como LOCAL.
     ia_permitir_externo_para_sensivel: bool = False
+
+    @model_validator(mode="after")
+    def _ckan_do_ambiente(self) -> "Settings":
+        if self.environment not in AMBIENTES:
+            raise ValueError(f"GDA_ENVIRONMENT={self.environment!r} inválido; "
+                             f"use {' | '.join(AMBIENTES)}.")
+        if not self.ckan_base_url:
+            self.ckan_base_url = ckan_padrao(self.environment)
+        return self
 
     @model_validator(mode="after")
     def _exigir_segredos_fora_de_dev(self) -> "Settings":
