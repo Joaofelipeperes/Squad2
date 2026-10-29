@@ -22,11 +22,12 @@ export interface Evento {
   tipo: string;
   tipo_rotulo: string;
   origem: string; // auditoria_ckan | comparacao_coletas (cadastro do órgão) | atividade_nativa (fora da auditoria)
-  dataset_id: string | null; // vazio em evento do cadastro do órgão
+  dataset_id_ckan: string | null; // vazio em evento do cadastro do órgão
   dataset_titulo: string | null;
-  organizacao_id: string | null;
+  organizacao_id: number | null; // id do órgão no inventário
+  organizacao_id_ckan: string | null;
   orgao_nome: string | null;
-  recurso_id: string | null;
+  recurso_id_ckan: string | null;
   recurso_nome: string | null;
   usuario: string | null;
   resumo: string;

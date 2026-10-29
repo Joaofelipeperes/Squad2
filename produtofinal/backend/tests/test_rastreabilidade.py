@@ -8,9 +8,24 @@ import pytest
 from app.core.db import SessionLocal
 from app.core.deps import UsuarioAtual
 from app.integrations.ckan.client import CkanClient
-from app.modules.inventario.models import Dataset
+from app.modules.inventario.models import Dataset, Organizacao
 from app.modules.rastreabilidade import regras, service
 from app.modules.rastreabilidade.models import EventoRastreabilidade, SincronizacaoRastreabilidade
+
+
+def _id_orgao(db, org_id_ckan: str) -> int:
+    """`id` do órgão no inventário pelo ID do CKAN (cria o órgão se ainda não existir)."""
+    org = db.query(Organizacao).filter_by(id_ckan=org_id_ckan).one_or_none()
+    if org is None:
+        org = Organizacao(id_ckan=org_id_ckan, name=org_id_ckan, titulo=org_id_ckan)
+        db.add(org)
+        db.flush()
+    return org.id
+
+
+def _dataset(db, id_ckan: str, name: str, titulo: str, org_id_ckan: str, **kw) -> Dataset:
+    return Dataset(id_ckan=id_ckan, name=name, titulo=titulo,
+                   organizacao_id=_id_orgao(db, org_id_ckan), **kw)
 
 
 # ------------------------------------------------------------------ regras
@@ -147,10 +162,9 @@ def _handler(chamadas):
 
 def _datasets():
     with SessionLocal() as db:
-        db.add_all([Dataset(ckan_id="d1", name="censo", titulo="Censo", organizacao_id="org-seduc"),
-                    Dataset(ckan_id="d2", name="sus", titulo="SUS", organizacao_id="org-ses"),
-                    Dataset(ckan_id="d3", name="velho", titulo="Velho", organizacao_id="org-ses",
-                            ativo_no_portal=False)])
+        db.add_all([_dataset(db, "d1", "censo", "Censo", "org-seduc"),
+                    _dataset(db, "d2", "sus", "SUS", "org-ses"),
+                    _dataset(db, "d3", "velho", "Velho", "org-ses", ativo_no_portal=False)])
         db.commit()
 
 
@@ -169,7 +183,7 @@ def test_sincronizacao_incremental_e_permissoes(monkeypatch):
         assert evs["a3"].tipo == regras.PRIVACAO and evs["a3"].usuario == "editor-u1"
         assert evs["a2"].recurso_nome == "dados.csv"
         assert evs["a1"].tipo == regras.INCLUSAO and evs["a1"].dataset_titulo == "Censo Escolar"
-        assert evs["a1"].organizacao_id == "org-seduc"
+        assert evs["a1"].organizacao_id_ckan == "org-seduc"
 
     # segunda rodada: só a atividade nova é lida, e a leitura para na primeira já conhecida
     ATIVIDADES["d1"].insert(0, {"id": "a4", "timestamp": "2026-10-21T08:00:00", "user_id": "u1",
@@ -197,7 +211,7 @@ def test_sem_token_sincronizacao_ignorada():
 
 def test_token_sem_permissao_em_nenhum_dataset_vira_erro():
     with SessionLocal() as db:
-        db.add(Dataset(ckan_id="d2", name="sus", titulo="SUS", organizacao_id="org-ses"))
+        db.add(_dataset(db, "d2", "sus", "SUS", "org-ses"))
         db.commit()
     client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler([])))
     sid = service.sincronizar(client)
@@ -213,34 +227,37 @@ def test_eventos_filtros_e_escopo_de_orgao(client, analista, orgao):
     with SessionLocal() as db:
         db.add(EventoRastreabilidade(
             ckan_activity_id="x1", ocorrido_em=regras.parse_timestamp("2026-10-17T10:00:00"),
-            tipo=regras.ALTERACAO, activity_type="changed metadata", dataset_id="d2",
-            dataset_titulo="SUS", organizacao_id="org-ses", resumo="Alterado.", detalhes=[]))
+            tipo=regras.ALTERACAO, activity_type="changed metadata", dataset_id_ckan="d2",
+            dataset_titulo="SUS", organizacao_id_ckan="org-ses", resumo="Alterado.", detalhes=[]))
         db.commit()
+        seduc, ses = _id_orgao(db, "org-seduc"), _id_orgao(db, "org-ses")
 
     r = client.get("/api/v1/rastreabilidade/eventos", headers=analista)
     assert r.status_code == 200, r.text
     corpo = r.json()
     assert corpo["total"] == 4
-    assert corpo["eventos"][0]["dataset_id"] == "d1"  # mais recente primeiro
+    assert corpo["eventos"][0]["dataset_id_ckan"] == "d1"  # mais recente primeiro
+    assert corpo["eventos"][0]["organizacao_id"] == seduc
+    assert corpo["eventos"][0]["organizacao_id_ckan"] == "org-seduc"
     assert corpo["eventos"][0]["tipo_rotulo"] == "Privação"
     assert corpo["sincronizacao"]["status"] == "ok"
-    assert {o["valor"] for o in corpo["opcoes"]["orgaos"]} == {"org-seduc", "org-ses"}
+    assert {o["valor"] for o in corpo["opcoes"]["orgaos"]} == {str(seduc), str(ses)}
     assert next(t["rotulo"] for t in corpo["opcoes"]["tipos"]) == "Inclusão"
 
     r = client.get("/api/v1/rastreabilidade/eventos?tipo=Inclusão", headers=analista)
     assert [e["tipo"] for e in r.json()["eventos"]] == ["inclusao"]
-    r = client.get("/api/v1/rastreabilidade/eventos?orgao=org-ses", headers=analista)
+    r = client.get(f"/api/v1/rastreabilidade/eventos?orgao={ses}", headers=analista)
     assert r.json()["total"] == 1
 
     # órgão publicador não tem a permissão (papel padrão)
     assert client.get("/api/v1/rastreabilidade/eventos", headers=orgao).status_code == 403
     # usuário restrito a um órgão só vê os eventos desse órgão
-    restrito = UsuarioAtual(id=99, email="x@seduc.go.gov.br", nome="X", orgao_id="org-seduc",
+    restrito = UsuarioAtual(id=99, email="x@seduc.go.gov.br", nome="X", orgao_id=seduc,
                             papeis=[], permissoes=frozenset({"rastreabilidade.acessar"}))
     with SessionLocal() as db:
         saida = service.listar_eventos(db, restrito)
-    assert {e.organizacao_id for e in saida.eventos} == {"org-seduc"}
-    assert [o.valor for o in saida.opcoes.orgaos] == ["org-seduc"]
+    assert {e.organizacao_id_ckan for e in saida.eventos} == {"org-seduc"}
+    assert [o.valor for o in saida.opcoes.orgaos] == [str(seduc)]
 
 
 def test_eventos_exige_permissao(client):
@@ -300,8 +317,7 @@ def _handler_d4(request: httpx.Request):
 
 def _sincronizar_d4():
     with SessionLocal() as db:
-        db.add(Dataset(ckan_id="d4", name="saude-escolar", titulo="Saúde Escolar",
-                       organizacao_id="org-ses"))
+        db.add(_dataset(db, "d4", "saude-escolar", "Saúde Escolar", "org-ses"))
         db.commit()
     client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler_d4))
     service.sincronizar(client)
@@ -358,7 +374,10 @@ def test_diff_lido_do_ckan_sem_gravar(client, analista):
 
 def test_diff_respeita_escopo_de_orgao():
     ckan = _sincronizar_d4()
-    outro = UsuarioAtual(id=2, email="b@seduc.go.gov.br", nome="B", orgao_id="org-seduc",
+    with SessionLocal() as db:
+        seduc = _id_orgao(db, "org-seduc")
+        db.commit()
+    outro = UsuarioAtual(id=2, email="b@seduc.go.gov.br", nome="B", orgao_id=seduc,
                          papeis=[], permissoes=frozenset({"rastreabilidade.acessar"}))
     with SessionLocal() as db:
         ev = db.query(EventoRastreabilidade).filter_by(ckan_activity_id="b1").one()
@@ -412,11 +431,11 @@ def test_comparacao_entre_coletas_gera_eventos_de_orgao():
     sid = service.sincronizar(orgaos=mudou)
     with SessionLocal() as db:
         evs = _eventos_de_orgao(db)
-        assert sorted((e.organizacao_id, e.tipo) for e in evs) == [
+        assert sorted((e.organizacao_id_ckan, e.tipo) for e in evs) == [
             ("org-novo", regras.INCLUSAO), ("org-seduc", regras.ALTERACAO),
             ("org-ses", regras.EXCLUSAO)]
         alt = next(e for e in evs if e.tipo == regras.ALTERACAO)
-        assert alt.usuario is None and alt.dataset_id is None and alt.ckan_activity_id is None
+        assert alt.usuario is None and alt.dataset_id_ckan is None and alt.ckan_activity_id is None
         assert {d["campo"] for d in alt.detalhes} == {"descrição", 'campo extra "campo_custom"'}
         s = db.get(SincronizacaoRastreabilidade, sid)
         assert (s.orgaos_consultados, s.eventos_novos, s.status) == (2, 3, "ignorada")
@@ -591,7 +610,7 @@ def test_acao_em_lote_vira_evento_sem_duplicar():
         return httpx.Response(404, json={"success": False})
 
     with SessionLocal() as db:
-        db.add(Dataset(ckan_id="d1", name="censo", titulo="Censo", organizacao_id="org-seduc"))
+        db.add(_dataset(db, "d1", "censo", "Censo", "org-seduc"))
         db.commit()
     client = CkanClient("http://ckan.local", transport=httpx.MockTransport(ckan))
     sid = service.sincronizar(client)
@@ -664,7 +683,7 @@ def test_versoes_do_ckan_dao_o_que_mudou_em_cada_acao_em_lote():
         return httpx.Response(404, json={"success": False})
 
     with SessionLocal() as db:
-        db.add(Dataset(ckan_id="d1", name="censo", titulo="Censo", organizacao_id="org-seduc"))
+        db.add(_dataset(db, "d1", "censo", "Censo", "org-seduc"))
         db.commit()
     service.sincronizar(CkanClient("http://ckan.local", transport=httpx.MockTransport(ckan)))
     with SessionLocal() as db:

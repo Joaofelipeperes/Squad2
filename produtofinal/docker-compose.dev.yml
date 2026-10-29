@@ -1,0 +1,39 @@
+# Modo desenvolvimento: o código de frontend/ e backend/ do seu computador é montado nos containers
+# e cada alteração salva já vale, sem rebuild (ADR-0017).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#   (com o CKAN local: acrescente -f docker-compose.ckan-local.yml antes deste arquivo)
+#
+# - web: servidor de desenvolvimento do Vite (em vez do nginx com o build), no mesmo
+#   http://localhost:8080. Tela alterada recarrega sozinha no navegador.
+# - api: uvicorn --reload; o worker reinicia ao salvar um .py.
+# - No Windows, a pasta montada não avisa o container das mudanças: por isso o "polling" abaixo.
+# - node_modules fica num volume do container (as dependências do Windows não servem no Linux).
+#   Mudou package.json ou pyproject.toml? Rode o mesmo comando com --build -V.
+#
+# Para voltar ao modo normal (nginx com o build): docker compose up -d --build
+services:
+  web:
+    build: { context: ./frontend, target: build }
+    command: ["npx", "vite", "--host", "0.0.0.0", "--port", "80", "--strictPort"]
+    environment:
+      VITE_PROXY_API: http://api:8000
+      VITE_HMR_CLIENT_PORT: "8080"
+      VITE_POLLING: "1"
+    volumes:
+      - ./frontend:/web
+      - /web/node_modules
+
+  api:
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --forwarded-allow-ips '*' --reload --reload-dir app"]
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./backend:/app
+
+  worker:
+    command: ["watchfiles", "--filter", "python", "python -m app.worker", "app"]
+    environment:
+      WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./backend:/app

@@ -25,11 +25,12 @@ class EventoOut(BaseModel):
     tipo: str          # código (inclusao, alteracao, ...)
     tipo_rotulo: str   # rótulo da tela (Inclusão, Alteração, ...)
     origem: str        # auditoria_ckan | comparacao_coletas (cadastro do órgão)
-    dataset_id: str | None      # vazio em evento do cadastro do órgão
+    dataset_id_ckan: str | None      # vazio em evento do cadastro do órgão
     dataset_titulo: str | None
-    organizacao_id: str | None
+    organizacao_id: int | None       # `id` do órgão no inventário (vazio se não estiver lá)
+    organizacao_id_ckan: str | None
     orgao_nome: str | None
-    recurso_id: str | None
+    recurso_id_ckan: str | None
     recurso_nome: str | None
     usuario: str | None
     resumo: str

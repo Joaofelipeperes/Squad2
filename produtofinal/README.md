@@ -25,13 +25,24 @@ Todas as dependências são gratuitas e de código aberto (restrição do PGP v2
 **Com Docker** (recomendado):
 
 ```bash
-cp .env.example .env            # ajuste GDA_SECRET_KEY e GDA_ENCRYPTION_KEY
+cp .env.example .env            # ajuste GDA_SECRET_KEY e GDA_ENCRYPTION_KEY (obrigatórias fora de dev)
 docker compose up -d --build
 docker compose exec api python -m app.cli criar-usuario --email voce@cge.go.gov.br --nome "Seu Nome" --papel administrador
 docker compose exec api python -m app.cli semear-ia     # perfis de IA de exemplo
 ```
 
 Web em http://localhost:8080 · API em http://localhost:8000/api/v1/docs
+
+**Modo desenvolvimento** (alteração salva já vale, sem rebuild — ADR-0017):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+`frontend/` e `backend/` ficam montados nos containers: a tela atualiza sozinha no navegador e a API
+e o worker reiniciam ao salvar um `.py`. Mudou `package.json` ou `pyproject.toml`? Rode o mesmo
+comando com `--build -V`. Com o CKAN local, inclua `-f docker-compose.ckan-local.yml` antes do
+`docker-compose.dev.yml`. Para voltar ao modo normal (nginx com build): `docker compose up -d --build`.
 
 **Com o CKAN local deste repositório** (portal de testes, `docker-compose.yml` da raiz):
 
@@ -48,7 +59,12 @@ docker compose exec api python -c "from app.integrations.ckan.client import Ckan
 ```
 
 A rede do CKAN é `<pasta da raiz>_default` (ex.: `squad2_default`); se for outra, defina
-`CKAN_NETWORK` antes de subir. Depois, o botão **Atualizar dados** coleta do CKAN local e, em
+`CKAN_NETWORK` antes de subir.
+
+O CKAN lido depende do `GDA_ENVIRONMENT` do `.env` (ADR-0024): `producao` lê o portal oficial
+(`https://dadosabertos.go.gov.br`); `homologacao` e `dev` leem o CKAN local
+(`http://ckansquad2-ckan-1:5000`). Para forçar outro, preencha `GDA_CKAN_BASE_URL` (ex.:
+`http://localhost:5000` com a API rodando fora do Docker). `GET /api/v1/saude` mostra qual está em uso. Depois, o botão **Atualizar dados** coleta do CKAN local e, em
 seguida, lê a auditoria da extensão `ckanext-dsaudit` para a tela **Rastreabilidade** (ADR-0009). O
 token dessa leitura vem de `CKAN_AUDITORIA_API_TOKEN` ou, na falta dele, do `CKAN_API_KEY` deixado
 pelo `subir_ambiente.ps1`; em produção use o token de um usuário **editor**

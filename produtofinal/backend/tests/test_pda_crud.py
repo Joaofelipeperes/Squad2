@@ -7,10 +7,13 @@ import pytest
 from app.core.db import SessionLocal
 from app.modules.inventario.models import Coleta, Dataset, Organizacao, Recurso
 from app.modules.pda import service
+from tests.conftest import SEDUC, SES
 from tests.test_pda_revisao import _importar
 
 API = "/api/v1/pda"
 URL = "https://dadosabertos.go.gov.br/dataset/"
+ADM = 3  # `id` próprio da organização "administracao" (1 e 2 vêm do conftest)
+FOLHA, ESCOLAS, FOLHA_ANTIGA = 1, 2, 3  # `id` próprio dos datasets
 
 
 @pytest.fixture(autouse=True)
@@ -22,12 +25,12 @@ def _hoje(monkeypatch):
 def inventario():
     """Organização "administracao" com um dataset publicado (um recurso válido)."""
     with SessionLocal() as db:
-        db.add(Organizacao(ckan_id="org-adm", name="administracao",
+        db.add(Organizacao(id=ADM, id_ckan="org-adm", name="administracao",
                            titulo="Secretaria da Administração"))
         db.add(Coleta(id=1, status="ok"))
-        db.add(Dataset(ckan_id="ds-folha", name="folha-de-pagamento", titulo="Folha",
-                       organizacao_id="org-adm", ultima_coleta_id=1))
-        db.add(Recurso(ckan_id="r-1", dataset_id="ds-folha", nome="folha.csv", formato="CSV",
+        db.add(Dataset(id=FOLHA, id_ckan="ds-folha", name="folha-de-pagamento", titulo="Folha",
+                       organizacao_id=ADM, ultima_coleta_id=1))
+        db.add(Recurso(id=1, id_ckan="r-1", dataset_id=FOLHA, nome="folha.csv", formato="CSV",
                        ultima_coleta_id=1, last_modified=datetime(2026, 9, 26, tzinfo=UTC)))
         db.commit()
 
@@ -99,35 +102,74 @@ def test_incluir_bases_com_e_sem_vinculo(client, gerente, inventario):
         prazo_abertura="2025-12-31", possui_conteudo_sigiloso=False))
     assert r.status_code == 201, r.text
     b = r.json()
-    assert b["vinculo"] == "resolvido" and b["dataset_id"] == "ds-folha"
-    assert b["orgao_chave"] == "org-adm"  # órgão do dataset vinculado
+    assert b["vinculo"] == "resolvido" and b["dataset_id"] == FOLHA
+    assert b["orgao_chave"] == str(ADM)  # órgão do dataset vinculado
     assert b["situacao"] == "Publicado" and b["recursos_validos"] == 1
 
     # Sem link: SEAD herda a organização pela evidência do vínculo por ID neste PDA
     b2 = client.post(url, headers=gerente, json=_base(
         nome_previsto="Movimentações", periodicidade="Múltipla",
         prazo_abertura="2025-03-31")).json()
-    assert b2["vinculo"] == "sem_vinculo" and b2["orgao_chave"] == "org-adm"
+    assert b2["vinculo"] == "sem_vinculo" and b2["orgao_chave"] == str(ADM)
     assert b2["periodicidade"] == "Múltipla" and b2["situacao"] == "Prazo vencido"
 
     # Name sem dataset no inventário → vínculo pendente; órgão escolhido no formulário
     b3 = client.post(url, headers=gerente, json=_base(
-        orgao_sigla="SEDUC", organizacao_id="org-seduc", nome_previsto="Escolas",
+        orgao_sigla="SEDUC", organizacao_id=SEDUC, nome_previsto="Escolas",
         dataset_link="escolas-estaduais")).json()
     assert b3["vinculo"] == "pendente" and b3["dataset_name_planilha"] == "escolas-estaduais"
-    assert b3["orgao_chave"] == "org-seduc"
+    assert b3["orgao_chave"] == str(SEDUC)
 
     assert _plano(client, gerente, p["id"])["total_bases"] == 3
     assert client.get(f"{API}/bases", headers=gerente).json()["total_previstas"] == 3
+
+
+def test_vinculo_pelo_id_do_ckan(client, gerente, inventario):
+    p = _criar_plano(client, gerente).json()
+    url = f"{API}/planos/{p['id']}/bases"
+    # Nome do PDA diferente do name no portal: o ID resolve o vínculo e o name fica para auditoria
+    b = client.post(url, headers=gerente, json=_base(
+        dataset_link="folha-pagamento-servidores", dataset_id_ckan=" ds-folha ")).json()
+    assert b["vinculo"] == "resolvido" and b["dataset_id"] == FOLHA
+    assert b["dataset_id_ckan"] == "ds-folha"
+    assert b["dataset_name_planilha"] == "folha-pagamento-servidores"
+    assert b["orgao_chave"] == str(ADM) and b["situacao"] == "Publicado"
+
+    # Só o ID, sem endereço
+    b2 = client.post(url, headers=gerente, json=_base(dataset_id_ckan="ds-folha")).json()
+    assert b2["vinculo"] == "resolvido" and b2["dataset_id"] == FOLHA
+
+    # Edição: trocar o ID pendente por um válido
+    pendente = client.post(url, headers=gerente, json=_base(dataset_link="nao-existe")).json()
+    assert pendente["vinculo"] == "pendente"
+    r = client.put(f"{API}/bases/{pendente['id']}", headers=gerente,
+                   json=_base(dataset_link="nao-existe", dataset_id_ckan="ds-folha"))
+    assert r.status_code == 200, r.text
+    assert r.json()["vinculo"] == "resolvido" and r.json()["dataset_id"] == FOLHA
+
+
+def test_vinculo_pelo_id_invalido(client, gerente, inventario):
+    with SessionLocal() as db:
+        db.add(Dataset(id=ESCOLAS, id_ckan="ds-outro", name="outro", titulo="Outro",
+                       organizacao_id=ADM, ultima_coleta_id=1))
+        db.commit()
+    p = _criar_plano(client, gerente).json()
+    url = f"{API}/planos/{p['id']}/bases"
+    r = client.post(url, headers=gerente, json=_base(dataset_id_ckan="id-inexistente"))
+    assert r.status_code == 422 and "ID do dataset não encontrado" in r.json()["detail"]
+    r = client.post(url, headers=gerente, json=_base(dataset_id_ckan="ds-outro",
+                                                           dataset_link="folha-de-pagamento"))
+    assert r.status_code == 422 and "datasets diferentes" in r.json()["detail"]
+    assert _plano(client, gerente, p["id"])["total_bases"] == 0
 
 
 @pytest.mark.parametrize("campos,mensagem", [
     ({"orgao_sigla": " "}, "órgão"),
     ({"nome_previsto": ""}, "nome da base"),
     ({"dataset_link": "https://outro.site/x?y=1"}, "Endereço do dataset"),
-    ({"organizacao_id": "org-inexistente"}, "Organização não encontrada"),
+    ({"organizacao_id": 9999}, "Organização não encontrada"),
     # dataset da administração com órgão SEDUC escolhido: incoerente
-    ({"organizacao_id": "org-seduc", "dataset_link": "folha-de-pagamento"}, "outra organização"),
+    ({"organizacao_id": SEDUC, "dataset_link": "folha-de-pagamento"}, "outra organização"),
 ])
 def test_incluir_base_invalida(client, gerente, inventario, campos, mensagem):
     p = _criar_plano(client, gerente).json()
@@ -160,7 +202,7 @@ def test_editar_base(client, gerente, inventario):
     assert r.status_code == 200, r.text
     b = r.json()
     assert b["nome_previsto"] == "Folha de Pagamento" and b["descricao"] == "Servidores ativos"
-    assert b["vinculo"] == "resolvido" and b["dataset_id"] == "ds-folha"
+    assert b["vinculo"] == "resolvido" and b["dataset_id"] == FOLHA
     assert b["periodicidade"] == "Mensal" and b["periodicidade_original"] == "Mnsal"
 
     # Endereço apagado → sem vínculo; periodicidade nova substitui o texto original
@@ -189,6 +231,136 @@ def test_opcoes_do_formulario(client, gerente, analista):
     r = client.get(f"{API}/formulario", headers=gerente)
     assert r.status_code == 200
     corpo = r.json()
-    assert [o["valor"] for o in corpo["organizacoes"]] == ["org-seduc", "org-ses"]
+    assert [o["valor"] for o in corpo["organizacoes"]] == [str(SEDUC), str(SES)]
     assert "Múltipla" in corpo["periodicidades"] and "Mensal" in corpo["periodicidades"]
     assert client.get(f"{API}/formulario", headers=analista).status_code == 403
+
+
+# ---------------------------------------------------------- vínculo pela busca de datasets
+def test_buscar_datasets_do_formulario(client, gerente, analista, inventario):
+    with SessionLocal() as db:
+        db.add(Dataset(id=ESCOLAS, id_ckan="ds-escolas", name="escolas-estaduais",
+                       titulo="Escolas 100%", organizacao_id=SEDUC, ultima_coleta_id=1))
+        db.add(Dataset(id=FOLHA_ANTIGA, id_ckan="ds-folha-antiga", name="folha-antiga",
+                       titulo="Folha (antiga)", organizacao_id=ADM, ativo_no_portal=False))
+        db.commit()
+    url = f"{API}/formulario/datasets"
+    r = client.get(url, headers=gerente, params={"busca": "FOLHA"})
+    assert r.status_code == 200, r.text
+    assert [d["id_ckan"] for d in r.json()] == ["ds-folha", "ds-folha-antiga"]  # ativos primeiro
+    assert r.json()[0]["orgao_nome"] == "Secretaria da Administração"
+    # Link do portal casa pelo name exato; ID também é aceito; % não é curinga
+    assert [d["id_ckan"] for d in client.get(url, headers=gerente, params={
+        "busca": f"{URL}escolas-estaduais/"}).json()] == ["ds-escolas"]
+    assert [d["id_ckan"] for d in client.get(url, headers=gerente, params={
+        "busca": "ds-folha-antiga"}).json()] == ["ds-folha-antiga"]
+    assert [d["id_ckan"] for d in client.get(url, headers=gerente, params={
+        "busca": "100%"}).json()] == ["ds-escolas"]
+    assert client.get(url, headers=gerente, params={"busca": "f"}).json() == []
+    assert client.get(url, headers=analista, params={"busca": "folha"}).status_code == 403
+
+
+def test_buscar_datasets_respeita_escopo_de_orgao(inventario):
+    class _Restrito:
+        restrito_a_orgao, orgao_id = True, SEDUC
+
+    with SessionLocal() as db:
+        assert service.buscar_datasets(db, _Restrito(), "folha") == []
+
+
+def test_vincular_base_pelo_id_escolhido(client, gerente, inventario):
+    p = _criar_plano(client, gerente).json()
+    r = client.post(f"{API}/planos/{p['id']}/bases", headers=gerente,
+                    json=_base(dataset_id=FOLHA, dataset_link="ignorado-quando-ha-id"))
+    assert r.status_code == 201, r.text
+    b = r.json()
+    assert b["vinculo"] == "resolvido" and b["dataset_id"] == FOLHA
+    assert b["dataset_name_planilha"] == "folha-de-pagamento"
+    assert b["orgao_chave"] == str(ADM)  # o órgão do dataset prevalece
+
+    with SessionLocal() as db:
+        db.add(Dataset(id=ESCOLAS, id_ckan="ds-escolas", name="escolas", titulo="Escolas",
+                       organizacao_id=SEDUC))
+        db.commit()
+    url = f"{API}/bases/{b['id']}"
+    # Trocar de dataset leva o órgão do novo; órgão escolhido incoerente é recusado
+    r = client.put(url, headers=gerente, json=_base(organizacao_id=ADM,
+                                                     dataset_id=ESCOLAS))
+    assert r.status_code == 422 and "outra organização" in r.json()["detail"]
+    b = client.put(url, headers=gerente, json=_base(dataset_id=ESCOLAS)).json()
+    assert b["dataset_id"] == ESCOLAS and b["orgao_chave"] == str(SEDUC)
+    assert client.put(url, headers=gerente,
+                      json=_base(dataset_id=9999)).status_code == 422
+
+
+# ---------------------------------------------------------- exclusão lógica e auditoria (ADR-0019)
+def _linha(modelo, id_):
+    """Lê o registro direto do banco, inclusive se excluído (o teste não passa pelo DAO)."""
+    from sqlalchemy import select
+    with SessionLocal() as db:
+        return db.scalars(select(modelo).where(modelo.id == id_)).one()
+
+
+def _id_usuario(email):
+    from sqlalchemy import select
+
+    from app.modules.acesso.models import Usuario
+    with SessionLocal() as db:
+        return db.scalars(select(Usuario.id).where(Usuario.email == email)).one()
+
+
+def test_excluir_pda_e_logico_e_libera_o_nome(client, gerente):
+    from app.modules.pda.models import BasePrevista, PlanoPda
+
+    _criar_plano(client, gerente, nome="PDA vigente")
+    p = _criar_plano(client, gerente, nome="PDA 2").json()
+    b = client.post(f"{API}/planos/{p['id']}/bases", headers=gerente, json=_base()).json()
+    assert client.delete(f"{API}/planos/{p['id']}", headers=gerente).status_code == 204
+
+    # Continua no banco, marcado como excluído, com as bases; a API não o enxerga mais
+    plano, base = _linha(PlanoPda, p["id"]), _linha(BasePrevista, b["id"])
+    assert plano.deleted and base.deleted
+    assert plano.changed_id == _id_usuario("paloma@cge.go.gov.br")
+    assert [x["nome"] for x in client.get(f"{API}/planos", headers=gerente).json()] == [
+        "PDA vigente"]
+    assert client.get(f"{API}/planos/{p['id']}", headers=gerente).status_code == 404
+    assert client.get(f"{API}/bases/{b['id']}", headers=gerente).status_code == 404
+    assert client.get(f"{API}/bases", headers=gerente,
+                      params={"plano_id": p["id"]}).status_code == 404
+    # O nome do PDA excluído pode ser reaproveitado (único só entre os ativos)
+    assert _criar_plano(client, gerente, nome="pda 2").status_code == 201
+
+
+def test_excluir_base_e_logico_e_atualiza_o_total(client, gerente):
+    from app.modules.pda.models import BasePrevista
+
+    p = _criar_plano(client, gerente).json()
+    url = f"{API}/planos/{p['id']}/bases"
+    b1 = client.post(url, headers=gerente, json=_base()).json()
+    client.post(url, headers=gerente, json=_base(nome_previsto="Outra"))
+    assert _plano(client, gerente, p["id"])["total_bases"] == 2
+    assert client.delete(f"{API}/bases/{b1['id']}", headers=gerente).status_code == 204
+    assert _linha(BasePrevista, b1["id"]).deleted
+    assert _plano(client, gerente, p["id"])["total_bases"] == 1
+    assert [x["nome_previsto"] for x in client.get(
+        f"{API}/bases", headers=gerente, params={"plano_id": p["id"]}).json()["bases"]] == ["Outra"]
+
+
+def test_auditoria_de_criacao_e_alteracao(client, gerente, admin):
+    from app.modules.pda.models import BasePrevista, PlanoPda
+
+    paloma, administrador = _id_usuario("paloma@cge.go.gov.br"), _id_usuario("admin@cge.go.gov.br")
+    p = _criar_plano(client, gerente).json()
+    b = client.post(f"{API}/planos/{p['id']}/bases", headers=gerente, json=_base()).json()
+    plano, base = _linha(PlanoPda, p["id"]), _linha(BasePrevista, b["id"])
+    assert (plano.created_id, plano.changed_id) == (paloma, paloma)
+    assert (base.created_id, base.changed_id) == (paloma, paloma)
+    assert plano.created is not None and plano.changed is not None
+
+    # Edição por outro usuário: muda só quem/quando alterou; a criação fica como estava
+    client.put(f"{API}/planos/{p['id']}", headers=admin, json={"nome": "PDA renomeado"})
+    client.put(f"{API}/bases/{b['id']}", headers=admin, json=_base(descricao="nova"))
+    plano2, base2 = _linha(PlanoPda, p["id"]), _linha(BasePrevista, b["id"])
+    assert (plano2.created_id, plano2.changed_id) == (paloma, administrador)
+    assert (base2.created_id, base2.changed_id) == (paloma, administrador)
+    assert plano2.created == plano.created and plano2.changed >= plano.changed

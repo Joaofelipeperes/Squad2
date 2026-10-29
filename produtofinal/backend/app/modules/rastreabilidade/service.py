@@ -11,16 +11,15 @@ A sincronização roda ao fim de cada coleta do inventário.
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal, utcnow
-from app.core.deps import UsuarioAtual, filtrar_por_orgao
+from app.core.deps import UsuarioAtual
 from app.integrations.ckan.client import CkanAcessoNegado, CkanClient, CkanError, CkanNaoEncontrado
-from app.modules.inventario.models import Coleta, Dataset, DatasetSnapshot, Organizacao, Recurso
 from app.modules.inventario.regras import chave_texto, contem_texto
 from app.modules.rastreabilidade import regras
+from app.modules.rastreabilidade.dao import RastreabilidadeDao
 from app.modules.rastreabilidade.models import (
     EventoRastreabilidade,
     OrgaoSnapshot,
@@ -61,9 +60,8 @@ def sincronizar(client: CkanClient | None = None, orgaos: list[dict] | None = No
 
     Falha de um dataset não interrompe os demais; falha geral fica registrada com status erro."""
     db = SessionLocal()
-    sinc = SincronizacaoRastreabilidade()
-    db.add(sinc)
-    db.commit()
+    dao = RastreabilidadeDao(db)
+    sinc = dao.criar_sincronizacao()
     token = get_settings().ckan_auditoria_api_token
     tem_token = bool(token and token.get_secret_value().strip())
     own_client = client is None and tem_token
@@ -74,42 +72,43 @@ def sincronizar(client: CkanClient | None = None, orgaos: list[dict] | None = No
         if orgaos:
             try:
                 sinc.orgaos_consultados = len(orgaos)
-                sinc.eventos_novos += _comparar_orgaos(db, orgaos, client, usuarios)
-                db.commit()
+                sinc.eventos_novos += _comparar_orgaos(dao, orgaos, client, usuarios)
+                dao.salvar(sinc)
+                dao.commit()
             except Exception as exc:  # comparação de órgãos não impede a leitura da auditoria
-                db.rollback()
-                sinc = db.get(SincronizacaoRastreabilidade, sinc.id)
+                dao.rollback()
+                sinc = dao.obter_sincronizacao(sinc.id)
                 sinc.erro = f"Cadastro dos órgãos não comparado: {type(exc).__name__}: {exc}"[:4000]
                 log.exception("Comparação do cadastro dos órgãos falhou")
-                db.commit()
+                dao.salvar(sinc)
+                dao.commit()
         if client is None:
             sinc.status, sinc.erro = "ignorada", MSG_SEM_TOKEN
             log.info("Rastreabilidade: %s", MSG_SEM_TOKEN)
             return sinc.id
-        _ler_auditoria(db, client, sinc, usuarios)
+        _ler_auditoria(dao, client, sinc, usuarios)
     except Exception as exc:  # registrar qualquer falha (mesmo padrão da coleta)
-        db.rollback()
-        sinc = db.get(SincronizacaoRastreabilidade, sinc.id)
+        dao.rollback()
+        sinc = dao.obter_sincronizacao(sinc.id)
         sinc.status, sinc.erro = "erro", f"{type(exc).__name__}: {exc}"[:4000]
         log.exception("Sincronização da rastreabilidade %s falhou", sinc.id)
     finally:
         sinc.finalizada_em = utcnow()
-        db.commit()
+        dao.salvar(sinc)
+        dao.commit()
         db.close()
         if own_client:
             client.close()
     return sinc.id
 
 
-def _ler_auditoria(db: Session, client: CkanClient, sinc: SincronizacaoRastreabilidade,
-                   usuarios: dict[str, str | None]) -> None:
+def _ler_auditoria(dao: RastreabilidadeDao, client: CkanClient,
+                   sinc: SincronizacaoRastreabilidade, usuarios: dict[str, str | None]) -> None:
     """Etapa 2: atividades novas da extensão de auditoria, dataset por dataset; depois, as
     atividades nativas sem registro da extensão (`_ler_atividades_nativas`)."""
-    conhecidos = set(db.scalars(select(EventoRastreabilidade.ckan_activity_id)
-                                .where(EventoRastreabilidade.ckan_activity_id.is_not(None))))
-    datasets = db.execute(select(Dataset.ckan_id, Dataset.titulo, Dataset.organizacao_id)
-                          .order_by(Dataset.ckan_id)).all()
-    recursos = dict(db.execute(select(Recurso.ckan_id, Recurso.nome)).all())
+    conhecidos = dao.atividades_conhecidas()
+    datasets = dao.datasets_para_auditoria()
+    recursos = dao.nomes_recursos()
     lidos = []  # datasets cuja auditoria foi lida (sem ela não há com o que parear as nativas)
     for ckan_id, titulo, org_id in datasets:
         try:
@@ -125,17 +124,19 @@ def _ler_auditoria(db: Session, client: CkanClient, sinc: SincronizacaoRastreabi
         for act in novos:
             evs = _eventos(act, ckan_id, titulo, org_id,
                            _nome_usuario(client, act, usuarios), recursos)
-            db.add_all(evs)
+            if evs:
+                dao.salvar(*evs)
             sinc.eventos_novos += len(evs)
             if act.get("id"):
                 conhecidos.add(act["id"])
-        db.commit()
+        dao.salvar(sinc)
+        dao.commit()
     if datasets and sinc.datasets_consultados == 0 and sinc.datasets_sem_permissao:
         sinc.status = "erro"
         sinc.erro = ("O token configurado não tem permissão de edição em nenhum dataset "
                      "(HTTP 403 em todos).")
         return
-    sinc.eventos_novos += _ler_atividades_nativas(db, client, lidos, conhecidos, usuarios,
+    sinc.eventos_novos += _ler_atividades_nativas(dao, client, lidos, conhecidos, usuarios,
                                                   sinc.iniciada_em)
     sinc.atividades_nativas_ate = sinc.iniciada_em
     sinc.status = "ok"
@@ -145,19 +146,19 @@ MARGEM_NATIVAS_MIN = 10   # relê um pouco antes da última marca (atividades gr
 MAX_PAGINAS_NATIVAS = 20
 
 
-def _ler_atividades_nativas(db: Session, client: CkanClient, datasets: list, conhecidos: set[str],
-                            usuarios: dict[str, str | None], inicio_sinc: datetime) -> int:
+def _ler_atividades_nativas(dao: RastreabilidadeDao, client: CkanClient, datasets: list,
+                            conhecidos: set[str], usuarios: dict[str, str | None],
+                            inicio_sinc: datetime) -> int:
     """Ações fora da edição auditada (ex.: Make public/Make private/Delete em lote na página da
     organização): para cada dataset, lê as atividades nativas novas e grava como evento as que não
     têm atividade da extensão do mesmo dataset a menos de 2 s (as demais já estão na linha do
     tempo). Só considera atividades a partir do primeiro registro da extensão (antes dele não há
     com o que parear). Devolve quantos eventos foram gravados."""
-    inicio_auditoria = db.scalar(select(func.min(EventoRastreabilidade.ocorrido_em))
-                                 .where(EventoRastreabilidade.origem == regras.ORIGEM_AUDITORIA))
+    inicio_auditoria = dao.inicio_auditoria(regras.ORIGEM_AUDITORIA)
     if inicio_auditoria is None:
         return 0
     limite = _utc(inicio_auditoria)
-    marca = db.scalar(select(func.max(SincronizacaoRastreabilidade.atividades_nativas_ate)))
+    marca = dao.marca_atividades_nativas()
     if marca is not None:
         limite = max(limite, _utc(marca) - timedelta(minutes=MARGEM_NATIVAS_MIN))
     novos = 0
@@ -171,18 +172,15 @@ def _ler_atividades_nativas(db: Session, client: CkanClient, datasets: list, con
                    and _no_intervalo(regras.parse_timestamp(a.get("timestamp")), limite, fim)]
         if not nativas:
             continue
-        auditadas = [_utc(t) for t in db.scalars(
-            select(EventoRastreabilidade.ocorrido_em).where(
-                EventoRastreabilidade.dataset_id == ckan_id,
-                EventoRastreabilidade.origem == regras.ORIGEM_AUDITORIA))]
+        auditadas = [_utc(t) for t in dao.datas_eventos(ckan_id, regras.ORIGEM_AUDITORIA)]
         orfas = regras.nativas_orfas(nativas, auditadas)
         if not orfas:
             continue
         tempos = [regras.parse_timestamp(a["timestamp"]) for a in orfas]
-        marcos = _marcos_visibilidade(db, ckan_id)
+        marcos = _marcos_visibilidade(dao, ckan_id)
         privado_atual = _privado_atual(client, ckan_id)
         estimadas = regras.resolver_visibilidade(
-            tempos, marcos, privado_atual, _base_visibilidade(db, ckan_id, tempos[0]))
+            tempos, marcos, privado_atual, _base_visibilidade(dao, ckan_id, tempos[0]))
         todas = sorted((a for a in nativas_lidas if regras.parse_timestamp(a.get("timestamp"))),
                        key=lambda a: regras.parse_timestamp(a["timestamp"]))
         versoes: dict[str, dict | None] = {}
@@ -192,16 +190,16 @@ def _ler_atividades_nativas(db: Session, client: CkanClient, datasets: list, con
             titulo_ev = ((act.get("data") or {}).get("package") or {}).get("title") or titulo
             usuario = _nome_usuario(client, act, usuarios)
             for seq, c in enumerate(eventos):
-                db.add(EventoRastreabilidade(
+                dao.salvar(EventoRastreabilidade(
                     origem=regras.ORIGEM_NATIVA, ckan_activity_id=act["id"], sequencia=seq,
                     ocorrido_em=quando, tipo=c.tipo, activity_type=act["activity_type"],
-                    dataset_id=ckan_id, dataset_titulo=titulo_ev[:500], organizacao_id=org_id,
-                    usuario=usuario[:200] if usuario else None, recurso_id=c.recurso_id,
-                    recurso_nome=c.recurso_nome, resumo=c.resumo, detalhes=c.detalhes,
-                    tem_diff=False))
+                    dataset_id_ckan=ckan_id, dataset_titulo=titulo_ev[:500],
+                    organizacao_id_ckan=org_id, usuario=usuario[:200] if usuario else None,
+                    recurso_id_ckan=c.recurso_id, recurso_nome=c.recurso_nome, resumo=c.resumo,
+                    detalhes=c.detalhes, tem_diff=False))
                 novos += 1
             conhecidos.add(act["id"])
-        db.commit()
+        dao.commit()
     return novos
 
 
@@ -315,12 +313,11 @@ def _nativas_desde(client: CkanClient, dataset_id: str, limite: datetime) -> lis
     return atividades
 
 
-def _marcos_visibilidade(db: Session, dataset_id: str) -> list[tuple[datetime, bool | None, bool]]:
+def _marcos_visibilidade(dao: RastreabilidadeDao,
+                         dataset_id: str) -> list[tuple[datetime, bool | None, bool]]:
     """Mudanças de visibilidade já conhecidas do dataset: (data, privado antes, privado depois)."""
     marcos = []
-    for quando, detalhes in db.execute(
-            select(EventoRastreabilidade.ocorrido_em, EventoRastreabilidade.detalhes).where(
-                EventoRastreabilidade.dataset_id == dataset_id)):
+    for quando, detalhes in dao.detalhes_eventos(dataset_id):
         for d in detalhes or []:
             if d.get("escopo") == "dataset" and d.get("campo") == "visibilidade":
                 depois = regras.visibilidade(d.get("novo"))
@@ -336,28 +333,24 @@ def _privado_atual(client: CkanClient, dataset_id: str) -> bool | None:
         return None
 
 
-def _base_visibilidade(db: Session, dataset_id: str, antes_de: datetime) -> bool | None:
+def _base_visibilidade(dao: RastreabilidadeDao, dataset_id: str,
+                       antes_de: datetime) -> bool | None:
     """False (público) se o dataset estava na busca pública da última coleta concluída antes de
     `antes_de`; sem essa evidência, desconhecido (None)."""
-    coleta = db.scalar(select(Coleta.id).where(Coleta.status == "ok",
-                                               Coleta.finalizada_em <= antes_de)
-                       .order_by(Coleta.finalizada_em.desc()).limit(1))
+    coleta = dao.ultima_coleta_ok_ate(antes_de)
     if coleta is None:
         return None
-    existe = db.scalar(select(func.count()).select_from(DatasetSnapshot).where(
-        DatasetSnapshot.coleta_id == coleta, DatasetSnapshot.dataset_id == dataset_id))
-    return False if existe else None
+    return False if dao.dataset_na_coleta(coleta, dataset_id) else None
 
 
-def _comparar_orgaos(db: Session, orgaos: list[dict], client: CkanClient | None = None,
+def _comparar_orgaos(dao: RastreabilidadeDao, orgaos: list[dict],
+                     client: CkanClient | None = None,
                      usuarios: dict[str, str | None] | None = None) -> int:
     """Compara o cadastro de cada órgão com a última fotografia dele e grava uma fotografia nova
     só quando mudou (ou quando o órgão sumiu da listagem). Na primeira vez (sem fotografias),
     apenas registra a base, sem gerar eventos. Com `client`, completa cada evento com a autoria
     (`_autoria_orgao`). Devolve quantos eventos foram gravados."""
-    ultimos_ids = select(func.max(OrgaoSnapshot.id)).group_by(OrgaoSnapshot.organizacao_id)
-    ultimos = {s.organizacao_id: s for s in
-               db.scalars(select(OrgaoSnapshot).where(OrgaoSnapshot.id.in_(ultimos_ids)))}
+    ultimos = dao.ultimas_fotografias_orgaos()
     tem_base = bool(ultimos)
     agora = utcnow()
     usuarios = {} if usuarios is None else usuarios
@@ -374,10 +367,9 @@ def _comparar_orgaos(db: Session, orgaos: list[dict], client: CkanClient | None 
         anterior = ultimos.get(oid)
         if anterior is not None and anterior.ativo and anterior.hash_conteudo == hash_atual:
             continue
-        snap = OrgaoSnapshot(organizacao_id=oid, capturado_em=agora, ativo=True,
+        snap = OrgaoSnapshot(organizacao_id_ckan=oid, capturado_em=agora, ativo=True,
                              hash_conteudo=hash_atual, payload=payload)
-        db.add(snap)
-        db.flush()
+        dao.salvar(snap)
         if not tem_base:
             continue
         antes = anterior.payload if anterior is not None and anterior.ativo else None
@@ -387,10 +379,9 @@ def _comparar_orgaos(db: Session, orgaos: list[dict], client: CkanClient | None 
     for oid, anterior in ultimos.items():
         if oid in vistos or not anterior.ativo:
             continue
-        snap = OrgaoSnapshot(organizacao_id=oid, capturado_em=agora, ativo=False,
+        snap = OrgaoSnapshot(organizacao_id_ckan=oid, capturado_em=agora, ativo=False,
                              hash_conteudo=anterior.hash_conteudo, payload=anterior.payload)
-        db.add(snap)
-        db.flush()
+        dao.salvar(snap)
         c = regras.comparar_orgao(anterior.payload, None)
         if c is not None:
             pendentes.append((snap, anterior, c))
@@ -398,8 +389,8 @@ def _comparar_orgaos(db: Session, orgaos: list[dict], client: CkanClient | None 
         autoria = []
         if client is not None:
             desde = _utc(anterior.capturado_em) if anterior is not None else None
-            autoria = _autoria_orgao(client, snap.organizacao_id, desde, agora, usuarios)
-        db.add(_evento_orgao(snap, c, autoria))
+            autoria = _autoria_orgao(client, snap.organizacao_id_ckan, desde, agora, usuarios)
+        dao.salvar(_evento_orgao(snap, c, autoria))
         novos += 1
     return novos
 
@@ -447,7 +438,7 @@ def _evento_orgao(snap: OrgaoSnapshot, c: regras.EventoClassificado,
     return EventoRastreabilidade(
         origem=regras.ORIGEM_COMPARACAO, orgao_snapshot_id=snap.id, ckan_activity_id=None,
         sequencia=0, ocorrido_em=ocorrido_em, tipo=c.tipo, activity_type="organization",
-        dataset_id=None, dataset_titulo=None, organizacao_id=snap.organizacao_id,
+        dataset_id_ckan=None, dataset_titulo=None, organizacao_id_ckan=snap.organizacao_id_ckan,
         usuario=usuario, resumo=c.resumo, detalhes=detalhes, tem_diff=False)
 
 
@@ -495,9 +486,9 @@ def _eventos(act: dict, dataset_id: str, titulo_atual: str, org_id: str | None,
             recurso_nome = _nome_recurso(data, c.recurso_id) or recursos.get(c.recurso_id)
         eventos.append(EventoRastreabilidade(
             ckan_activity_id=act["id"], sequencia=seq, ocorrido_em=quando, tipo=c.tipo,
-            activity_type=act.get("activity_type") or "", dataset_id=dataset_id,
+            activity_type=act.get("activity_type") or "", dataset_id_ckan=dataset_id,
             dataset_titulo=(regras.titulo_do_pacote(data) or titulo_atual)[:500],
-            organizacao_id=org_id, recurso_id=c.recurso_id,
+            organizacao_id_ckan=org_id, recurso_id_ckan=c.recurso_id,
             recurso_nome=recurso_nome[:500] if recurso_nome else None,
             usuario=usuario[:200] if usuario else None, resumo=c.resumo, detalhes=c.detalhes,
             tem_diff=c.tem_diff))
@@ -515,79 +506,54 @@ def _utc(valor: datetime | None) -> datetime | None:
 
 
 def ultima_sincronizacao(db: Session) -> SincronizacaoRastreabilidade | None:
-    return db.scalar(select(SincronizacaoRastreabilidade)
-                     .order_by(SincronizacaoRastreabilidade.id.desc()).limit(1))
+    return RastreabilidadeDao(db).ultima_sincronizacao()
 
 
 def listar_eventos(db: Session, user: UsuarioAtual, *, tipo: str | None = None,
-                   orgao: str | None = None, dataset: str | None = None,
+                   orgao: int | None = None, dataset: str | None = None,
                    busca: str | None = None, desde: datetime | None = None,
                    ate: datetime | None = None, ordem: str = "recentes",
                    limite: int = LIMITE_PADRAO) -> EventosOut:
-    """Linha do tempo no escopo de órgão do usuário. Filtros: tipo (código), órgão (ID da
-    organização), dataset (ID do CKAN), busca (título ou nome do dataset, sem diferenciar acento
-    nem maiúscula), período (desde/até, inclusive) e ordem por data (recentes | antigos)."""
+    """Linha do tempo no escopo de órgão do usuário. Filtros: tipo (código), órgão (`id` da
+    organização no inventário), dataset (ID do CKAN), busca (título ou nome do dataset, sem
+    diferenciar acento nem maiúscula), período (desde/até, inclusive) e ordem por data
+    (recentes | antigos)."""
+    dao = RastreabilidadeDao.de(db, user)
     limite = max(1, min(limite, LIMITE_MAXIMO))
-    base = filtrar_por_orgao(select(EventoRastreabilidade),
-                             EventoRastreabilidade.organizacao_id, user)
-    orgaos = {o.ckan_id: o.titulo.strip() for o in db.scalars(select(Organizacao))}
-    presentes = {o for o in db.scalars(
-        filtrar_por_orgao(select(EventoRastreabilidade.organizacao_id).distinct(),
-                          EventoRastreabilidade.organizacao_id, user)) if o}
-
-    stmt = base
-    if tipo:
-        stmt = stmt.where(EventoRastreabilidade.tipo == tipo)
-    if orgao:
-        stmt = stmt.where(EventoRastreabilidade.organizacao_id == orgao)
-    if dataset:
-        stmt = stmt.where(EventoRastreabilidade.dataset_id == dataset)
-    if busca:
-        stmt = stmt.where(_condicao_busca(db, busca))
-    if desde:
-        stmt = stmt.where(EventoRastreabilidade.ocorrido_em >= desde)
-    if ate:
-        stmt = stmt.where(EventoRastreabilidade.ocorrido_em <= ate)
-    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    if ordem == "antigos":
-        ordenacao = (EventoRastreabilidade.ocorrido_em.asc(), EventoRastreabilidade.id.asc())
-    else:
-        ordenacao = (EventoRastreabilidade.ocorrido_em.desc(), EventoRastreabilidade.id.desc())
-    linhas = db.scalars(stmt.order_by(*ordenacao).limit(limite)).all()
-    sinc = ultima_sincronizacao(db)
+    orgaos = {o.id_ckan: o for o in dao.organizacoes()}
+    presentes = dao.orgaos_com_eventos(user)
+    total, linhas = dao.eventos(user, tipo=tipo, orgao=orgao, dataset=dataset,
+                                condicao_busca=_condicao_busca(dao, busca) if busca else None,
+                                desde=desde, ate=ate, antigos=ordem == "antigos", limite=limite)
+    sinc = dao.ultima_sincronizacao()
     return EventosOut(
         total=total, exibidos=len(linhas),
         opcoes=EventosOpcoesOut(
             tipos=[OpcaoOut(valor=k, rotulo=v) for k, v in regras.TIPOS.items()],
-            orgaos=sorted((OpcaoOut(valor=i, rotulo=orgaos[i]) for i in presentes if i in orgaos),
+            orgaos=sorted((OpcaoOut(valor=str(orgaos[i].id), rotulo=orgaos[i].titulo.strip())
+                           for i in presentes if i in orgaos),
                           key=lambda o: chave_texto(o.rotulo))),
         sincronizacao=SincronizacaoOut.model_validate(sinc) if sinc else None,
         eventos=[_saida(e, orgaos) for e in linhas])
 
 
-def _condicao_busca(db: Session, busca: str):
+def _condicao_busca(dao: RastreabilidadeDao, busca: str):
     """Dataset cujo título ou nome atual (inventário) contém o texto, sem acento — ou cujo
-    título na data do evento contém o texto, ou cujo ID é o texto. Para eventos do cadastro do
-    órgão, o título ou nome do órgão."""
-    ids = [ckan_id for ckan_id, titulo, name in
-           db.execute(select(Dataset.ckan_id, Dataset.titulo, Dataset.name))
-           if contem_texto(busca, titulo, name)]
-    orgaos = [ckan_id for ckan_id, titulo, name in
-              db.execute(select(Organizacao.ckan_id, Organizacao.titulo, Organizacao.name))
-              if contem_texto(busca, titulo, name)]
-    return or_(EventoRastreabilidade.dataset_id.in_(ids),
-               EventoRastreabilidade.dataset_id == busca.strip(),
-               EventoRastreabilidade.dataset_titulo.icontains(busca.strip(), autoescape=True),
-               (EventoRastreabilidade.origem == regras.ORIGEM_COMPARACAO)
-               & EventoRastreabilidade.organizacao_id.in_(orgaos))
+    título na data do evento contém o texto, ou cujo ID do CKAN é o texto. Para eventos do
+    cadastro do órgão, o título ou nome do órgão."""
+    orgaos = [o.id_ckan for o in dao.organizacoes() if contem_texto(busca, o.titulo, o.name)]
+    return dao.condicao_busca(busca.strip(), dao.ids_ckan_datasets_com_texto(busca, contem_texto),
+                              orgaos, regras.ORIGEM_COMPARACAO)
 
 
-def _saida(e: EventoRastreabilidade, orgaos: dict[str, str]) -> EventoOut:
+def _saida(e: EventoRastreabilidade, orgaos: dict) -> EventoOut:
+    org = orgaos.get(e.organizacao_id_ckan or "")
     return EventoOut(
         id=e.id, origem=e.origem, ocorrido_em=_utc(e.ocorrido_em), tipo=e.tipo,
-        tipo_rotulo=regras.TIPOS.get(e.tipo, e.tipo), dataset_id=e.dataset_id,
-        dataset_titulo=e.dataset_titulo, organizacao_id=e.organizacao_id,
-        orgao_nome=orgaos.get(e.organizacao_id or ""), recurso_id=e.recurso_id,
+        tipo_rotulo=regras.TIPOS.get(e.tipo, e.tipo), dataset_id_ckan=e.dataset_id_ckan,
+        dataset_titulo=e.dataset_titulo, organizacao_id=org.id if org else None,
+        organizacao_id_ckan=e.organizacao_id_ckan,
+        orgao_nome=org.titulo.strip() if org else None, recurso_id_ckan=e.recurso_id_ckan,
         recurso_nome=e.recurso_nome, usuario=e.usuario, resumo=e.resumo,
         detalhes=[DetalheOut(**d) for d in e.detalhes or []], tem_diff=e.tem_diff)
 
@@ -609,9 +575,7 @@ def diff_evento(db: Session, user: UsuarioAtual, evento_id: int,
     """Diff linha a linha de uma troca de arquivo ou de um upsert no DataStore, lido do CKAN
     na hora (a auditoria fica lá; aqui nada é gravado, pois os valores podem conter dado
     pessoal). Evento de outro órgão para usuário restrito → não encontrado."""
-    stmt = filtrar_por_orgao(select(EventoRastreabilidade),
-                             EventoRastreabilidade.organizacao_id, user)
-    ev = db.scalar(stmt.where(EventoRastreabilidade.id == evento_id))
+    ev = RastreabilidadeDao.de(db, user).evento_visivel(user, evento_id)
     if ev is None:
         raise EventoNaoEncontrado("Evento não encontrado.")
     if not ev.tem_diff:
@@ -644,8 +608,8 @@ def diff_evento(db: Session, user: UsuarioAtual, evento_id: int,
 def _buscar_atividade(client: CkanClient, ev: EventoRastreabilidade) -> dict | None:
     offset = 0
     for _ in range(MAX_PAGINAS_DIFF):
-        pagina = client.auditoria_dataset(ev.dataset_id, limit=PAGINA_CKAN, offset=offset,
-                                          resource_id=ev.recurso_id,
+        pagina = client.auditoria_dataset(ev.dataset_id_ckan, limit=PAGINA_CKAN, offset=offset,
+                                          resource_id=ev.recurso_id_ckan,
                                           activity_type=ev.activity_type)
         resultados = pagina.get("results") or []
         for act in resultados:

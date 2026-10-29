@@ -51,3 +51,18 @@ def test_aceita_dict_iso_e_datetime_sem_fuso():
 def test_service_delega_para_regras():
     r = service.ultima_atualizacao_real([_r(datetime(2026, 9, 1, tzinfo=UTC))])
     assert isinstance(r, UltimaAtualizacao) and r.data == datetime(2026, 9, 1, tzinfo=UTC)
+
+
+def test_recurso_do_banco_usa_created_ckan_nunca_a_auditoria():
+    """Objeto do banco: a data estimada vem de `created_ckan` (criação no CKAN); o `created` da
+    tabela é a auditoria e nunca entra no cálculo (ADR-0019)."""
+    from app.modules.inventario.models import Recurso
+
+    rec = Recurso(created_ckan=datetime(2026, 4, 1, tzinfo=UTC), last_modified=None,
+                  eh_dicionario_dados=False)
+    rec.created = datetime(2026, 10, 22, tzinfo=UTC)  # gravação no nosso banco
+    assert ultima_atualizacao_real([rec]) == UltimaAtualizacao(
+        datetime(2026, 4, 1, tzinfo=UTC), True)
+    sem_data = Recurso(created_ckan=None, last_modified=None, eh_dicionario_dados=False)
+    sem_data.created = datetime(2026, 10, 22, tzinfo=UTC)
+    assert ultima_atualizacao_real([sem_data]) == UltimaAtualizacao(None, False)

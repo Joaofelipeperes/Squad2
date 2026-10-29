@@ -56,3 +56,33 @@ def test_todo_modelo_tem_docstring():
 def test_adrs_estruturadas_e_na_linha_do_tempo():
     r = _rodar("checar_decisoes.py")
     assert r.returncode == 0, r.stdout
+
+
+# ---------------------------------------------------------- acesso ao banco (ADR-0019)
+APP = RAIZ / "backend/app"
+_METODOS_DA_SESSAO = ("execute", "scalar", "scalars", "get", "add", "add_all", "delete", "merge",
+                      "flush", "commit", "rollback", "refresh", "expire_all", "query")
+# `db.<método>(` / `session.<método>(` fora de um DAO = acesso direto ao banco
+_ACESSO_DIRETO = re.compile(r"\b(?:db|session|sessao)\.(?:%s)\(" % "|".join(_METODOS_DA_SESSAO))
+
+
+def test_banco_so_e_acessado_pelos_daos():
+    """Só `core/dao.py` e os `dao.py` dos módulos falam com a sessão; o resto chama o DAO."""
+    permitidos = {APP / "core/dao.py", APP / "core/db.py"}
+    violacoes = []
+    for arq in sorted(APP.rglob("*.py")):
+        if arq in permitidos or arq.name == "dao.py":
+            continue
+        for n, linha in enumerate(arq.read_text(encoding="utf-8").splitlines(), start=1):
+            if _ACESSO_DIRETO.search(linha.split("#", 1)[0]):
+                violacoes.append(f"{arq.relative_to(APP)}:{n}: {linha.strip()}")
+    assert not violacoes, "Acesso direto ao banco fora do DAO:\n" + "\n".join(violacoes)
+
+
+def test_toda_tabela_tem_id_e_auditoria():
+    from app.core.db import Base
+    exigidas = ("id", "deleted", "created", "created_id", "changed", "changed_id")
+    for tabela in Base.metadata.sorted_tables:
+        faltando = [c for c in exigidas if c not in tabela.c]
+        assert not faltando, f"{tabela.name} sem {faltando}"
+        assert [c.name for c in tabela.primary_key.columns] == ["id"], f"{tabela.name}: PK ≠ id"

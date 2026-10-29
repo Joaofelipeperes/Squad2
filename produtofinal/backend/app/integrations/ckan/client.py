@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
 
 
 class CkanError(RuntimeError):
-    pass
+    def __init__(self, mensagem: str, status_http: int | None = None) -> None:
+        super().__init__(mensagem)
+        self.status_http = status_http
 
 
 class CkanAcessoNegado(CkanError):
@@ -44,6 +46,7 @@ class CkanClient:
         headers = {"User-Agent": "monitor-dados-abertos-go/0.1 (CGE-GO/GEDA)"}
         if api_token:
             headers["Authorization"] = api_token
+        self._transport = transport
         self._http = httpx.Client(
             base_url=f"{self.base_url}/api/3/action",
             timeout=timeout or s.ckan_timeout_s,
@@ -70,9 +73,9 @@ class CkanClient:
                 if resp.status_code >= 500 or resp.status_code == 429:
                     raise httpx.HTTPStatusError("transitório", request=resp.request, response=resp)
                 if resp.status_code == 403:
-                    raise CkanAcessoNegado(f"{name}: acesso negado pelo CKAN (HTTP 403)")
+                    raise CkanAcessoNegado(f"{name}: acesso negado pelo CKAN (HTTP 403)", 403)
                 if resp.status_code == 404:
-                    raise CkanNaoEncontrado(f"{name}: não encontrado no CKAN (HTTP 404)")
+                    raise CkanNaoEncontrado(f"{name}: não encontrado no CKAN (HTTP 404)", 404)
                 data = resp.json()
                 if not data.get("success"):
                     raise CkanError(f"{name} falhou: {data.get('error')}")
@@ -163,3 +166,37 @@ class CkanClient:
 
     def usuario(self, user_id: str) -> dict:
         return self.action("user_show", id=user_id)
+
+    # ------------------------------------------------------------------ arquivos dos recursos
+    def url_download(self, recurso_id: str, dataset_id: str, url: str | None,
+                     url_type: str | None) -> str | None:
+        """Endereço para baixar o arquivo do recurso. Arquivo enviado ao CKAN (`upload`) é baixado
+        pelo endereço deste cliente, não pela URL gravada: dentro do Docker, a URL gravada aponta
+        para o endereço público do portal (ex.: localhost:5000), que o container não alcança.
+        Link externo é baixado da própria URL."""
+        if not url:
+            return None
+        if url_type == "upload":
+            nome = url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+            return f"{self.base_url}/dataset/{dataset_id}/resource/{recurso_id}/download/{nome}"
+        return url
+
+    def baixar(self, url: str, limite_bytes: int) -> bytes:
+        """Baixa um arquivo (para a varredura LGPD), parando se passar de `limite_bytes`."""
+        partes, total = [], 0
+        # Sem o token da auditoria: a URL pode ser um link externo ao portal.
+        headers = {k: v for k, v in self._http.headers.items() if k.lower() != "authorization"}
+        try:
+            with httpx.Client(transport=self._transport, timeout=self._http.timeout,
+                              follow_redirects=True, headers=headers) as http, \
+                    http.stream("GET", url) as resp:
+                if resp.status_code >= 400:
+                    raise CkanError(f"HTTP {resp.status_code} ao baixar {url}", resp.status_code)
+                for pedaco in resp.iter_bytes():
+                    total += len(pedaco)
+                    if total > limite_bytes:
+                        raise CkanError(f"Arquivo maior que {limite_bytes // (1024 * 1024)} MB.")
+                    partes.append(pedaco)
+        except httpx.HTTPError as exc:
+            raise CkanError(f"Falha ao baixar {url}: {exc}") from exc
+        return b"".join(partes)

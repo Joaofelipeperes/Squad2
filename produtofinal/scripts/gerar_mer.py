@@ -34,24 +34,33 @@ import_all_models()
 # Referências sem chave estrangeira, mantidas de propósito (ver docs/banco/convencoes.md).
 # O gerador valida que tabela e coluna existem: renomear sem atualizar aqui quebra o --check.
 REFERENCIAS_LOGICAS = [
-    ("dataset_snapshot", "dataset_id", "dataset", "ckan_id", True,
+    ("dataset_snapshot", "dataset_id", "dataset", "id", True,
      "Fotografia histórica: sem FK para não depender do estado atual do dataset."),
     ("ia_uso", "perfil_id", "ia_perfil_provedor", "id", True,
      "Registro de uso sobrevive à exclusão do perfil (o nome fica em perfil_nome)."),
     ("coleta", "solicitada_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("lgpd_decisao", "usuario", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("lgpd_correcao", "aprovado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
+    ("lgpd_correcao", "solicitada_por", "usuario", "email", False, "Autoria congelada como e-mail."),
+    ("lgpd_correcao", "revertida_por", "usuario", "email", False, "Autoria congelada como e-mail."),
+    ("lgpd_varredura", "solicitada_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("ia_vinculo_tarefa", "alterado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("parametro", "alterado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("acesso_log", "usuario", "usuario", "email", False, "Autoria congelada como e-mail."),
-    ("rastreabilidade_evento", "dataset_id", "dataset", "ckan_id", True,
+    ("rastreabilidade_evento", "dataset_id_ckan", "dataset", "id_ckan", True,
      "Evento histórico: sobrevive à saída do dataset do inventário."),
-    ("rastreabilidade_evento", "organizacao_id", "organizacao", "ckan_id", False,
+    ("rastreabilidade_evento", "organizacao_id_ckan", "organizacao", "id_ckan", False,
      "Órgão do dataset na sincronização; usado no filtro e no escopo de órgão."),
-    ("rastreabilidade_orgao_snapshot", "organizacao_id", "organizacao", "ckan_id", True,
+    ("rastreabilidade_evento", "recurso_id_ckan", "recurso", "id_ckan", False,
+     "Recurso do evento; sobrevive à saída do recurso do inventário."),
+    ("rastreabilidade_orgao_snapshot", "organizacao_id_ckan", "organizacao", "id_ckan", True,
      "Fotografia histórica do cadastro: sobrevive à saída do órgão do portal."),
 ]
 # (origem, coluna, destino, coluna destino, desenhar no diagrama?, observação)
+
+# Colunas de identidade e auditoria presentes em TODA tabela (`RegistroMixin`, ADR-0019): ficam no
+# dicionário de dados, mas saem do diagrama para não repetir cinco linhas em cada entidade.
+AUDITORIA = ("deleted", "created", "created_id", "changed", "changed_id")
 
 _TIPOS = [(Boolean, "bool"), (DateTime, "datetime"), (Date, "date"), (Float, "float"),
           (Integer, "int"), (Text, "text"), (String, "varchar"), (JSON, "json")]
@@ -96,8 +105,13 @@ def chaves(col, tabela) -> list[str]:
         k.append("PK")
     if col.foreign_keys:
         k.append("FK")
-    if col.unique or any(len(c.columns) == 1 and col.name in c.columns.keys()
-                         for c in tabela.constraints if c.__class__.__name__ == "UniqueConstraint"):
+    unica = col.unique or any(
+        len(c.columns) == 1 and col.name in c.columns.keys()
+        for c in tabela.constraints if c.__class__.__name__ == "UniqueConstraint")
+    # índice único de uma coluna — inclui os únicos só entre ativos (ADR-0019)
+    unica = unica or any(i.unique and len(i.expressions) == 1 and col.name in i.columns.keys()
+                         for i in tabela.indexes)
+    if unica:
         k.append("UK")
     return k
 
@@ -134,10 +148,13 @@ def gerar() -> str:
         "> **Arquivo gerado** por `scripts/gerar_mer.py` a partir dos modelos SQLAlchemy.",
         "> Não edite à mão: altere o modelo (ou sua docstring), crie a migração e rode o script.",
         "> Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: "
-        "[ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).",
+        "[ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md) · "
+        "[ADR-0019](../adr/0019-dao-exclusao-logica-e-auditoria.md).",
         "",
         f"{len(tabelas)} tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = "
-        "referência lógica sem FK (ver tabela ao final).",
+        "referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, "
+        "`created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), "
+        "omitidas do diagrama e listadas no dicionário de dados.",
         "",
         "## Diagrama",
         "",
@@ -147,6 +164,8 @@ def gerar() -> str:
     for t in tabelas:
         out.append(f"    {t.name} {{")
         for c in t.columns:
+            if c.name in AUDITORIA:
+                continue
             curto, _ = tipo(c)
             k = chaves(c, t)
             out.append(f"        {curto} {c.name}" + (f" {', '.join(k)}" if k else ""))
@@ -163,6 +182,9 @@ def gerar() -> str:
         if desenhar:
             out.append(f'    {destino} |o..o{{ {origem} : "{col} (lógica)"')
     out += ["```", ""]
+    rels.append(("<toda tabela>", "created_id / changed_id", "usuario", "id", "—",
+                 "referência lógica", "Auditoria (ADR-0019): quem criou / alterou por último; "
+                 "vazio = sistema. Sem FK para não criar ciclos."))
 
     out += ["## Relacionamentos", "",
             "| Origem | Destino | Cardinalidade (pai : filhos) | Tipo | Observação |",

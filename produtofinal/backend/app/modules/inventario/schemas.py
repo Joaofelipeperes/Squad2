@@ -29,10 +29,11 @@ class DatasetOut(BaseModel):
     de dados. Última atualização = maior `last_modified` dos recursos válidos (nunca o
     `metadata_modified`); `estimada` = sem last_modified, veio da criação do recurso."""
 
-    ckan_id: str
+    id: int
+    id_ckan: str | None
     name: str
     titulo: str
-    organizacao_id: str | None
+    organizacao_id: int | None
     orgao_nome: str | None
     recursos_validos: int
     formatos: list[str]
@@ -55,7 +56,8 @@ class DatasetsOut(BaseModel):
 
 
 class RecursoOut(BaseModel):
-    ckan_id: str
+    id: int
+    id_ckan: str | None
     nome: str | None
     formato: str | None
     url: str | None

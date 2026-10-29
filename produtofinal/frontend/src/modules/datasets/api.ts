@@ -8,10 +8,11 @@ export interface Opcao { valor: string; rotulo: string }
 
 /** Linha da tela. `situacao` é a situação no PORTAL (não a do PDA). */
 export interface DatasetLinha {
-  ckan_id: string;
+  id: number;
+  id_ckan: string | null; // ID do dataset no CKAN (o vínculo com o portal)
   name: string;
   titulo: string;
-  organizacao_id: string | null;
+  organizacao_id: number | null;
   orgao_nome: string | null;
   recursos_validos: number;
   formatos: string[];
@@ -22,7 +23,8 @@ export interface DatasetLinha {
 }
 
 export interface Recurso {
-  ckan_id: string;
+  id: number;
+  id_ckan: string | null;
   nome: string | null;
   formato: string | null;
   url: string | null;
@@ -71,6 +73,6 @@ function consulta(f: FiltrosDatasets): string {
 
 export const datasetsApi = {
   lista: (f: FiltrosDatasets) => api.get<DatasetsLista>(consulta(f)),
-  detalhe: (id: string) => api.get<DatasetDetalhe>(`/inventario/datasets/${encodeURIComponent(id)}`),
-  basesPda: (id: string) => api.get<BaseVinculada[]>(`/pda/datasets/${encodeURIComponent(id)}/bases`),
+  detalhe: (id: number) => api.get<DatasetDetalhe>(`/inventario/datasets/${id}`),
+  basesPda: (id: number) => api.get<BaseVinculada[]>(`/pda/datasets/${id}/bases`),
 };

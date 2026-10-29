@@ -16,6 +16,7 @@ from app.modules.inventario.models import Organizacao  # noqa: E402
 
 import_all_models()
 SENHA = "senha12345"
+SEDUC, SES = 1, 2  # `id` próprio das organizações criadas em `_db`
 
 
 @pytest.fixture(autouse=True)
@@ -23,14 +24,16 @@ def _db():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
-        db.add_all([Organizacao(ckan_id="org-seduc", name="seduc", titulo="Secretaria da Educação"),
-                    Organizacao(ckan_id="org-ses", name="ses", titulo="Secretaria da Saúde")])
+        db.add_all([Organizacao(id=SEDUC, id_ckan="org-seduc", name="seduc",
+                                titulo="Secretaria da Educação"),
+                    Organizacao(id=SES, id_ckan="org-ses", name="ses",
+                                titulo="Secretaria da Saúde")])
         db.commit()
         criar_usuario(db, "admin@cge.go.gov.br", "Admin", SENHA, ["administrador"])
         criar_usuario(db, "paloma@cge.go.gov.br", "Paloma", SENHA, ["gerente_geda"])
         criar_usuario(db, "estagiario@cge.go.gov.br", "Estagiário", SENHA, ["analista_geda"])
         criar_usuario(db, "servidor@seduc.go.gov.br", "Servidor SEDUC", SENHA,
-                      ["orgao_publicador"], orgao_id="org-seduc")
+                      ["orgao_publicador"], orgao_id=SEDUC)
     yield
 
 

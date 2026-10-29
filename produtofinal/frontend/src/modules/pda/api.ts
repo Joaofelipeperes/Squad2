@@ -32,10 +32,51 @@ export interface ImportacaoResumo {
   orgaos_sem_correspondencia: string[];
   tem_coluna_prazo: boolean;
   tem_coluna_portal: boolean;
+  tem_coluna_id_ckan: boolean;
+  avisos: LinhaIgnorada[]; // bases importadas com ressalva (ex.: ID do CKAN não reconhecido)
   colunas_opcionais_ausentes: string[];
 }
 
+/** Campos da planilha que a configuração da importação aponta para uma coluna do arquivo. */
+export type CampoImportacao =
+  | "orgao" | "base" | "orgao_nome" | "id_ckan" | "descricao" | "unidade" | "periodicidade" | "prazo"
+  | "politicas" | "sigiloso" | "portal";
+
+/**
+ * Configuração da leitura enviada com a planilha (campo `config` do POST /pda/planos), guardada no
+ * navegador de quem importa. Coluna vazia = reconhecida pelos nomes usuais; `linha_cabecalho` = linha
+ * dos nomes das colunas (os dados começam na seguinte); `delimitador` vazio = detectar (só .csv).
+ */
+export interface ConfigImportacao {
+  colunas: Partial<Record<CampoImportacao, string>>;
+  linha_cabecalho: number | null;
+  delimitador: string;
+}
+
 export interface VinculosResultado { vinculos_resolvidos: number; vinculos_pendentes: number }
+
+/** Importação dos IDs do CKAN (POST /pda/planos/{id}/ids-ckan). */
+export interface LinhaIdCkan {
+  linha: number;
+  sigla: string | null;
+  nome_pda: string | null;
+  dataset_id: string | null;
+  base_id: number | null;
+  base_nome: string | null;
+  id_atual: string | null;
+  motivo: string | null;
+}
+export interface IdsCkanResumo {
+  aplicado: boolean;
+  total_linhas: number;
+  atualizadas: number;
+  atualizar: LinhaIdCkan[];
+  substituir: LinhaIdCkan[];
+  iguais: number;
+  sem_id: number;
+  sem_base: LinhaIdCkan[];
+  invalidas: LinhaIdCkan[];
+}
 
 export interface Opcao { valor: string; rotulo: string }
 
@@ -59,10 +100,12 @@ export interface BasePda {
   possui_conteudo_sigiloso: boolean | null;
   prazo_abertura: string | null;
   vinculo: Vinculo;
-  dataset_id: string | null;
+  dataset_id: number | null;
+  dataset_id_ckan: string | null; // ID do dataset no CKAN (link do portal)
   dataset_name: string | null;
   dataset_titulo: string | null;
   dataset_name_planilha: string | null;
+  dataset_id_ckan_planilha: string | null; // ID do CKAN informado; sem dataset = vínculo pendente
   dataset_ativo: boolean | null;
   data_publicacao: string | null;
   recursos_validos: number;
@@ -110,7 +153,7 @@ export interface PlanoEntrada {
 /** Inclusão (POST /pda/planos/{id}/bases) e edição (PUT /pda/bases/{id}) de uma base. */
 export interface BaseEntrada {
   orgao_sigla: string;
-  organizacao_id: string | null; // vazio = identificar pela sigla
+  organizacao_id: number | null; // vazio = identificar pela sigla
   nome_previsto: string;
   descricao: string | null;
   unidade_responsavel: string | null;
@@ -118,11 +161,24 @@ export interface BaseEntrada {
   prazo_abertura: string | null;
   politicas_publicas: string | null;
   possui_conteudo_sigiloso: boolean | null;
+  dataset_id: number | null; // escolhido na busca; tem precedência sobre dataset_link
   dataset_link: string | null; // link do portal ou name; serve só para achar o ID
+  dataset_id_ckan?: string | null; // ID do dataset no CKAN digitado (a busca já aceita o ID)
 }
 
-/** Opções do formulário de base: organizações do portal (valor = ID CKAN) e periodicidades. */
+/** Opções do formulário de base: organizações do portal (valor = id) e periodicidades. */
 export interface FormularioPda { organizacoes: Opcao[]; periodicidades: string[] }
+
+/** Dataset do inventário encontrado pela busca do formulário de base (valor = ID CKAN). */
+export interface DatasetOpcao {
+  id: number;
+  id_ckan: string | null;
+  name: string;
+  titulo: string;
+  organizacao_id: number | null;
+  orgao_nome: string | null;
+  ativo_no_portal: boolean;
+}
 
 /** Limite de tamanho do arquivo aceito pelo backend (413 acima disso). */
 export const TAMANHO_MAX_ARQUIVO = 5 * 1024 * 1024;
@@ -140,9 +196,18 @@ function consultaBases(planoId: number | null, f: FiltrosPda): string {
 export const pdaApi = {
   planos: () => api.get<PlanoPda[]>("/pda/planos"),
   importar: (form: FormData) => api.upload<ImportacaoResumo>("/pda/planos", form),
+  importarIds: (planoId: number, arquivo: File, aplicar: boolean, sobrescrever: boolean) => {
+    const form = new FormData();
+    form.append("arquivo", arquivo, arquivo.name);
+    form.append("aplicar", aplicar ? "true" : "false");
+    form.append("sobrescrever", sobrescrever ? "true" : "false");
+    return api.upload<IdsCkanResumo>(`/pda/planos/${planoId}/ids-ckan`, form);
+  },
   criarPlano: (dados: PlanoEntrada) => api.post<PlanoPda>("/pda/planos/manual", dados),
   atualizarPlano: (id: number, dados: PlanoEntrada) => api.put<PlanoPda>(`/pda/planos/${id}`, dados),
   formulario: () => api.get<FormularioPda>("/pda/formulario"),
+  buscarDatasets: (busca: string) =>
+    api.get<DatasetOpcao[]>(`/pda/formulario/datasets?${new URLSearchParams({ busca })}`),
   criarBase: (planoId: number, dados: BaseEntrada) => api.post<BasePda>(`/pda/planos/${planoId}/bases`, dados),
   atualizarBase: (id: number, dados: BaseEntrada) => api.put<BasePda>(`/pda/bases/${id}`, dados),
   excluirBase: (id: number) => api.del<void>(`/pda/bases/${id}`),

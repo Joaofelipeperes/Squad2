@@ -141,7 +141,7 @@ function ItemLinhaDoTempo({ e }: { e: Evento }) {
           <b>{e.orgao_nome ?? "Órgão não identificado"}</b>
           {orgao
             ? <> · <span className="badge badge-gray">Cadastro do órgão</span></>
-            : <> · <span title={e.dataset_id ?? undefined}>{e.dataset_titulo}</span></>}
+            : <> · <span title={e.dataset_id_ckan ?? undefined}>{e.dataset_titulo}</span></>}
           {e.origem === "atividade_nativa" && (
             <> · <span className="badge badge-amber"
                        title="Ação registrada só pelo CKAN, fora da edição auditada pela extensão (ex.: Make public/Make private/Delete em lote na página da organização). Quem e quando vêm do CKAN; o que mudou é deduzido.">

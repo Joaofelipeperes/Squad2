@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | Parcial: formato fechado (PBI-53) implementado; completude e sem recurso em esqueleto |
+| **Status** | Parcial: formato fechado (PBI-53) e datasets sem recurso (PBI-51) implementados; completude em esqueleto |
 | **Responsável** | Luiza (US16) · João (US17) |
 | **User stories** | US16 (PBI-48 a PBI-50), US17 (PBI-51 a PBI-53) |
 | **Backend** | `backend/app/modules/metadados/` |
 | **Frontend** | sem tela própria — resultados aparecem em Datasets, Organizações e Relatórios |
-| **Última atualização** | 18/10/2026 |
+| **Última atualização** | 28/10/2026 |
 
 ## Propósito
 Mede o preenchimento dos metadados obrigatórios e identifica datasets sem recurso e recursos em
@@ -26,9 +26,13 @@ Nenhum endpoint ainda. Previsto: `GET /api/v1/metadados/completude` e `/formatos
 (`metadados.acessar`).
 
 ## Serviços e métodos
+`dao.py` — `MetadadosDao(Dao)` (ADR-0019): `recursos_validos_de_datasets_ativos` (base de `recursos_formato_fechado`). Só leitura; registros excluídos não contam.
+
 Contratos em `service.py`:
 - `completude(dataset, obrigatorios) -> float` — PBI-49.
-- `datasets_sem_recurso(db)` — PBI-51.
+- `datasets_sem_recurso(db) -> list[Dataset]` — PBI-51: datasets **ativos** no portal sem recurso
+  válido (sem arquivo, ou só com o dicionário de dados; recurso apagado do CKAN não conta).
+  **Implementado** (`MetadadosDao.datasets_ativos_sem_recurso`).
 - `recursos_formato_fechado(db, formatos_abertos) -> list[Recurso]` — PBI-53: recursos atuais (ainda
   no pacote) de datasets ativos, sem dicionário de dados, com formato fora da lista. **Implementado.**
 
@@ -48,7 +52,7 @@ Sem tabelas próprias: lê `dataset` e `recurso`.
 |---|---|---|
 | consome | inventario | `Dataset` (campos e extras), `Recurso.formato` |
 | consome | parametros | `metadados_obrigatorios`, `formatos_abertos` |
-| é consumido por | painel | `recursos_formato_fechado` e `regras.normalizar_formato` — "Recursos sem formato aberto" na tela Organizações |
+| é consumido por | painel | `recursos_formato_fechado` e `regras.normalizar_formato` — "Recursos sem formato aberto" na tela Organizações; `datasets_sem_recurso` — cartão e alertas do Dashboard |
 | é consumido por | relatorios | indicadores e listas exportáveis |
 
 ## Jobs agendados
@@ -73,3 +77,6 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 |---|---|---|
 | 30/09/2026 | Esqueleto: contratos e permissão | Victor |
 | 18/10/2026 | Formato fechado (PBI-53): `regras.eh_formato_aberto`/`normalizar_formato` e `service.recursos_formato_fechado`, usados pela tela Organizações | Humberto |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): `recursos_formato_fechado` junta `Recurso` × `Dataset` por `Dataset.id`; sem mudança de comportamento | Victor |
+| 22/10/2026 | Banco só pelo `MetadadosDao` (ADR-0019); recursos excluídos não entram no formato fechado | Victor |
+| 28/10/2026 | Datasets sem recurso (PBI-51): `service.datasets_sem_recurso` e `MetadadosDao.datasets_ativos_sem_recurso`, usados pelo Dashboard | Humberto |
