@@ -7,7 +7,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.core.deps import UsuarioAtual
-from app.integrations.ckan.client import CkanClient
+from app.integrations.ckan.client import CkanClient, CkanError
 from app.modules.inventario.models import Dataset, Organizacao
 from app.modules.rastreabilidade import regras, service
 from app.modules.rastreabilidade.models import EventoRastreabilidade, SincronizacaoRastreabilidade
@@ -385,27 +385,22 @@ def test_diff_respeita_escopo_de_orgao():
             service.diff_evento(db, outro, ev.id, client=ckan)
 
 
-def test_diff_le_do_ckan_de_auditoria_configurado(monkeypatch):
-    """Sem cliente injetado, a auditoria/diff constrói o CkanClient apontando para
-    `ckan_auditoria_base_url` (o portal com o dsaudit, estratégia do PR #9) — e não para o CKAN do
-    inventário escolhido por ambiente (ADR-0024)."""
+def test_diff_le_do_ckan_em_uso(monkeypatch):
+    """Sem cliente injetado, a auditoria/diff constrói o CkanClient com a URL/token do CKAN em uso
+    (config_ativa = perfil selecionado ou .env, ADR-0024) — não com o CKAN do inventário."""
+    from app.modules.ckan_config.service import ConfigCkan
     _sincronizar_d4()  # popula os eventos; 'b1' (troca de arquivo) tem tem_diff=True
     capturado = {}
 
-    class _Token:
-        def get_secret_value(self):  # noqa: D401
-            return "token-editor"
-
-    class _Settings:
-        ckan_auditoria_api_token = _Token()
-        ckan_auditoria_base_url = "http://ckan-auditoria.example:5000"
+    monkeypatch.setattr(service, "config_ativa",
+                        lambda: ConfigCkan("http://inventario:5000",
+                                           "http://ckan-auditoria.example:5000", "token-editor"))
 
     def _fabricar(*, base_url=None, api_token=None, **kw):
         capturado["base_url"] = base_url
         return CkanClient(base_url=base_url, transport=httpx.MockTransport(_handler_d4),
                           api_token=api_token)
 
-    monkeypatch.setattr(service, "get_settings", lambda: _Settings())
     monkeypatch.setattr(service, "CkanClient", _fabricar)
 
     analista = UsuarioAtual(id=1, email="a@cge.go.gov.br", nome="A", orgao_id=None,
@@ -452,6 +447,31 @@ def test_diff_csv_api_mapeia_erros(client, analista):
     # evento sem diff → 409; inexistente → 404 (antes de exigir token)
     assert client.get(f"{url}/{privacao.id}/diff.csv", headers=analista).status_code == 409
     assert client.get(f"{url}/99999/diff.csv", headers=analista).status_code == 404
+
+
+def _handler_html_acesso_negado(request: httpx.Request) -> httpx.Response:
+    """Imita um portal que devolve HTML de 'Acesso Negado' com HTTP 200 (sem o dsaudit)."""
+    return httpx.Response(200, text="<!DOCTYPE html><html>Acesso Negado</html>",
+                          headers={"content-type": "text/html"})
+
+
+def test_action_resposta_nao_json_vira_ckan_error():
+    """HTML com HTTP 200 (portal sem o endpoint) → CkanError tratado, não JSONDecodeError cru."""
+    ckan = CkanClient("http://portal.local", transport=httpx.MockTransport(_handler_html_acesso_negado))
+    with pytest.raises(CkanError):
+        ckan.status()
+
+
+def test_diff_com_resposta_nao_json_vira_indisponivel_sem_500():
+    """Regressão: auditoria devolvendo HTML não pode estourar 500; vira DiffIndisponivel (409)."""
+    _sincronizar_d4()  # popula o evento 'b1' (tem_diff=True)
+    html = CkanClient("http://portal.local", transport=httpx.MockTransport(_handler_html_acesso_negado))
+    user = UsuarioAtual(id=1, email="a@cge.go.gov.br", nome="A", orgao_id=None,
+                        papeis=[], permissoes=frozenset({"rastreabilidade.acessar"}))
+    with SessionLocal() as db:
+        arquivo = db.query(EventoRastreabilidade).filter_by(ckan_activity_id="b1").one()
+        with pytest.raises(service.DiffIndisponivel):
+            service.diff_evento(db, user, arquivo.id, client=html)
 
 
 # ------------------------------------------------------------------ cadastro dos órgãos

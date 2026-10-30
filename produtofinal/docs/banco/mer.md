@@ -4,7 +4,7 @@
 > Não edite à mão: altere o modelo (ou sua docstring), crie a migração e rode o script.
 > Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md) · [ADR-0019](../adr/0019-dao-exclusao-logica-e-auditoria.md).
 
-23 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, `created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), omitidas do diagrama e listadas no dicionário de dados.
+24 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, `created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), omitidas do diagrama e listadas no dicionário de dados.
 
 ## Diagrama
 
@@ -279,6 +279,15 @@ erDiagram
         varchar chave UK
         json valor
         varchar alterado_por
+    }
+    ckan_perfil {
+        int id PK
+        varchar nome UK
+        varchar base_url
+        varchar auditoria_base_url
+        text auditoria_api_token_cifrada
+        varchar auditoria_api_token_dica
+        bool selecionado
     }
     acesso_papel ||--o{ acesso_papel_permissao : "papel_id"
     usuario ||--o{ acesso_usuario_papel : "usuario_id"
@@ -911,3 +920,27 @@ Valor de negócio editável pela GEDA; ausente no banco = vale o padrão do cat�
 | `changed_id` | int | sim |  |  |  |
 
 Índices: `uq_parametro_chave`
+
+### Módulo `ckan_config` — ckan_config
+Documentação do módulo: [docs/modulos/ckan_config.md](../modulos/ckan_config.md)
+
+#### `ckan_perfil`
+
+Perfil de conexão com um CKAN. Um fica `selecionado` e rege todo o sistema (sobrepõe o `.env`); trocar de perfil não apaga os dados já coletados (ADR-0024).
+
+| Coluna | Tipo | Nulo | Chave | Referência | Padrão |
+|---|---|:-:|---|---|---|
+| `id` | int | não | PK |  |  |
+| `nome` | varchar(120) | não | UK |  |  |
+| `base_url` | varchar(500) | não |  |  |  |
+| `auditoria_base_url` | varchar(500) | sim |  |  |  |
+| `auditoria_api_token_cifrada` | text | sim |  |  |  |
+| `auditoria_api_token_dica` | varchar(20) | sim |  |  |  |
+| `selecionado` | bool | não |  |  | `False` |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `uq_ckan_perfil_nome`

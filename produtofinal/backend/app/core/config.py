@@ -60,11 +60,9 @@ class Settings(BaseSettings):
     # editor das organizações monitoradas (nunca de sysadmin em produção). Vazio = a
     # rastreabilidade não sincroniza.
     ckan_auditoria_api_token: SecretStr | None = None
-    # CKAN de onde a auditoria/diff é lida. O histórico do dsaudit só existe no CKAN em que as
-    # edições realmente ocorrem (o portal oficial); por isso a auditoria segue no portal mesmo em
-    # dev/homologação, que leem o Docker local para o inventário (ADR-0024). Esta é a estratégia do
-    # PR #9 — sem ela o `tem_diff` nunca liga e a tela de rastreabilidade não exibe o diff.
-    # Vazio = portal oficial (ckan_padrao("producao")).
+    # CKAN de onde a auditoria/diff (dsaudit) é lida quando NÃO há perfil selecionado na tela de
+    # Configurações CKAN (ADR-0024). Vazio = usa a `ckan_base_url`. Normalmente o perfil ativo é
+    # quem decide isto; esta variável é só o fallback do `.env`.
     ckan_auditoria_base_url: str | None = None
 
     # CKAN — escrita (somente publicação de recurso anonimizado, US26 / PBI-95)
@@ -97,8 +95,6 @@ class Settings(BaseSettings):
                              f"use {' | '.join(AMBIENTES)}.")
         if not self.ckan_base_url:
             self.ckan_base_url = ckan_padrao(self.environment)
-        if not self.ckan_auditoria_base_url:
-            self.ckan_auditoria_base_url = CKAN_PORTAL_OFICIAL
         return self
 
     @model_validator(mode="after")

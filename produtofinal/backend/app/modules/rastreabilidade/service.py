@@ -15,10 +15,10 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
 from app.integrations.ckan.client import CkanAcessoNegado, CkanClient, CkanError, CkanNaoEncontrado
+from app.modules.ckan_config.service import config_ativa
 from app.modules.inventario.regras import chave_texto, contem_texto
 from app.modules.rastreabilidade import regras
 from app.modules.rastreabilidade.dao import RastreabilidadeDao
@@ -64,13 +64,11 @@ def sincronizar(client: CkanClient | None = None, orgaos: list[dict] | None = No
     db = SessionLocal()
     dao = RastreabilidadeDao(db)
     sinc = dao.criar_sincronizacao()
-    settings = get_settings()
-    token = settings.ckan_auditoria_api_token
-    tem_token = bool(token and token.get_secret_value().strip())
+    cfg = config_ativa()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
+    tem_token = bool(cfg.auditoria_token)
     own_client = client is None and tem_token
     if own_client:
-        client = CkanClient(base_url=settings.ckan_auditoria_base_url,
-                            api_token=token.get_secret_value().strip())
+        client = CkanClient(base_url=cfg.auditoria_base_url, api_token=cfg.auditoria_token)
     usuarios: dict[str, str | None] = {}
     try:
         if orgaos:
@@ -586,13 +584,11 @@ def diff_evento(db: Session, user: UsuarioAtual, evento_id: int,
         raise EventoNaoEncontrado("Evento não encontrado.")
     if not ev.tem_diff:
         raise DiffIndisponivel("Este evento não tem comparação linha a linha.")
-    settings = get_settings()
-    token = settings.ckan_auditoria_api_token
-    if client is None and not (token and token.get_secret_value().strip()):
+    cfg = config_ativa()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
+    if client is None and not cfg.auditoria_token:
         raise DiffIndisponivel(MSG_SEM_TOKEN)
     own_client = client is None
-    client = client or CkanClient(base_url=settings.ckan_auditoria_base_url,
-                                  api_token=token.get_secret_value().strip())
+    client = client or CkanClient(base_url=cfg.auditoria_base_url, api_token=cfg.auditoria_token)
     try:
         act = _buscar_atividade(client, ev)
     except CkanError as exc:
