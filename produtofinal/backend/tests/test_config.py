@@ -65,6 +65,27 @@ def test_ckan_informado_prevalece_sobre_o_ambiente(ambiente):
     assert s.ckan_base_url == "http://localhost:5000"
 
 
+# A auditoria/diff (dsaudit, ADR-0009) lê o CKAN onde as edições realmente acontecem — o portal
+# oficial, que mantém o histórico. Por isso ela independe do CKAN do inventário escolhido por
+# ambiente (ADR-0024): em dev/homologação o inventário lê o Docker local, mas a auditoria segue no
+# portal (estratégia do PR #9), senão o `tem_diff` nunca liga e a tela não mostra o diff.
+@pytest.mark.parametrize("ambiente", ["dev", "homologacao", "producao"])
+def test_auditoria_le_o_portal_por_padrao(ambiente):
+    s = _settings(environment=ambiente, secret_key=CHAVE_FORTE, encryption_key=CHAVE_FERNET)
+    assert s.ckan_auditoria_base_url == CKAN_PORTAL_OFICIAL
+
+
+def test_auditoria_independe_do_ckan_do_inventario_em_dev():
+    s = _settings(environment="dev")
+    assert s.ckan_base_url == CKAN_LOCAL_DOCKER
+    assert s.ckan_auditoria_base_url == CKAN_PORTAL_OFICIAL
+
+
+def test_auditoria_base_url_informada_prevalece():
+    s = _settings(environment="dev", ckan_auditoria_base_url="http://ckan-dsaudit-local:5000")
+    assert s.ckan_auditoria_base_url == "http://ckan-dsaudit-local:5000"
+
+
 def test_ambiente_desconhecido_e_recusado_mesmo_com_segredos_fortes():
     with pytest.raises(ValidationError, match="GDA_ENVIRONMENT"):
         _settings(environment="production", secret_key=CHAVE_FORTE, encryption_key=CHAVE_FERNET)

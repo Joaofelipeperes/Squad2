@@ -385,6 +385,75 @@ def test_diff_respeita_escopo_de_orgao():
             service.diff_evento(db, outro, ev.id, client=ckan)
 
 
+def test_diff_le_do_ckan_de_auditoria_configurado(monkeypatch):
+    """Sem cliente injetado, a auditoria/diff constrói o CkanClient apontando para
+    `ckan_auditoria_base_url` (o portal com o dsaudit, estratégia do PR #9) — e não para o CKAN do
+    inventário escolhido por ambiente (ADR-0024)."""
+    _sincronizar_d4()  # popula os eventos; 'b1' (troca de arquivo) tem tem_diff=True
+    capturado = {}
+
+    class _Token:
+        def get_secret_value(self):  # noqa: D401
+            return "token-editor"
+
+    class _Settings:
+        ckan_auditoria_api_token = _Token()
+        ckan_auditoria_base_url = "http://ckan-auditoria.example:5000"
+
+    def _fabricar(*, base_url=None, api_token=None, **kw):
+        capturado["base_url"] = base_url
+        return CkanClient(base_url=base_url, transport=httpx.MockTransport(_handler_d4),
+                          api_token=api_token)
+
+    monkeypatch.setattr(service, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(service, "CkanClient", _fabricar)
+
+    analista = UsuarioAtual(id=1, email="a@cge.go.gov.br", nome="A", orgao_id=None,
+                            papeis=[], permissoes=frozenset({"rastreabilidade.acessar"}))
+    with SessionLocal() as db:
+        arquivo = db.query(EventoRastreabilidade).filter_by(ckan_activity_id="b1").one()
+        diff = service.diff_evento(db, analista, arquivo.id)
+    assert capturado["base_url"] == "http://ckan-auditoria.example:5000"
+    assert diff.total_linhas == 2  # leu o diff pela URL de auditoria, não pela do inventário
+
+
+def test_linhas_do_diff_sem_corte_para_o_csv():
+    """A tela mantém o corte de MAX_LINHAS_DIFF; o CSV (limite=None) traz todas as linhas."""
+    changes = [{"status": "inserted", "key": {"id": i}, "fields": []}
+               for i in range(regras.MAX_LINHAS_DIFF + 1)]
+    recortadas, total = regras.linhas_do_diff(changes)
+    assert len(recortadas) == regras.MAX_LINHAS_DIFF
+    assert total == regras.MAX_LINHAS_DIFF + 1
+    todas, total_sem_corte = regras.linhas_do_diff(changes, limite=None)
+    assert len(todas) == regras.MAX_LINHAS_DIFF + 1 == total_sem_corte
+
+
+def test_diff_csv_do_evento_traz_todas_as_linhas_detalhadas():
+    """Download da tela: CSV (;) com cabeçalho e uma linha por campo alterado, sem corte."""
+    ckan = _sincronizar_d4()
+    analista_user = UsuarioAtual(id=1, email="a@cge.go.gov.br", nome="A", orgao_id=None,
+                                 papeis=[], permissoes=frozenset({"rastreabilidade.acessar"}))
+    with SessionLocal() as db:
+        arquivo = db.query(EventoRastreabilidade).filter_by(ckan_activity_id="b1").one()
+        nome, csv_txt = service.diff_evento_csv(db, analista_user, arquivo.id, client=ckan)
+    assert nome == f"rastreabilidade-diff-evento-{arquivo.id}.csv"
+    linhas = csv_txt.strip().splitlines()
+    assert linhas[0] == "Linha;Situação;Coluna;Antes;Depois"
+    assert any("id=2" in linha and "25" in linha for linha in linhas[1:])
+    assert len(linhas) >= 3  # cabeçalho + pelo menos as 2 linhas do diff
+
+
+def test_diff_csv_api_mapeia_erros(client, analista):
+    _sincronizar_d4()
+    url = "/api/v1/rastreabilidade/eventos"
+    with SessionLocal() as db:
+        privacao = db.query(EventoRastreabilidade).filter_by(ckan_activity_id="b2",
+                                                             sequencia=0).one()
+    # evento sem diff → 409; inexistente → 404 (antes de exigir token)
+    assert client.get(f"{url}/{privacao.id}/diff.csv", headers=analista).status_code == 409
+    assert client.get(f"{url}/99999/diff.csv", headers=analista).status_code == 404
+
+
 # ------------------------------------------------------------------ cadastro dos órgãos
 def _org(oid, titulo, descricao="", extras=None):
     return {"id": oid, "name": oid, "title": titulo, "description": descricao,
