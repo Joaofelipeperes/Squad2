@@ -41,5 +41,10 @@ class PainelDao(Dao):
                        condicao_recurso_atual()))
         return self.buscar_lista(filtrar_por_orgao(stmt, Dataset.organizacao_id, user))
 
+    def datasets_ativos(self, user: UsuarioAtual) -> list[tuple[int, int | None]]:
+        """(id, organizacao_id) dos datasets ativos no portal, no escopo de órgão do usuário."""
+        stmt = select(Dataset.id, Dataset.organizacao_id).where(Dataset.ativo_no_portal.is_(True))
+        return self.buscar_linhas(filtrar_por_orgao(stmt, Dataset.organizacao_id, user))
+
     def orgao_de_cada_dataset(self) -> dict[int, int | None]:
         return dict(self.buscar_linhas(select(Dataset.id, Dataset.organizacao_id)))

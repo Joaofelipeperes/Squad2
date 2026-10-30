@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Alerta, Kpis, VisaoGeral } from "./api";
+import type { Alerta, DadosPessoais, Espontaneas, Kpis, VisaoGeral } from "./api";
 import { dashboardApi } from "./api";
 import { BarrasHorizontais } from "./BarrasHorizontais";
 import type { Fatia } from "./Rosca";
 import { Rosca } from "./Rosca";
 import { fmtData, fmtDataHora } from "@/modules/pda/formato";
 import { SituacaoBadge } from "@/modules/pda/SituacaoBadge";
+import { Pode } from "@/shared/acesso/Pode";
 import { PageLede } from "@/shared/ui/PageLede";
 
 const fmt = new Intl.NumberFormat("pt-BR");
@@ -63,7 +64,10 @@ function cartoes(k: Kpis, plano: VisaoGeral["plano"]): Cartao[] {
       ? pendente("Atualizações em atraso", "fa-hourglass-half", "amber", "")
       : { icone: "fa-hourglass-half", cor: "amber", valor: k.atualizacoes_em_atraso, rotulo: "Atualizações em atraso",
           pe: "Acima da periodicidade do PDA", classePe: k.atualizacoes_em_atraso ? "warn" : "ok" },
-    pendente("Possíveis dados pessoais", "fa-shield-halved", "red", ""),
+    k.possiveis_dados_pessoais == null
+      ? pendente("Possíveis dados pessoais", "fa-shield-halved", "red", "")
+      : { icone: "fa-shield-halved", cor: "red", valor: k.possiveis_dados_pessoais, rotulo: "Possíveis dados pessoais",
+          pe: "Aguardando revisão humana", classePe: k.possiveis_dados_pessoais ? "bad" : "ok" },
     { icone: "fa-circle-question", cor: "amber", valor: k.datasets_sem_recurso, rotulo: "Datasets sem recurso",
       pe: "Dataset criado, sem arquivo", classePe: k.datasets_sem_recurso ? "warn" : "ok" },
   ];
@@ -164,6 +168,13 @@ export default function DashboardPage() {
             <StatusAtualizacoes d={d} />
           </div>
 
+          <div className="charts-row">
+            <Pode permissao="lgpd.acessar">
+              {d.dados_pessoais && <DadosPessoaisPainel p={d.dados_pessoais} />}
+            </Pode>
+            <EspontaneasPainel e={d.espontaneas} plano={d.plano} />
+          </div>
+
           <Alertas d={d} />
 
           <div className="panel">
@@ -213,6 +224,74 @@ function StatusAtualizacoes({ d }: { d: VisaoGeral }) {
           de 80% do prazo. Eventual e Estática não têm prazo fixo.
           {aguardando > 0 && ` ${fmt.format(aguardando)} base(s) aguardando vínculo não entram no gráfico.`}
           {d.atualizacao_estimada > 0 && ` ${fmt.format(d.atualizacao_estimada)} base(s) sem last_modified usam a data de criação.`}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DadosPessoaisPainel({ p }: { p: DadosPessoais }) {
+  const total = p.por_tipo.reduce((s, c) => s + c.total, 0);
+  return (
+    <div className="panel" style={{ marginBottom: 0 }}>
+      <div className="panel-head">
+        <div>
+          <h3>Possíveis dados pessoais</h3>
+          <div className="sub">
+            {fmt.format(total)} achado(s) em {fmt.format(p.recursos_com_achados)} de{" "}
+            {fmt.format(p.recursos_analisados)} recurso(s) analisado(s)
+          </div>
+        </div>
+        <Link className="btn btn-outline btn-sm" to="/lgpd">Ver dados pessoais</Link>
+      </div>
+      <div className="panel-body">
+        {total > 0 ? (
+          <BarrasHorizontais rotuloAcessivel="Possíveis dados pessoais por tipo" unidade={["achado", "achados"]}
+            barras={p.por_tipo.map((c) => ({ ...c, cor: "var(--blue-500)" }))} />
+        ) : (
+          <p className="help-texto">
+            {p.recursos_analisados ? "Nenhum possível dado pessoal nos recursos analisados."
+              : "Nenhum recurso analisado ainda: rode a varredura na tela Dados Pessoais."}
+          </p>
+        )}
+        <div className="status-triagem" aria-label="Situação da triagem">
+          {p.por_status.map((c) => (
+            <span key={c.rotulo}>{c.rotulo} <strong>{fmt.format(c.total)}</strong></span>
+          ))}
+        </div>
+        <p className="help-texto" style={{ marginTop: 8 }}>
+          Por tipo, sem os descartados como falso positivo. {fmt.format(p.criticos)} de prioridade alta
+          aguardando revisão. Só contagens: o valor encontrado nunca é guardado.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function EspontaneasPainel({ e, plano }: { e: Espontaneas; plano: VisaoGeral["plano"] }) {
+  const pct = e.datasets_no_portal ? Math.round((e.espontaneas / e.datasets_no_portal) * 100) : 0;
+  return (
+    <div className="panel" style={{ marginBottom: 0 }}>
+      <div className="panel-head">
+        <div>
+          <h3>Bases espontâneas</h3>
+          <div className="sub">
+            {fmt.format(e.espontaneas)} de {fmt.format(e.datasets_no_portal)} datasets do portal ({pct}%) sem base
+            {plano ? ` no ${plano.nome}` : " no PDA (nenhum PDA vigente)"}
+          </div>
+        </div>
+        <Link className="btn btn-outline btn-sm" to="/datasets">Ver datasets</Link>
+      </div>
+      <div className="panel-body">
+        {e.espontaneas > 0 ? (
+          <BarrasHorizontais rotuloAcessivel="Bases espontâneas por órgão" unidade={["base", "bases"]}
+            barras={e.por_orgao.map((c) => ({ ...c, cor: "var(--blue-500)" }))} />
+        ) : (
+          <p className="help-texto">Todos os datasets ativos do portal estão vinculados a uma base do PDA vigente.</p>
+        )}
+        <p className="help-texto" style={{ marginTop: 12 }}>
+          Base espontânea: dataset publicado no portal que nenhuma base do PDA vigente vincula pelo ID do CKAN
+          ({fmt.format(e.no_pda)} estão no PDA). Órgãos com mais espontâneas primeiro.
         </p>
       </div>
     </div>
