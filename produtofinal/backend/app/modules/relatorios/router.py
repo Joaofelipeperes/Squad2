@@ -36,7 +36,7 @@ def previa(nome: str, db: DbSession,
 def exportar(nome: str, db: DbSession,
              user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR,
                                                            P.RELATORIOS_EXPORTAR))],
-             formato: Annotated[str, Query(pattern="^(xlsx|csv)$")] = "xlsx"):
+             formato: Annotated[str, Query(pattern="^(xlsx|csv|pdf)$")] = "xlsx"):
     try:
         conteudo, media_type, arquivo = service.exportar(db, nome, formato, user)
     except service.ErroRelatorio as exc:

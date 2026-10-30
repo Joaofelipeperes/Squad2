@@ -1,5 +1,7 @@
 """Tela Relatórios (US20, PBI-60/61/77): catálogo, prévia e exportação XLSX/CSV. Dados fictícios."""
 import io
+import re
+from datetime import date, datetime
 
 import pytest
 from openpyxl import load_workbook
@@ -7,6 +9,7 @@ from openpyxl import load_workbook
 from app.core.db import SessionLocal
 from app.modules.acesso.service import criar_usuario
 from app.modules.lgpd.models import Achado
+from app.modules.relatorios import regras
 from tests.conftest import SENHA, login
 from tests.test_painel_organizacoes import _hoje, inventario  # noqa: F401 (fixtures)
 from tests.test_painel_visao_geral import PDA, so_dicionario  # noqa: F401 (fixtures)
@@ -59,7 +62,7 @@ def test_catalogo_segue_permissao_de_origem(client, gerente):
 def test_permissoes(client, orgao, gerente):
     assert client.get(API, headers=orgao).status_code == 403
     assert client.get(f"{API}/inexistente/previa", headers=gerente).status_code == 404
-    assert client.get(f"{API}/pda/exportar?formato=pdf", headers=gerente).status_code == 422
+    assert client.get(f"{API}/pda/exportar?formato=doc", headers=gerente).status_code == 422
 
 
 def test_pda_e_atualizacoes(client, gerente, com_pda):
@@ -102,6 +105,33 @@ def test_exportar_csv(client, gerente, com_pda):
     texto = r.content.decode("utf-8")
     assert texto.startswith("﻿Órgão;Siglas no PDA;")
     assert "Secretaria da Saúde;SES;4;" in texto
+
+
+@pytest.mark.parametrize("valor,esperado", [
+    (27.0, "27"), (33.3, "33,3"), (None, ""), (True, "Sim"), (date(2026, 10, 1), "01/10/2026"),
+])
+def test_texto_da_celula(valor, esperado):
+    assert regras.texto(valor) == esperado
+
+
+def test_exportar_pdf(client, gerente, com_pda):
+    r = client.get(f"{API}/pda/exportar?formato=pdf", headers=gerente)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert 'filename="relatorio-pda-2026-10-18.pdf"' in r.headers["content-disposition"]
+    assert r.content.startswith(b"%PDF") and b"/Title (Relat" in r.content
+
+
+def test_pdf_muitas_linhas_e_vazio():
+    """Tabela longa quebra em várias páginas; relatório vazio ainda gera o PDF."""
+    agora = datetime(2026, 10, 30, 9, 0)
+    linhas = [[f"Base {i} com nome comprido & <especial>", "Publicado", date(2026, 1, 1)]
+              for i in range(300)]
+    longo = regras.gerar_pdf("Teste", ["Base", "Situação", "Prazo"], linhas, referencia="PDA",
+                             gerado_em=agora)
+    assert int(re.search(rb"/Count (\d+)", longo).group(1)) > 1  # páginas no catálogo do PDF
+    vazio = regras.gerar_pdf("Teste", ["Base", "Situação"], [], referencia=None, gerado_em=agora)
+    assert vazio.startswith(b"%PDF")
 
 
 def test_exportar_exige_permissao(client, admin, gerente):

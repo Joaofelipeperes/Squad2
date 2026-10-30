@@ -19,6 +19,7 @@ dependencies = [
   "psycopg[binary]>=3.1",
   "python-multipart>=0.0.18",  # upload (planilha do PDA); <0.0.18 tem DoS (CVE-2024-53981)
   "openpyxl>=3.1",            # leitura de .xlsx (PDA, PBI-12) e exportação XLSX (PBI-60)
+  "reportlab>=4.2",           # exportação PDF dos relatórios (PBI-60, ADR-0026)
 ]
 
 [project.optional-dependencies]

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Implementado (6 relatórios do protótipo, prévia e exportação XLSX/CSV) |
+| **Status** | Implementado (6 relatórios do protótipo, prévia e exportação XLSX/CSV/PDF) |
 | **Responsável** | João |
 | **User stories** | US20 (PBI-60, PBI-61, PBI-77) |
 | **Backend** | `backend/app/modules/relatorios/` |
@@ -15,7 +15,7 @@ Substitui o controle manual em planilhas da GEDA por relatórios exportáveis co
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Relatórios | `/relatorios` | `relatorios.acessar` | Gerar relatório (prévia, `relatorios.acessar` + permissão do módulo de origem); exportar Excel/CSV (`relatorios.exportar`) |
+| Relatórios | `/relatorios` | `relatorios.acessar` | Gerar relatório (prévia, `relatorios.acessar` + permissão do módulo de origem); exportar Excel/CSV/PDF (`relatorios.exportar`) |
 
 Referência visual: `#screen-reports` (6 relatórios do protótipo, PBI-77). Cada cartão abre um modal
 com a prévia (até 50 linhas, total de linhas e referência, ex.: o PDA vigente). A exportação leva o
@@ -36,7 +36,7 @@ origem o usuário acessa.
 |---|---|---|---|
 | GET | `/api/v1/relatorios` | `relatorios.acessar` | Catálogo filtrado pela permissão do módulo de origem |
 | GET | `/api/v1/relatorios/{id}/previa` | `relatorios.acessar` + origem | Colunas, primeiras 50 linhas como texto, total e referência |
-| GET | `/api/v1/relatorios/{id}/exportar?formato=xlsx\|csv` | `relatorios.acessar` + `relatorios.exportar` + origem | Arquivo `relatorio-<id>-<aaaa-mm-dd>.<formato>` |
+| GET | `/api/v1/relatorios/{id}/exportar?formato=xlsx\|csv\|pdf` | `relatorios.acessar` + `relatorios.exportar` + origem | Arquivo `relatorio-<id>-<aaaa-mm-dd>.<formato>` |
 
 Erros: relatório inexistente → 404; sem a permissão do módulo de origem → 403; formato inválido → 422.
 
@@ -44,10 +44,12 @@ Erros: relatório inexistente → 404; sem a permissão do módulo de origem →
 - `catalogo(user) -> list[RelatorioOut]` — relatórios visíveis para o usuário.
 - `montar(db, nome, user) -> (Definicao, Tabela)` — monta colunas e linhas no escopo de órgão.
 - `previa(db, nome, user, limite=50) -> PreviaOut`.
-- `exportar(db, nome, formato, user) -> (bytes, media_type, nome_arquivo)` — PBI-60/61.
-- `regras.gerar_xlsx` / `regras.gerar_csv` (puras): XLSX com cabeçalho em negrito, congelado,
-  filtro e datas formatadas (openpyxl, já nas dependências); CSV com BOM UTF-8 e `;` para o Excel
-  em pt-BR (mesmo padrão do log de acesso).
+- `exportar(db, nome, formato, user) -> (bytes, media_type, nome_arquivo)` — PBI-60/61; formato `xlsx`, `csv` ou `pdf`.
+- `regras.gerar_xlsx` / `regras.gerar_csv` / `regras.gerar_pdf` (puras): XLSX com cabeçalho em
+  negrito, congelado, filtro e datas formatadas (openpyxl, já nas dependências); CSV com BOM UTF-8
+  e `;` para o Excel em pt-BR (mesmo padrão do log de acesso); PDF em A4 paisagem com reportlab
+  (ADR-0026): título, referência, data de geração e total, cabeçalho da tabela repetido em cada
+  página, texto quebrado nas células e paginação no rodapé.
 
 ## Modelo de dados
 Sem tabelas próprias. `RelatoriosDao` só lê as organizações visíveis ao usuário.
@@ -76,7 +78,8 @@ por órgão.
 Nenhum.
 
 ## Regras de negócio e decisões
-Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.md).
+Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.md),
+[ADR-0026](../adr/0026-exportacao-pdf-com-reportlab.md) (PDF com reportlab).
 
 - Colunas compatíveis com as planilhas atuais da GEDA (PBI-61) — a confirmar com os modelos.
 - Escopo de órgão: os relatórios usam os services de origem com o usuário da requisição; nas
@@ -95,3 +98,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 07/10/2026 | Interações: consumo do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Humberto |
 | 30/10/2026 | Tela Relatórios (US20, PBI-60/61/77): 6 relatórios do protótipo com prévia e exportação XLSX/CSV; `GET /relatorios`, `/{id}/previa`, `/{id}/exportar`; catálogo filtrado pela permissão do módulo de origem | Victor |
 | 30/10/2026 | Prévia rola dentro do modal (altura máxima de 60vh, cabeçalho fixo); `Modal` compartilhado não fecha mais ao clicar na barra de rolagem do fundo | Victor |
+| 30/10/2026 | Exportação em PDF (ADR-0026, reportlab): `formato=pdf` na rota de exportação, `regras.gerar_pdf` em A4 paisagem com título, referência, data de geração, cabeçalho repetido por página e paginação; botão "Exportar PDF" no modal | Victor |

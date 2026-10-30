@@ -18,7 +18,7 @@ export interface Previa {
   total: number; // linhas do relatório completo
 }
 
-export type Formato = "xlsx" | "csv";
+export type Formato = "xlsx" | "csv" | "pdf";
 
 /** Baixa o arquivo do relatório (a exportação leva todas as linhas, não só as da prévia). */
 async function exportar(id: string, formato: Formato) {

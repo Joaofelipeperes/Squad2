@@ -10,7 +10,7 @@ import { useToast } from "@/shared/ui/Toast";
 /**
  * Tela "Relatórios" (US20, PBI-60/61/77) — referência visual: #screen-reports do Protótipo V1.
  * Só aparecem os relatórios cujo módulo de origem o usuário acessa. "Gerar relatório" abre a
- * prévia (primeiras linhas); a exportação XLSX/CSV leva o relatório inteiro e exige
+ * prévia (primeiras linhas); a exportação XLSX/CSV/PDF leva o relatório inteiro e exige
  * relatorios.exportar.
  */
 export default function RelatoriosPage() {
@@ -74,6 +74,9 @@ function PreviaModal({ relatorio, onFechar }: { relatorio: Relatorio; onFechar: 
           <Pode permissao="relatorios.exportar">
             <button className="btn btn-outline btn-sm" disabled={!p || exportar.isPending} onClick={() => exportar.mutate("csv")}>
               <i className="fa-solid fa-file-csv" />Exportar CSV
+            </button>
+            <button className="btn btn-outline btn-sm" disabled={!p || exportar.isPending} onClick={() => exportar.mutate("pdf")}>
+              <i className="fa-solid fa-file-pdf" />Exportar PDF
             </button>
             <button className="btn btn-primary btn-sm" disabled={!p || exportar.isPending} onClick={() => exportar.mutate("xlsx")}>
               <i className="fa-solid fa-file-export" />{exportar.isPending ? "Exportando..." : "Exportar Excel"}

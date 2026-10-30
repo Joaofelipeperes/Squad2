@@ -3,9 +3,12 @@ Cada relatório monta uma tabela (colunas + linhas) com os services dos módulos
 escopo de órgão do usuário; a prévia mostra as primeiras linhas e a exportação leva todas."""
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.deps import UsuarioAtual
 from app.modules.atualizacoes import regras as regras_atualizacao
 from app.modules.lgpd import service as lgpd
@@ -181,12 +184,27 @@ def previa(db: Session, nome: str, user: UsuarioAtual, limite: int = PREVIA_LINH
                      total=len(tabela.linhas))
 
 
+def _agora_local() -> datetime:
+    """Data e hora no fuso da aplicação (mesma regra de `pda.hoje_local`), para o PDF."""
+    try:
+        fuso = ZoneInfo(get_settings().timezone)
+    except ZoneInfoNotFoundError:
+        fuso = timezone(timedelta(hours=-3))
+    return datetime.now(fuso)
+
+
 def exportar(db: Session, nome: str, formato: str, user: UsuarioAtual) -> tuple[bytes, str, str]:
-    """PBI-60/61 — arquivo completo do relatório: (conteúdo, media type, nome do arquivo)."""
+    """PBI-60/61 — arquivo completo do relatório: (conteúdo, media type, nome do arquivo).
+    PDF (ADR-0026) leva também título, referência e data de geração."""
     if formato not in regras.FORMATOS:
-        raise Invalido(f"Formato inválido: use {' ou '.join(regras.FORMATOS)}.")
+        raise Invalido(f"Formato inválido: use {', '.join(regras.FORMATOS)}.")
     definicao, tabela = montar(db, nome, user)
-    conteudo = (regras.gerar_xlsx(definicao.titulo, tabela.colunas, tabela.linhas)
-                if formato == "xlsx" else regras.gerar_csv(tabela.colunas, tabela.linhas))
+    if formato == "xlsx":
+        conteudo = regras.gerar_xlsx(definicao.titulo, tabela.colunas, tabela.linhas)
+    elif formato == "pdf":
+        conteudo = regras.gerar_pdf(definicao.titulo, tabela.colunas, tabela.linhas,
+                                    referencia=tabela.referencia, gerado_em=_agora_local())
+    else:
+        conteudo = regras.gerar_csv(tabela.colunas, tabela.linhas)
     return conteudo, regras.MIME[formato], regras.nome_arquivo(definicao.id, formato,
                                                                pda.hoje_local())
