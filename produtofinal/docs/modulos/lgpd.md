@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 29/10/2026 |
+| **Última atualização** | 30/10/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -120,7 +120,7 @@ Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`
 | consome | ia | `AIGateway.chat(TarefaIA.CLASSIFICACAO_DADO_PESSOAL)` e `AIGateway.embed(TarefaIA.EMBEDDINGS_DADO_PESSOAL)` — sensíveis, só modelo local |
 | consome | parametros | `tipos_dado_pessoal`, `confianca_minima_lgpd`, `margem_embeddings_lgpd`, `tamanho_maximo_recurso_lgpd_mb` |
 | consome | CKAN (integração) | `CkanClient.url_download` + `baixar` (leitura dos arquivos, com intervalo mínimo por host e espera no HTTP 429 — ADR-0025); `CkanWriter.replace_resource_file` (publicação e reversão da anonimização) — única escrita do sistema |
-| é consumido por | painel | ranking de exposição por órgão (US27) e indicador de risco (PBI-57) |
+| é consumido por | painel | `service.resumo_dados_pessoais(db, user)` — **apenas contagens** por tipo e status (cartão e gráfico "Possíveis dados pessoais" do Dashboard, só com `lgpd.acessar`); ranking de exposição por órgão (US27) a implementar |
 | é consumido por | atualizacoes | correções publicadas não contam como atualização (PBI-79) |
 | é consumido por | relatorios | relatório priorizado (PBI-38) |
 | é consumido por | assistente | `Achado`: **apenas contagens** por dataset, tipo e status — nunca coluna, linha ou valor |
@@ -193,3 +193,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 27/10/2026 | Merge com `desenvolvimento` (ADR-0018/0019): `LgpdDao` concentra o acesso ao banco; `lgpd_achado`, `lgpd_varredura` e `lgpd_correcao` apontam para `recurso.id` e herdam `id`/`deleted`/auditoria da `Base`; API e tela usam o `id` próprio de dataset e recurso; download e publicação no CKAN pelo `id_ckan`; migrações refeitas numa só (`9d583e5bd118`, sobre `a8e2f5c1d9b4`) | Luiza |
 | 28/10/2026 | Migração `9d583e5bd118`: `lgpd_varredura.deleted` com `server_default=sa.false()` (era `sa.text('0')`, aceito no SQLite e recusado no PostgreSQL — a API não subia no Docker) | Victor |
 | 29/10/2026 | Fila executada pelo worker (ADR-0025): `POST /varreduras` só enfileira; job `lgpd.fila_varredura` a cada minuto retoma a interrompida (uma vez por recurso) e varre as pendentes; `executar_fila` e a liberação após 12 h removidos; job incremental só enfileira; download com intervalo por host e espera no HTTP 429 | Victor |
+| 30/10/2026 | Resumo agregado para o Dashboard: `service.resumo_dados_pessoais` e `ResumoDadosPessoaisOut` (recursos analisados e com achados, aguardando revisão, críticos, por tipo sem falso positivo e por status) — só contagens, no escopo do usuário | Humberto |

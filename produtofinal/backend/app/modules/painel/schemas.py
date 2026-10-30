@@ -3,6 +3,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.modules.lgpd.schemas import ResumoDadosPessoaisOut
+
 
 class PlanoResumoOut(BaseModel):
     id: int
@@ -62,7 +64,7 @@ class KpisOut(BaseModel):
     recursos_monitorados: int  # atuais, sem dicionário, de datasets ativos
     datasets_sem_recurso: int  # PBI-51
     atualizacoes_em_atraso: int | None = None  # entre as vinculadas (ADR-0023); None = nenhuma
-    possiveis_dados_pessoais: int | None = None  # módulo lgpd
+    possiveis_dados_pessoais: int | None = None  # achados aguardando revisão; None sem lgpd.acessar
 
 
 class ContagemOut(BaseModel):
@@ -77,6 +79,16 @@ class AlertaOut(BaseModel):
     situacao: str
     prazo: date | None  # PDA: meta de abertura; Atualização: vencimento pela periodicidade
     destino: str  # rota da tela onde o item é tratado
+
+
+class EspontaneasOut(BaseModel):
+    """Bases espontâneas (US7, ADR-0026): datasets ativos no portal que nenhuma base do PDA vigente
+    vincula pelo ID. Sem PDA vigente, todos os datasets ativos são espontâneos."""
+
+    datasets_no_portal: int  # datasets ativos (escopo do usuário)
+    no_pda: int  # ativos vinculados a alguma base do PDA vigente
+    espontaneas: int
+    por_orgao: list[ContagemOut]  # órgãos com mais espontâneas (até 10, o resto em "Outros")
 
 
 class VisaoGeralOut(BaseModel):
@@ -94,3 +106,5 @@ class VisaoGeralOut(BaseModel):
     alertas: list[AlertaOut]  # os mais prioritários de cada tipo (até 10 por tipo)
     total_alertas: int
     alertas_por_tipo: dict[str, int]  # "PDA" | "Atualização" | "Inventário" → total
+    espontaneas: EspontaneasOut
+    dados_pessoais: ResumoDadosPessoaisOut | None  # None = usuário sem lgpd.acessar

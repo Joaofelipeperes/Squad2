@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 28/10/2026 |
+| **Última atualização** | 30/10/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -43,6 +43,13 @@ evolução temporal abaixo dos cards (PBI-75).
   atrasada** (tipo "Atualização", prazo = vencimento pela periodicidade) → base vinculada sem
   recurso → base próxima do prazo → dataset sem recurso (inventário). "Prazo vencido" sem vínculo
   não vira alerta.
+- **Possíveis dados pessoais** (só com `lgpd.acessar`, via `<Pode>` e no backend): barras por tipo
+  (sem falso positivo), situação da triagem (Revisar, Confirmado, Falso positivo, Tratado),
+  recursos com achados de N analisados e atalho **Ver dados pessoais** (`/lgpd`). O cartão do
+  topo mostra os achados aguardando revisão.
+- **Bases espontâneas** (ADR-0026): datasets ativos do portal sem base do PDA vigente vinculada
+  pelo ID — total e % no título, barras pelos 10 órgãos com mais espontâneas (o resto em "Outros
+  órgãos (N)") e atalho **Ver datasets**.
 - **Fluxo de governança monitorado** (faixa estática do protótipo).
 - Gráficos em HTML/CSS, sem biblioteca de gráficos (nenhuma dependência nova).
 
@@ -73,7 +80,7 @@ evolução temporal abaixo dos cards (PBI-75).
 ## API
 | Método | Rota (`/api/v1/painel`) | Permissão | Descrição |
 |---|---|---|---|
-| GET | `/visao-geral` | `painel.acessar` | `VisaoGeralOut` (escopo de órgão do usuário): plano vigente, hoje, `ultima_coleta`, `kpis` (`KpisOut`), `situacoes_pda` e `situacoes_atualizacao` (`[{rotulo, total}]`), `atualizacao_estimada`, `alertas` (`[{tipo, orgao, item, situacao, prazo, destino}]`, até 10 **por tipo**), `total_alertas` e `alertas_por_tipo` |
+| GET | `/visao-geral` | `painel.acessar` | `VisaoGeralOut` (escopo de órgão do usuário): plano vigente, hoje, `ultima_coleta`, `kpis` (`KpisOut`), `situacoes_pda` e `situacoes_atualizacao` (`[{rotulo, total}]`), `atualizacao_estimada`, `alertas` (`[{tipo, orgao, item, situacao, prazo, destino}]`, até 10 **por tipo**), `total_alertas`, `alertas_por_tipo`, `espontaneas` (`EspontaneasOut`) e `dados_pessoais` (`ResumoDadosPessoaisOut` do lgpd; null sem `lgpd.acessar`) |
 | GET | `/organizacoes` | `painel.acessar` | `OrganizacoesOut`: plano vigente (`{id, nome}` ou null), hoje, `formatos_abertos` e uma `OrganizacaoOut` por órgão (escopo de órgão do usuário) |
 
 `OrganizacaoOut`: chave (`id` da organização em texto ou `sigla:<SIGLA>`), organizacao_id (inteiro), nome, siglas,
@@ -86,15 +93,18 @@ dia entre as vinculadas com prazo; null sem nenhuma), `atualizacoes_atrasadas` (
 `KpisOut`: orgaos_monitorados, orgaos_no_pda, bases_previstas, bases_vinculadas, bases_publicadas,
 `bases_em_atraso` (só entre as vinculadas; null sem nenhuma vinculada), bases_prazo_vencido,
 datasets_publicados, datasets_fora_do_portal, recursos_monitorados, datasets_sem_recurso e os
-`atualizacoes_em_atraso` (entre as vinculadas; null sem nenhuma) e o pendente
-`possiveis_dados_pessoais` (null).
+`atualizacoes_em_atraso` (entre as vinculadas; null sem nenhuma) e `possiveis_dados_pessoais`
+(achados aguardando revisão; null sem `lgpd.acessar`). `EspontaneasOut`: datasets_no_portal,
+no_pda, espontaneas, por_orgao (`[{rotulo, total}]`).
 
 ## Serviços e métodos
-`dao.py` — `PainelDao(Dao)` (ADR-0019): `organizacoes_visiveis`, `datasets_ativos_por_orgao`, `recursos_validos_por_orgao`, `orgao_de_cada_dataset`, `datasets_por_situacao(user)` e `recursos_validos(user)` (Dashboard). Só leitura; registros excluídos não contam.
+`dao.py` — `PainelDao(Dao)` (ADR-0019): `organizacoes_visiveis`, `datasets_ativos_por_orgao`, `recursos_validos_por_orgao`, `orgao_de_cada_dataset`, `datasets_por_situacao(user)`, `recursos_validos(user)` e `datasets_ativos(user)` (Dashboard). Só leitura; registros excluídos não contam.
 
 - `kpis(db, user, bases, *, orgaos, datasets, recursos, sem_recurso) -> KpisOut` — PBI-56.
 - `visao_geral(db, user) -> VisaoGeralOut` — US19/PBI-56: bases do PDA vigente
   (`pda.bases_do_plano`), inventário no escopo do usuário, `metadados.datasets_sem_recurso`,
+  `espontaneas(ativos, bases, orgs) -> EspontaneasOut` (ADR-0026, função pura) e
+  `lgpd.service.resumo_dados_pessoais` (só com `lgpd.acessar`).
   `situacao_atualizacao(base, hoje)` (sem vínculo → Aguardando vínculo; dataset fora do portal →
   Sem informação; senão `atualizacoes.regras.situacao_periodicidade`) e `inventario.ultima_coleta`.
   Testes em `tests/test_painel_visao_geral.py`.
@@ -118,7 +128,7 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 | consome | inventario | contagens e última coleta; `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` (Organizações) |
 | consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)`: bases previstas, vinculadas, publicadas e metas por órgão, **sempre do PDA vigente** (Organizações); `regras` (situações, `chave_sigla`); `hoje_local()` |
 | consome | atualizacoes | `regras.situacao_periodicidade` e `vencimento_atualizacao` (status das atualizações, cartão e alertas do Dashboard; coluna Atualização e cartão do detalhe em Organizações) |
-| consome | lgpd | indicador de risco e ranking de exposição (US27) |
+| consome | lgpd | `service.resumo_dados_pessoais(db, user)` — cartão e gráfico "Possíveis dados pessoais" do Dashboard (só com `lgpd.acessar`); ranking de exposição (US27) a implementar |
 | consome | metadados | completude média; `recursos_formato_fechado(db, formatos_abertos)` e `regras.normalizar_formato` (Organizações); `datasets_sem_recurso(db)` (Dashboard) |
 | consome | parametros | `formatos_abertos` |
 
@@ -133,8 +143,8 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 
 ## Pendências
 - Fórmula do índice de atenção (validar com a GEDA).
-- Dashboard: "Possíveis dados pessoais" depende do módulo `lgpd`; gráficos de evolução temporal
-  (PBI-75) exigem guardar os indicadores por coleta.
+- Dashboard: gráficos de evolução temporal (PBI-75) exigem guardar os indicadores por coleta.
+  Bases espontâneas: reclassificação manual (PBI-18) e filtro "espontânea" na tela Datasets.
 - Organizações: "Bases publicadas" depende do vínculo base × dataset (hoje 0 de 409 no PDA vigente);
   "Atualização" da regra por periodicidade (`atualizacoes`, PBI-27/28); "Riscos LGPD" do módulo
   `lgpd`; "Últimas alterações" da `rastreabilidade`. Validar com a GEDA se ZIP (605 recursos no
@@ -154,3 +164,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 28/10/2026 | Dashboard: gráfico "Status das atualizações" (rosca) e cartão "Atualizações em atraso" pela periodicidade do PDA vigente (ADR-0023), no lugar da idade da última atualização; alerta "Atualização atrasada"; `situacoes_atualizacao` no lugar de `idade_atualizacao` | Humberto |
 | 28/10/2026 | Dashboard: alertas em abas por tipo (Todos / PDA / Atualização / Inventário), até 10 de cada (`alertas_por_tipo`), para um tipo numeroso não esconder os outros | Humberto |
 | 28/10/2026 | Organizações: coluna **Atualização** (% em dia pela periodicidade do PDA, ADR-0023) e cartão "Atualizações atrasadas" no detalhe (`atualizacao_pct`, `atualizacoes_atrasadas`, `atualizacoes_avaliadas`) | Humberto |
+| 30/10/2026 | Dashboard: gráficos **Possíveis dados pessoais** (resumo do lgpd, só com `lgpd.acessar`; cartão com os achados aguardando revisão) e **Bases espontâneas** (ADR-0026: datasets ativos sem vínculo com o PDA vigente, por órgão); `espontaneas()`, `PainelDao.datasets_ativos`, `EspontaneasOut`, `dados_pessoais` | Humberto |

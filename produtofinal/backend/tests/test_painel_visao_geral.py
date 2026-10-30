@@ -44,7 +44,8 @@ def test_visao_geral_sem_pda(client, gerente, so_dicionario):
     # Inventário: só datasets ativos; recursos atuais sem dicionário (r1, r2, r5, r6)
     assert (k["datasets_publicados"], k["datasets_fora_do_portal"]) == (3, 1)
     assert k["recursos_monitorados"] == 4 and k["datasets_sem_recurso"] == 1
-    assert k["atualizacoes_em_atraso"] is None and k["possiveis_dados_pessoais"] is None
+    assert k["atualizacoes_em_atraso"] is None
+    assert k["possiveis_dados_pessoais"] == 0  # gerente vê o módulo lgpd; nenhum achado
     assert set(_situacoes(corpo).values()) == {0}
     assert set(_situacoes(corpo, "situacoes_atualizacao").values()) == {0}
     assert [a["item"] for a in corpo["alertas"]] == ["Escolas"]
@@ -95,3 +96,67 @@ def test_alertas_ate_10_por_tipo(monkeypatch, client, gerente, so_dicionario):
     corpo = client.get(API, headers=gerente).json()
     assert [a["tipo"] for a in corpo["alertas"]] == ["PDA", "Atualização", "Inventário"]
     assert corpo["alertas_por_tipo"]["PDA"] == 2 and corpo["total_alertas"] == 4
+
+
+# ---------------------------------------------------------- bases espontâneas (US7, ADR-0026)
+def test_espontaneas_sem_e_com_pda(client, gerente, so_dicionario):
+    # Sem PDA vigente: todo dataset ativo é espontâneo (ds-a e ds-b da SES, ds-d da SEDUC)
+    e = client.get(API, headers=gerente).json()["espontaneas"]
+    assert (e["datasets_no_portal"], e["no_pda"], e["espontaneas"]) == (3, 0, 3)
+    assert {c["rotulo"]: c["total"] for c in e["por_orgao"]} == {
+        "Secretaria da Saúde": 2, "Secretaria da Educação": 1}
+    client.post("/api/v1/pda/planos", headers=gerente, data={"nome": "PDA teste"},
+                files={"arquivo": ("pda.csv", PDA.encode(), "text/csv")})
+    # "Indicadores" vincula ds-a; "Antiga" vincula ds-c, que está fora do portal (não conta)
+    e = client.get(API, headers=gerente).json()["espontaneas"]
+    assert (e["datasets_no_portal"], e["no_pda"], e["espontaneas"]) == (3, 1, 2)
+
+
+def test_espontaneas_agrupa_alem_de_10_orgaos():
+    from types import SimpleNamespace
+
+    from app.modules.painel.service import espontaneas
+    orgs = {i: SimpleNamespace(sigla=f"O{i:02d}", titulo=f"Órgão {i}") for i in range(1, 13)}
+    ativos = [(i * 100 + k, i) for i in range(1, 13) for k in range(i)] + [(9999, None)]
+    # o único dataset do O01 está no PDA: sobram 11 órgãos + "Sem organização"
+    e = espontaneas(ativos, [SimpleNamespace(dataset_id=100)], orgs)
+    assert e.espontaneas == len(ativos) - 1 and len(e.por_orgao) == 11
+    assert (e.por_orgao[0].rotulo, e.por_orgao[0].total) == ("O12", 12)
+    assert e.por_orgao[-1].rotulo == "Outros órgãos (2)"
+
+
+# ---------------------------------------------------------- possíveis dados pessoais
+@pytest.fixture
+def achados(so_dicionario):
+    from app.modules.lgpd.models import Achado, Varredura
+    with SessionLocal() as db:
+        db.add_all([Varredura(recurso_id=1, status="ok"), Varredura(recurso_id=5, status="ok"),
+                    Varredura(recurso_id=2, status="erro")])
+        for i, (rec, tipo, prio, status) in enumerate([
+                (1, "cpf", "Alta", "revisar"), (1, "endereco", "Média", "revisar"),
+                (5, "endereco", "Alta", "confirmado"), (5, "email", "Baixa", "falso_positivo")]):
+            db.add(Achado(recurso_id=rec, coluna=f"c{i}", tipo=tipo, metodo="regra", confianca=90,
+                          prioridade=prio, status=status, impressao_digital=f"h{i}"))
+        db.commit()
+
+
+def test_dados_pessoais_resumo(client, gerente, achados):
+    corpo = client.get(API, headers=gerente).json()
+    d = corpo["dados_pessoais"]
+    assert d["recursos_analisados"] == 2 and d["recursos_com_achados"] == 2
+    assert d["aguardando_revisao"] == 2 and d["criticos"] == 1
+    # falso positivo não entra por tipo; o mais frequente primeiro
+    assert [(c["rotulo"], c["total"]) for c in d["por_tipo"]] == [("Endereço", 2), ("CPF", 1)]
+    assert {c["rotulo"]: c["total"] for c in d["por_status"]} == {
+        "Revisar": 2, "Confirmado": 1, "Falso positivo": 1, "Tratado": 0}
+    assert corpo["kpis"]["possiveis_dados_pessoais"] == 2
+
+
+def test_dados_pessoais_so_com_lgpd_acessar(client, achados):
+    from app.modules.acesso.service import criar_usuario
+    from tests.conftest import SENHA, login
+    with SessionLocal() as db:
+        criar_usuario(db, "junior@cge.go.gov.br", "Júnior", SENHA, ["superintendencia"])
+    h = login(client, "junior@cge.go.gov.br")  # painel.acessar sem lgpd.acessar
+    corpo = client.get(API, headers=h).json()
+    assert corpo["dados_pessoais"] is None and corpo["kpis"]["possiveis_dados_pessoais"] is None

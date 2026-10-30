@@ -38,12 +38,14 @@ from app.modules.lgpd.schemas import (
     AchadoDetalheOut,
     AchadoOut,
     AchadosOut,
+    ContagemOut,
     DecisaoIn,
     DecisaoOut,
     KpisOut,
     OpcaoOut,
     OpcoesAchadosOut,
     PedidoVarreduraOut,
+    ResumoDadosPessoaisOut,
     VarreduraOut,
     VarredurasOut,
 )
@@ -86,6 +88,26 @@ def _kpis(dao: LgpdDao, user: UsuarioAtual, linhas: list[AchadoOut]) -> KpisOut:
         alertas_criticos=sum(1 for a in linhas
                              if a.prioridade == regras.ALTA and a.status == "revisar"),
         alertas_para_revisao=sum(1 for a in linhas if a.status == "revisar"))
+
+
+def resumo_dados_pessoais(db: Session, user: UsuarioAtual) -> ResumoDadosPessoaisOut:
+    """Dashboard (painel): achados agregados por tipo e por status da triagem, no escopo de órgão
+    do usuário. Falso positivo não entra na contagem por tipo. Só contagens (PBI-35)."""
+    dao = LgpdDao.de(db, user)
+    achados = [a for a, _r, _ds in dao.achados_visiveis(user)]
+    validos = [a for a in achados if a.status != "falso_positivo"]
+    por_tipo: dict[str, int] = {}
+    for a in validos:
+        por_tipo[a.tipo] = por_tipo.get(a.tipo, 0) + 1
+    return ResumoDadosPessoaisOut(
+        recursos_analisados=dao.recursos_analisados(user),
+        recursos_com_achados=len({a.recurso_id for a in validos}),
+        aguardando_revisao=sum(1 for a in achados if a.status == "revisar"),
+        criticos=sum(1 for a in achados if a.status == "revisar" and a.prioridade == regras.ALTA),
+        por_tipo=[ContagemOut(rotulo=regras.rotulo_tipo(t), total=n)
+                  for t, n in sorted(por_tipo.items(), key=lambda x: (-x[1], regras.rotulo_tipo(x[0])))],
+        por_status=[ContagemOut(rotulo=rotulo, total=sum(1 for a in achados if a.status == codigo))
+                    for codigo, rotulo in regras.STATUS.items()])
 
 
 def listar_achados(db: Session, user: UsuarioAtual, *, prioridade: str | None = None,

@@ -18,6 +18,23 @@ class KpisOut(BaseModel):
     alertas_para_revisao: int     # achados com status "revisar"
 
 
+class ContagemOut(BaseModel):
+    rotulo: str
+    total: int
+
+
+class ResumoDadosPessoaisOut(BaseModel):
+    """Resumo agregado dos achados para o Dashboard (só contagens, nunca valores — PBI-35), no
+    escopo de órgão do usuário."""
+
+    recursos_analisados: int  # recursos com varredura concluída
+    recursos_com_achados: int  # recursos com achado que não foi descartado como falso positivo
+    aguardando_revisao: int  # achados com status "revisar"
+    criticos: int  # achados de prioridade Alta aguardando revisão
+    por_tipo: list[ContagemOut]  # achados que não são falso positivo, por tipo (mais frequente 1º)
+    por_status: list[ContagemOut]  # achados por status da triagem (ordem de regras.STATUS)
+
+
 class AchadoOut(BaseModel):
     id: int
     prioridade: str
