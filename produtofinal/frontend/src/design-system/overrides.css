@@ -144,6 +144,9 @@ a.btn { text-decoration: none; }
 .lgpd-explicacao li { margin: 2px 0; }
 .inline-msg:not(.ok):not(.err) { background: var(--amber-100); color: var(--amber-600); }
 .modal.modal-largo { max-width: 1000px; width: calc(100vw - 48px); }
+/* Relatórios: a prévia rola dentro do modal, com o cabeçalho da tabela fixo */
+.relatorio-previa { max-height: 60vh; overflow: auto; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); }
+.relatorio-previa thead th { position: sticky; top: 0; z-index: 1; }
 .varredura-opcoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
 .varredura-opcao { border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--gray-50); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .varredura-opcao h4 { margin: 0; font-size: 14px; color: var(--ink); display: flex; gap: 8px; align-items: center; }

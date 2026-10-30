@@ -84,7 +84,7 @@ function PreviaModal({ relatorio, onFechar }: { relatorio: Relatorio; onFechar: 
       {previa.isLoading && <div className="table-empty">Gerando prévia...</div>}
       {previa.isError && <div className="table-empty">Não foi possível gerar a prévia: {previa.error.message}</div>}
       {p && (
-        <div className="table-scroll">
+        <div className="table-scroll relatorio-previa">
           <table>
             <thead><tr>{p.colunas.map((c) => <th key={c}>{c}</th>)}</tr></thead>
             <tbody>

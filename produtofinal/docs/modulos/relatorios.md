@@ -94,3 +94,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 30/09/2026 | Esqueleto: contrato e permissões | Victor |
 | 07/10/2026 | Interações: consumo do pda via `plano_vigente`/`bases_do_plano` (sempre o PDA vigente) | Humberto |
 | 30/10/2026 | Tela Relatórios (US20, PBI-60/61/77): 6 relatórios do protótipo com prévia e exportação XLSX/CSV; `GET /relatorios`, `/{id}/previa`, `/{id}/exportar`; catálogo filtrado pela permissão do módulo de origem | Victor |
+| 30/10/2026 | Prévia rola dentro do modal (altura máxima de 60vh, cabeçalho fixo); `Modal` compartilhado não fecha mais ao clicar na barra de rolagem do fundo | Victor |
