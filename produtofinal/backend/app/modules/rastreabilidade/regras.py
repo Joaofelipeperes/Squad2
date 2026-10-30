@@ -303,10 +303,12 @@ def titulo_do_pacote(data: dict | None) -> str | None:
 MAX_LINHAS_DIFF = 500
 
 
-def linhas_do_diff(changes: list[dict] | None) -> tuple[list[dict], int]:
+def linhas_do_diff(changes: list[dict] | None,
+                   limite: int | None = MAX_LINHAS_DIFF) -> tuple[list[dict], int]:
     """`changes` de uma troca de arquivo ou de um upsert no DataStore → linhas para a tela:
     chave (texto), situação (incluída, alterada, removida) e campos com antes → depois.
-    Devolve (até MAX_LINHAS_DIFF linhas, total). Só para exibição: nada disso é gravado."""
+    Devolve (linhas até `limite`, total). `limite=None` traz todas (usado no download em CSV).
+    Só para exibição/exportação: nada disso é gravado."""
     rotulos = {"inserted": "incluída", "updated": "alterada", "deleted": "removida"}
     linhas = []
     for c in changes or []:
@@ -319,7 +321,7 @@ def linhas_do_diff(changes: list[dict] | None) -> tuple[list[dict], int]:
             "campos": [{"campo": str(f.get("field")), "anterior": _texto(f.get("old")),
                         "novo": _texto(f.get("new"))} for f in c.get("fields") or []],
         })
-    return linhas[:MAX_LINHAS_DIFF], len(linhas)
+    return (linhas if limite is None else linhas[:limite]), len(linhas)
 
 
 # ------------------------------------------------------------------ cadastro dos órgãos

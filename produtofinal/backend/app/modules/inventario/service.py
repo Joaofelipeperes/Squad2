@@ -12,6 +12,7 @@ from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
 from app.integrations.ckan.client import CkanClient
 from app.modules.atualizacoes.regras import ultima_atualizacao_real
+from app.modules.ckan_config.service import cliente_leitura
 from app.modules.inventario import regras
 from app.modules.inventario.dao import InventarioDao
 from app.modules.inventario.models import Coleta, Dataset, DatasetSnapshot, Organizacao, Recurso
@@ -69,7 +70,7 @@ def executar(coleta_id: int, client: CkanClient | None = None) -> None:
     db = SessionLocal()
     dao = InventarioDao(db)
     own_client = client is None
-    client = client or CkanClient()
+    client = client or cliente_leitura()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
     coleta = dao.obter_coleta(coleta_id)
     orgs: list[dict] = []
     try:

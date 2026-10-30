@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { Evento, EventosLista, FiltrosEventos, Sincronizacao } from "./api";
-import { FILTROS_VAZIOS, rastreabilidadeApi } from "./api";
+import { FILTROS_VAZIOS, rastreabilidadeApi, salvarArquivo } from "./api";
 import { PageLede } from "@/shared/ui/PageLede";
 
 /**
@@ -192,7 +192,11 @@ const CLASSE_SITUACAO_LINHA: Record<string, string> = {
   "incluída": "badge-green", "alterada": "badge-amber", "removida": "badge-red",
 };
 
-/** Diff linha a linha buscado no CKAN só quando aberto (não fica gravado na solução). */
+/** Quantas linhas da comparação aparecem na tela; o restante vai no CSV para download. */
+const PREVIA_LINHAS_DIFF = 3;
+
+/** Diff linha a linha buscado no CKAN só quando aberto (não fica gravado na solução). Mostra uma
+ * prévia de até 3 linhas; todas as alterações detalhadas ficam no CSV para download. */
 function DiffArquivo({ eventoId }: { eventoId: number }) {
   const diff = useQuery({
     queryKey: ["rastreabilidade", "diff", eventoId],
@@ -200,11 +204,29 @@ function DiffArquivo({ eventoId }: { eventoId: number }) {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+  const [baixando, setBaixando] = useState(false);
+  const [erroCsv, setErroCsv] = useState<string | null>(null);
+
+  async function baixarCsv() {
+    setBaixando(true);
+    setErroCsv(null);
+    try {
+      const { blob, filename } = await rastreabilidadeApi.baixarDiffCsv(eventoId);
+      salvarArquivo(blob, filename);
+    } catch (e) {
+      setErroCsv(e instanceof Error ? e.message : "Não foi possível baixar o CSV.");
+    } finally {
+      setBaixando(false);
+    }
+  }
+
   if (diff.isError) {
     return <div className="inline-msg err" role="alert" style={{ marginTop: 8 }}>{diff.error.message}</div>;
   }
   if (!diff.data) return <div className="tl-meta" style={{ marginTop: 8 }}>Carregando o diff do CKAN…</div>;
   const d = diff.data;
+  const previa = d.linhas.slice(0, PREVIA_LINHAS_DIFF);
+  const temMais = d.total_linhas > previa.length;
   const versoes = d.versao_anterior != null && d.versao_nova != null
     ? `versão ${d.versao_anterior} → ${d.versao_nova}` : "";
   return (
@@ -214,13 +236,13 @@ function DiffArquivo({ eventoId }: { eventoId: number }) {
         {d.colunas_chave.length > 0
           ? ` · linhas comparadas pela chave: ${d.colunas_chave.join(", ")}`
           : " · linhas comparadas pela posição (sem coluna de valores únicos)"}
-        {d.total_linhas > d.linhas.length && ` · exibindo ${d.linhas.length} de ${d.total_linhas} linhas`}
+        {temMais && ` · prévia de ${previa.length} de ${d.total_linhas} linhas`}
       </div>
       <div className="table-scroll">
         <table>
           <thead><tr><th>Linha</th><th>Situação</th><th>Coluna</th><th>Antes</th><th>Depois</th></tr></thead>
           <tbody>
-            {d.linhas.flatMap((l, i) => {
+            {previa.flatMap((l, i) => {
               const campos = l.campos.length ? l.campos : [{ campo: "—", anterior: null, novo: null }];
               return campos.map((c, j) => (
                 <tr key={`${i}-${j}`}>
@@ -239,6 +261,18 @@ function DiffArquivo({ eventoId }: { eventoId: number }) {
           </tbody>
         </table>
       </div>
+      <div className="tl-meta" style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={baixarCsv} disabled={baixando}>
+          <i className="fa-solid fa-file-csv" style={{ marginRight: 4 }} />
+          {baixando ? "Gerando CSV…" : "Baixar CSV com todas as alterações"}
+        </button>
+        {temMais && (
+          <span style={{ color: "var(--gray-500)" }}>
+            A tela mostra {previa.length} de {d.total_linhas} linhas; o CSV traz todas.
+          </span>
+        )}
+      </div>
+      {erroCsv && <div className="inline-msg err" role="alert" style={{ marginTop: 6 }}>{erroCsv}</div>}
     </div>
   );
 }

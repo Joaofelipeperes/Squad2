@@ -65,6 +65,19 @@ def test_ckan_informado_prevalece_sobre_o_ambiente(ambiente):
     assert s.ckan_base_url == "http://localhost:5000"
 
 
+# O CKAN da auditoria/diff vem normalmente do perfil selecionado na tela de Configurações CKAN
+# (ADR-0024). No `.env`, a variável é só o fallback: vazia por padrão (a resolução usa a base_url).
+def test_auditoria_base_url_vazia_por_padrao():
+    s = _settings(environment="dev")
+    assert s.ckan_base_url == CKAN_LOCAL_DOCKER
+    assert s.ckan_auditoria_base_url is None
+
+
+def test_auditoria_base_url_informada_prevalece():
+    s = _settings(environment="dev", ckan_auditoria_base_url="http://ckan-dsaudit-local:5000")
+    assert s.ckan_auditoria_base_url == "http://ckan-dsaudit-local:5000"
+
+
 def test_ambiente_desconhecido_e_recusado_mesmo_com_segredos_fortes():
     with pytest.raises(ValidationError, match="GDA_ENVIRONMENT"):
         _settings(environment="production", secret_key=CHAVE_FORTE, encryption_key=CHAVE_FERNET)
