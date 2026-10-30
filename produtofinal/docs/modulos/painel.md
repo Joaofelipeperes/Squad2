@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 28/10/2026 |
+| **Última atualização** | 30/10/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -121,6 +121,7 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 | consome | lgpd | indicador de risco e ranking de exposição (US27) |
 | consome | metadados | completude média; `recursos_formato_fechado(db, formatos_abertos)` e `regras.normalizar_formato` (Organizações); `datasets_sem_recurso(db)` (Dashboard) |
 | consome | parametros | `formatos_abertos` |
+| é consumido por | relatorios | `organizacoes(db, user)` (relatório por órgão) e `situacao_atualizacao(base, hoje)` (relatório de atualizações) |
 
 ## Jobs agendados
 Nenhum.
@@ -154,3 +155,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 28/10/2026 | Dashboard: gráfico "Status das atualizações" (rosca) e cartão "Atualizações em atraso" pela periodicidade do PDA vigente (ADR-0023), no lugar da idade da última atualização; alerta "Atualização atrasada"; `situacoes_atualizacao` no lugar de `idade_atualizacao` | Humberto |
 | 28/10/2026 | Dashboard: alertas em abas por tipo (Todos / PDA / Atualização / Inventário), até 10 de cada (`alertas_por_tipo`), para um tipo numeroso não esconder os outros | Humberto |
 | 28/10/2026 | Organizações: coluna **Atualização** (% em dia pela periodicidade do PDA, ADR-0023) e cartão "Atualizações atrasadas" no detalhe (`atualizacao_pct`, `atualizacoes_atrasadas`, `atualizacoes_avaliadas`) | Humberto |
+| 30/10/2026 | Interações: `organizacoes` e `situacao_atualizacao` consumidos pelo módulo `relatorios` (sem mudança no código do painel) | Victor |

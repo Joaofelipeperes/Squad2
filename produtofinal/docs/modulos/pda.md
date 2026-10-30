@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 28/10/2026 |
+| **Última atualização** | 30/10/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -392,7 +392,6 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   PBI-18, PBI-82); escolha do dataset numa lista com busca (hoje o vínculo manual é pelo endereço
   digitado).
 - Edição e remoção de bases não têm histórico de quem alterou o quê (entra com a `rastreabilidade`).
-- Relatórios e exportação das bases do PDA (US20): consumir `bases_do_plano` no módulo `relatorios`.
 - A última atualização usa `created` só quando nenhum recurso válido tem `last_modified`; o PBI-25
   pode pedir o fallback por recurso — validar.
 - O órgão de uma base já vinculada não acompanha mudança de órgão do dataset após a importação.
@@ -429,3 +428,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 28/10/2026 | Merge com `desenvolvimento` (LGPD): a ADR da importação configurável passa a ADR-0022 (o número 0020 já era da ADR do Claude Haiku) e a migração `b9d4e6f2a7c1` passa a vir depois de `9d583e5bd118` (LGPD), evitando duas pontas no Alembic; variante larga do `Modal` unificada com a da LGPD | Victor |
 | 28/10/2026 | Merge com `desenvolvimento`: mapeamento de colunas e Importar IDs do CKAN adaptados à chave própria (ADR-0018) e ao DAO (ADR-0019) — o ID do arquivo é procurado em `dataset.id_ckan` (`PdaDao.datasets_por_id_ckan`) e a base grava `dataset.id`; `importar_plano` recebe `user` e `mapeamento` | Humberto |
 | 28/10/2026 | Merge com `desenvolvimento` (#11): fica a importação configurável do Victor (ADR-0022, aba Configuração e ID_UNICO na própria importação); **sai a etapa de mapeamento de colunas** (`POST /planilha/colunas`, `MapeamentoIn`, `regras.ler_cabecalho`/`validar_mapeamento`, `MapeamentoColunas.tsx`); fica o **Importar IDs do CKAN** em lote para PDA já importado (`regras.ler_ids_ckan` sobre `_UUID`/`_SEM_ID` da ADR-0022) | Humberto |
+| 30/10/2026 | Interações: `bases_do_plano` consumido pelo módulo `relatorios` (relatórios de cumprimento do PDA e de atualizações); pendência de US20 resolvida | Victor |
