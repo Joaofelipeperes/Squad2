@@ -143,7 +143,9 @@ def portal(monkeypatch):
         return httpx.Response(200, content=csv_alunos())
 
     transporte = httpx.MockTransport(ckan)
-    monkeypatch.setattr(service, "CkanClient",
+    # O cliente CKAN agora vem da fábrica cliente_leitura (perfil ativo, ADR-0024); é nela que
+    # injetamos o transporte simulado.
+    monkeypatch.setattr(service, "cliente_leitura",
                         lambda: CkanClient("http://ckan-interno:5000", transport=transporte))
 
     perguntas = []

@@ -21,6 +21,7 @@ export function PrioridadeTag({ prioridade }: { prioridade: string }) {
 const CLASSE: Record<StatusAchado, string> = {
   revisar: "badge-amber", confirmado: "badge-red", falso_positivo: "badge-gray", tratado: "badge-green",
 };
+export const classeStatusAchado = (status: StatusAchado) => CLASSE[status] ?? "badge-gray";
 export function StatusAchadoBadge({ status }: { status: StatusAchado }) {
   return <span className={`badge ${CLASSE[status] ?? "badge-gray"}`}>{ROTULO_STATUS[status] ?? status}</span>;
 }

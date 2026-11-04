@@ -103,4 +103,18 @@ function consulta(f: FiltrosEventos): string {
 export const rastreabilidadeApi = {
   eventos: (f: FiltrosEventos) => api.get<EventosLista>(consulta(f)),
   diff: (eventoId: number) => api.get<Diff>(`/rastreabilidade/eventos/${eventoId}/diff`),
+  /** CSV com TODAS as linhas da comparação do evento (sem o corte de 500 da tela). */
+  baixarDiffCsv: (eventoId: number) => api.download(`/rastreabilidade/eventos/${eventoId}/diff.csv`),
 };
+
+/** Dispara o salvamento de um arquivo no navegador. */
+export function salvarArquivo(blob: Blob, nome: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

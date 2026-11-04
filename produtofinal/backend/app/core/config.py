@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     # editor das organizações monitoradas (nunca de sysadmin em produção). Vazio = a
     # rastreabilidade não sincroniza.
     ckan_auditoria_api_token: SecretStr | None = None
+    # CKAN de onde a auditoria/diff (dsaudit) é lida quando NÃO há perfil selecionado na tela de
+    # Configurações CKAN (ADR-0024). Vazio = usa a `ckan_base_url`. Normalmente o perfil ativo é
+    # quem decide isto; esta variável é só o fallback do `.env`.
+    ckan_auditoria_base_url: str | None = None
 
     # CKAN — escrita (somente publicação de recurso anonimizado, US26 / PBI-95)
     # Permanece desligada até a autorização formal CGE-GO/SECTI. Credencial é da GEDA.

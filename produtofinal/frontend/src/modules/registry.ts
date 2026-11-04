@@ -5,6 +5,7 @@
  */
 import { atualizacoesModule } from "@/modules/atualizacoes";
 import { assistenteWidget } from "@/modules/assistente";
+import { ckanModule } from "@/modules/ckan";
 import { dashboardModule } from "@/modules/dashboard";
 import { datasetsModule } from "@/modules/datasets";
 import { envioModule } from "@/modules/envio";
@@ -33,6 +34,7 @@ export const MODULOS: AppModule[] = [
   parametrosModule,
   usuariosModule,
   logsAcessoModule,
+  ckanModule,  // Administração · Configurações CKAN (ADR-0024) — último item
 ];
 
 export const WIDGETS: AppWidget[] = [assistenteWidget];

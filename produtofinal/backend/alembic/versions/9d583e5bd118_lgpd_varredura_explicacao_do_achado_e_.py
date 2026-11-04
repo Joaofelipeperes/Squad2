@@ -40,9 +40,9 @@ def upgrade() -> None:
     sa.Column('aviso', sa.Text(), nullable=True),
     sa.Column('erro', sa.Text(), nullable=True),
     sa.Column('deleted', sa.Boolean(), server_default=sa.false(), nullable=False),
-    sa.Column('created', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('created', sa.DateTime(timezone=True), server_default=sa.func.current_timestamp(), nullable=False),
     sa.Column('created_id', sa.Integer(), nullable=True),
-    sa.Column('changed', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('changed', sa.DateTime(timezone=True), server_default=sa.func.current_timestamp(), nullable=False),
     sa.Column('changed_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['recurso_id'], ['recurso.id'], name=op.f('fk_lgpd_varredura_recurso_id_recurso')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_lgpd_varredura'))

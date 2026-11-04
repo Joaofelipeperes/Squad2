@@ -49,6 +49,7 @@ class P(StrEnum):
     PARAMETROS_ACESSAR = "parametros.acessar"
     PARAMETROS_EDITAR = "parametros.editar"
     IA_CONFIGURAR = "ia.configurar"
+    CKAN_CONFIG_GERENCIAR = "ckan_config.gerenciar"
     ACESSO_GERENCIAR_USUARIOS = "acesso.gerenciar_usuarios"
     ACESSO_GERENCIAR_PAPEIS = "acesso.gerenciar_papeis"
     ACESSO_VER_LOGS = "acesso.ver_logs"
@@ -117,6 +118,10 @@ META: dict[P, MetaPermissao] = {
     P.IA_CONFIGURAR: MetaPermissao("ia", "Configurar modelos de IA",
                                    "Cadastrar provedores, chaves e vincular modelos às tarefas.",
                                    sensivel=True),
+    P.CKAN_CONFIG_GERENCIAR: MetaPermissao("ckan_config", "Configurar conexões do CKAN",
+                                           "Cadastrar perfis de conexão do CKAN (URLs e token da "
+                                           "auditoria) e escolher qual CKAN o sistema usa.",
+                                           sensivel=True),
     P.ACESSO_GERENCIAR_USUARIOS: MetaPermissao("acesso", "Gerenciar usuários",
                                                "Criar usuários, atribuir papéis e órgão."),
     P.ACESSO_GERENCIAR_PAPEIS: MetaPermissao("acesso", "Gerenciar papéis",
