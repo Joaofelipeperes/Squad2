@@ -8,15 +8,17 @@ Fontes (ADR-0009):
   entre coletas (`OrgaoSnapshot`).
 A sincronização roda ao fim de cada coleta do inventário.
 """
+import csv
+import io
 import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
 from app.integrations.ckan.client import CkanAcessoNegado, CkanClient, CkanError, CkanNaoEncontrado
+from app.modules.ckan_config.service import config_ativa
 from app.modules.inventario.regras import chave_texto, contem_texto
 from app.modules.rastreabilidade import regras
 from app.modules.rastreabilidade.dao import RastreabilidadeDao
@@ -62,11 +64,11 @@ def sincronizar(client: CkanClient | None = None, orgaos: list[dict] | None = No
     db = SessionLocal()
     dao = RastreabilidadeDao(db)
     sinc = dao.criar_sincronizacao()
-    token = get_settings().ckan_auditoria_api_token
-    tem_token = bool(token and token.get_secret_value().strip())
+    cfg = config_ativa()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
+    tem_token = bool(cfg.auditoria_token)
     own_client = client is None and tem_token
     if own_client:
-        client = CkanClient(api_token=token.get_secret_value().strip())
+        client = CkanClient(base_url=cfg.auditoria_base_url, api_token=cfg.auditoria_token)
     usuarios: dict[str, str | None] = {}
     try:
         if orgaos:
@@ -571,20 +573,22 @@ MAX_PAGINAS_DIFF = 20
 
 
 def diff_evento(db: Session, user: UsuarioAtual, evento_id: int,
-                client: CkanClient | None = None) -> DiffOut:
+                client: CkanClient | None = None,
+                limite: int | None = regras.MAX_LINHAS_DIFF) -> DiffOut:
     """Diff linha a linha de uma troca de arquivo ou de um upsert no DataStore, lido do CKAN
     na hora (a auditoria fica lá; aqui nada é gravado, pois os valores podem conter dado
-    pessoal). Evento de outro órgão para usuário restrito → não encontrado."""
+    pessoal). Evento de outro órgão para usuário restrito → não encontrado.
+    `limite=None` traz todas as linhas (usado pelo download em CSV)."""
     ev = RastreabilidadeDao.de(db, user).evento_visivel(user, evento_id)
     if ev is None:
         raise EventoNaoEncontrado("Evento não encontrado.")
     if not ev.tem_diff:
         raise DiffIndisponivel("Este evento não tem comparação linha a linha.")
-    token = get_settings().ckan_auditoria_api_token
-    if client is None and not (token and token.get_secret_value().strip()):
+    cfg = config_ativa()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
+    if client is None and not cfg.auditoria_token:
         raise DiffIndisponivel(MSG_SEM_TOKEN)
     own_client = client is None
-    client = client or CkanClient(api_token=token.get_secret_value().strip())
+    client = client or CkanClient(base_url=cfg.auditoria_base_url, api_token=cfg.auditoria_token)
     try:
         act = _buscar_atividade(client, ev)
     except CkanError as exc:
@@ -595,7 +599,7 @@ def diff_evento(db: Session, user: UsuarioAtual, evento_id: int,
     if act is None:
         raise DiffIndisponivel("A atividade não foi encontrada na auditoria do CKAN.")
     data = act.get("data") or {}
-    linhas, total = regras.linhas_do_diff(data.get("changes"))
+    linhas, total = regras.linhas_do_diff(data.get("changes"), limite)
     versao, anterior = data.get("version") or {}, data.get("previous_version") or {}
     return DiffOut(
         evento_id=ev.id, recurso_nome=ev.recurso_nome,
@@ -603,6 +607,30 @@ def diff_evento(db: Session, user: UsuarioAtual, evento_id: int,
         versao_anterior=anterior.get("version"), versao_nova=versao.get("version"),
         colunas_chave=[str(k) for k in data.get("keys") or []],
         total_linhas=total, linhas=[DiffLinhaOut(**linha) for linha in linhas])
+
+
+CABECALHO_CSV_DIFF = ["Linha", "Situação", "Coluna", "Antes", "Depois"]
+
+
+def diff_evento_csv(db: Session, user: UsuarioAtual, evento_id: int,
+                    client: CkanClient | None = None) -> tuple[str, str]:
+    """TODAS as linhas da comparação do evento em CSV (separador `;`), para o download da tela de
+    rastreabilidade — sem o corte de `MAX_LINHAS_DIFF` da exibição. Uma linha do CSV por campo
+    alterado; linha sem campos vira uma linha só com Linha/Situação. Mesmo escopo de órgão e os
+    mesmos erros de `diff_evento` (evento inexistente/sem permissão → EventoNaoEncontrado; sem
+    diff/sem token → DiffIndisponivel). Devolve (nome do arquivo, conteúdo do CSV)."""
+    diff = diff_evento(db, user, evento_id, client=client, limite=None)
+    buffer = io.StringIO()
+    escritor = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+    escritor.writerow(CABECALHO_CSV_DIFF)
+    for linha in diff.linhas:
+        if linha.campos:
+            for campo in linha.campos:
+                escritor.writerow([linha.chave, linha.situacao, campo.campo,
+                                   campo.anterior or "", campo.novo or ""])
+        else:
+            escritor.writerow([linha.chave, linha.situacao, "", "", ""])
+    return f"rastreabilidade-diff-evento-{diff.evento_id}.csv", buffer.getvalue()
 
 
 def _buscar_atividade(client: CkanClient, ev: EventoRastreabilidade) -> dict | None:

@@ -89,6 +89,7 @@ class CkanClient:
             timeout=timeout or s.ckan_timeout_s,
             headers=headers,
             transport=transport,
+            follow_redirects=True,  # alguns portais redirecionam a API; sem isso o corpo vem vazio
         )
 
     def close(self) -> None:
@@ -113,7 +114,14 @@ class CkanClient:
                     raise CkanAcessoNegado(f"{name}: acesso negado pelo CKAN (HTTP 403)", 403)
                 if resp.status_code == 404:
                     raise CkanNaoEncontrado(f"{name}: não encontrado no CKAN (HTTP 404)", 404)
-                data = resp.json()
+                try:
+                    data = resp.json()
+                except ValueError as exc:
+                    # Corpo não-JSON (ex.: página HTML de "Acesso Negado" com HTTP 200, típica de
+                    # portal sem a extensão/endpoint): vira erro tratado em vez de JSONDecodeError.
+                    tipo = resp.headers.get("content-type", "?")
+                    raise CkanError(f"{name}: resposta não-JSON do CKAN "
+                                    f"(HTTP {resp.status_code}, {tipo})", resp.status_code) from exc
                 if not data.get("success"):
                     raise CkanError(f"{name} falhou: {data.get('error')}")
                 return data["result"]

@@ -47,6 +47,31 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   return executar<T>(method, path, body === undefined ? undefined : JSON.stringify(body), "application/json");
 }
 
+/** Baixa um arquivo da API (com token). Devolve o blob e o nome sugerido pelo servidor. */
+async function baixar(path: string): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {};
+  const token = tokenStore.get();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const resp = await fetch(`${BASE}${path}`, { method: "GET", headers });
+  if (resp.status === 401) {
+    tokenStore.clear();
+    window.dispatchEvent(new Event("gda:sessao-expirada"));
+  }
+  if (!resp.ok) {
+    let msg = `Erro ${resp.status}`;
+    try {
+      const data = await resp.json();
+      if (typeof data.detail === "string") msg = data.detail;
+    } catch {
+      /* resposta sem JSON */
+    }
+    throw new ApiError(resp.status, msg);
+  }
+  const disposicao = resp.headers.get("Content-Disposition") ?? "";
+  const achado = /filename="?([^"]+)"?/.exec(disposicao);
+  return { blob: await resp.blob(), filename: achado?.[1] ?? "download" };
+}
+
 export const api = {
   get: <T>(p: string) => request<T>("GET", p),
   post: <T>(p: string, b?: unknown) => request<T>("POST", p, b),
@@ -54,4 +79,6 @@ export const api = {
   del: <T>(p: string) => request<T>("DELETE", p),
   /** POST multipart/form-data (envio de arquivo). Não define Content-Type: o navegador põe o boundary. */
   upload: <T>(p: string, form: FormData) => executar<T>("POST", p, form),
+  /** GET de um arquivo para download (com token). Devolve o blob e o nome do servidor. */
+  download: (p: string) => baixar(p),
 };

@@ -23,6 +23,7 @@ export const PERMISSOES = [
   "parametros.acessar",
   "parametros.editar",
   "ia.configurar",
+  "ckan_config.gerenciar",
   "acesso.gerenciar_usuarios",
   "acesso.gerenciar_papeis",
   "acesso.ver_logs"
@@ -52,6 +53,7 @@ export const ROTULOS_PERMISSAO: Record<Permissao, string> = {
   "parametros.acessar": "Ver parâmetros",
   "parametros.editar": "Editar parâmetros",
   "ia.configurar": "Configurar modelos de IA",
+  "ckan_config.gerenciar": "Configurar conexões do CKAN",
   "acesso.gerenciar_usuarios": "Gerenciar usuários",
   "acesso.gerenciar_papeis": "Gerenciar papéis",
   "acesso.ver_logs": "Ver log de acesso"

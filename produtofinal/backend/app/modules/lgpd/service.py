@@ -28,6 +28,7 @@ from app.core.deps import UsuarioAtual, exigir_mesmo_orgao
 from app.integrations.ai.base import AIProviderError, ChatMessage, ChatRequest
 from app.integrations.ai.policy import TarefaIA
 from app.integrations.ckan.client import CkanClient, CkanError
+from app.modules.ckan_config.service import cliente_leitura
 from app.modules.ia.gateway import AIGateway, IANaoConfigurada
 from app.modules.inventario.models import Dataset, Organizacao, Recurso
 from app.modules.inventario.service import recursos_atuais
@@ -351,7 +352,7 @@ def executar_varredura(db: Session, v: Varredura, client: CkanClient | None = No
             f"{', '.join(sorted(leitura.FORMATOS_SUPORTADOS))})."))
     limite_mb = int(obter_parametro(db, "tamanho_maximo_recurso_lgpd_mb"))
     proprio = client is None
-    client = client or CkanClient()
+    client = client or cliente_leitura()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
     try:
         url = client.url_download(r.id_ckan, ds.id_ckan if ds else None, r.url, r.url_type)
         if not url:

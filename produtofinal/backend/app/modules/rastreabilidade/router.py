@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
@@ -47,3 +47,20 @@ def diff_evento(evento_id: int, db: DbSession,
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except service.DiffIndisponivel as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
+@router.get("/eventos/{evento_id}/diff.csv")
+def diff_evento_csv(evento_id: int, db: DbSession,
+                    user: UsuarioAtual = Depends(require(P.RASTREABILIDADE_ACESSAR))):
+    """Mesma comparação do diff, porém com TODAS as linhas (sem o corte da tela), em CSV (`;`) para
+    download. UTF-8 com BOM para abrir direto no Excel em português."""
+    try:
+        nome, conteudo = service.diff_evento_csv(db, user, evento_id)
+    except service.EventoNaoEncontrado as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except service.DiffIndisponivel as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return Response(
+        content=("﻿" + conteudo).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'})
