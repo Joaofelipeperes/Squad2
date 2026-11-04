@@ -256,6 +256,7 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
 | é consumido por | assistente | `plano_vigente` + `bases_do_plano(db, plano.id, user)` — situação e prazo das bases (do órgão ou do dataset citado) e listas de atraso/prazo; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
+| é consumido por | atualizacoes | `plano_vigente` + `bases_do_plano` — periodicidade, dataset vinculado e última atualização na tela Monitoramento de Atualizações; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | inventario (tela Datasets) | `GET /datasets/{id}/bases` — prazo, periodicidade e situação PDA no detalhe do dataset |
 
 ## Jobs agendados
@@ -430,4 +431,5 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 28/10/2026 | Merge com `desenvolvimento` (LGPD): a ADR da importação configurável passa a ADR-0022 (o número 0020 já era da ADR do Claude Haiku) e a migração `b9d4e6f2a7c1` passa a vir depois de `9d583e5bd118` (LGPD), evitando duas pontas no Alembic; variante larga do `Modal` unificada com a da LGPD | Victor |
 | 28/10/2026 | Merge com `desenvolvimento`: mapeamento de colunas e Importar IDs do CKAN adaptados à chave própria (ADR-0018) e ao DAO (ADR-0019) — o ID do arquivo é procurado em `dataset.id_ckan` (`PdaDao.datasets_por_id_ckan`) e a base grava `dataset.id`; `importar_plano` recebe `user` e `mapeamento` | Humberto |
 | 28/10/2026 | Merge com `desenvolvimento` (#11): fica a importação configurável do Victor (ADR-0022, aba Configuração e ID_UNICO na própria importação); **sai a etapa de mapeamento de colunas** (`POST /planilha/colunas`, `MapeamentoIn`, `regras.ler_cabecalho`/`validar_mapeamento`, `MapeamentoColunas.tsx`); fica o **Importar IDs do CKAN** em lote para PDA já importado (`regras.ler_ids_ckan` sobre `_UUID`/`_SEM_ID` da ADR-0022) | Humberto |
+| 30/10/2026 | Interações: a tela Monitoramento de Atualizações (atualizacoes) consome `plano_vigente` + `bases_do_plano`; sem mudança de código neste módulo | Squad 2 |
 | 30/10/2026 | Interações e regras: bases espontâneas definidas pela ADR-0026 (dataset ativo sem vínculo com o PDA vigente), calculadas no painel; sem mudança de código neste módulo | Humberto |
