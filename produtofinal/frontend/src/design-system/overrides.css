@@ -152,6 +152,11 @@ a.btn { text-decoration: none; }
 .varredura-dataset { display: flex; gap: 8px; flex-wrap: wrap; }
 .varredura-dataset .text-input, .varredura-dataset select { flex: 1 1 200px; min-width: 0; }
 
+/* Situação da triagem LGPD no Dashboard */
+.status-triagem { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; font-size: 12px;
+  color: var(--gray-700); }
+.status-triagem strong { color: var(--ink); font-variant-numeric: tabular-nums; margin-left: 2px; }
+
 /* Painel de varredura LGPD: lista com rolagem (fila inteira visível), cabeçalho fixo */
 .varreduras-lista { max-height: 430px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: 8px;
   scrollbar-width: auto; scrollbar-color: var(--gray-500) var(--gray-100); scrollbar-gutter: stable; }

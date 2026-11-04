@@ -15,7 +15,7 @@ export interface Kpis {
   recursos_monitorados: number;
   datasets_sem_recurso: number;
   atualizacoes_em_atraso: number | null; // entre as vinculadas (ADR-0023); null = nenhuma
-  possiveis_dados_pessoais: number | null;
+  possiveis_dados_pessoais: number | null; // achados aguardando revisão; null sem lgpd.acessar
 }
 
 export interface Contagem { rotulo: string; total: number }
@@ -27,6 +27,24 @@ export interface Alerta {
   situacao: string;
   prazo: string | null;
   destino: string; // rota da tela onde o item é tratado
+}
+
+/** Bases espontâneas (ADR-0026): datasets ativos no portal sem base do PDA vigente vinculada. */
+export interface Espontaneas {
+  datasets_no_portal: number;
+  no_pda: number;
+  espontaneas: number;
+  por_orgao: Contagem[]; // até 10 órgãos e "Outros órgãos (N)"
+}
+
+/** Resumo do módulo LGPD (só contagens). */
+export interface DadosPessoais {
+  recursos_analisados: number;
+  recursos_com_achados: number;
+  aguardando_revisao: number;
+  criticos: number;
+  por_tipo: Contagem[];
+  por_status: Contagem[];
 }
 
 export interface VisaoGeral {
@@ -41,6 +59,8 @@ export interface VisaoGeral {
   alertas: Alerta[]; // até 10 de cada tipo, na ordem de prioridade
   total_alertas: number;
   alertas_por_tipo: Record<string, number>;
+  espontaneas: Espontaneas;
+  dados_pessoais: DadosPessoais | null; // null = usuário sem lgpd.acessar
 }
 
 export const dashboardApi = {
