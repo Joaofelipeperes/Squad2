@@ -64,7 +64,8 @@ export function VarreduraPainel({ onAndamento }: { onAndamento: (n: number) => v
     onError: (e: Error) => toast(e.message, true),
   });
 
-  const ultimas = (lista.data?.varreduras ?? []).slice(0, 6);
+  // Até 200 (fila + últimas executadas); a caixa mostra ~6 linhas e rola para ver o resto
+  const ultimas = lista.data?.varreduras ?? [];
   return (
     <div className="panel">
       <div className="panel-head">
@@ -128,7 +129,12 @@ export function VarreduraPainel({ onAndamento }: { onAndamento: (n: number) => v
         ) : ultimas.length === 0 ? (
           <p className="cell-muted" style={{ fontSize: 13, margin: 0 }}>Nenhuma varredura executada ainda.</p>
         ) : (
-          <div className="table-scroll">
+          <>
+          <p className="cell-muted" style={{ fontSize: 12.5, margin: "0 0 6px" }}>
+            {ultimas.length} varredura(s), da mais recente para a mais antiga
+            {ultimas.length > 6 && " · role a lista para ver todas"}
+          </p>
+          <div className="table-scroll varreduras-lista">
             <table>
               <thead><tr><th>Recurso</th><th>Situação</th><th>Linhas</th><th>Achados</th>
                 <th>Chamadas ao modelo</th><th>Modelo</th><th>Quando</th></tr></thead>
@@ -155,6 +161,7 @@ export function VarreduraPainel({ onAndamento }: { onAndamento: (n: number) => v
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>

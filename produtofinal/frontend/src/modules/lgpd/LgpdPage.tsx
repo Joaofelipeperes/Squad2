@@ -1,13 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { KeyboardEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { Achado, AchadosLista, FiltrosLgpd } from "./api";
-import { FILTROS_VAZIOS, correcoesApi, lgpdApi } from "./api";
+import { FILTROS_VAZIOS, ROTULO_STATUS, correcoesApi, lgpdApi } from "./api";
+import type { GrupoRecurso } from "./agrupar";
+import { agruparPorRecurso } from "./agrupar";
 import { AchadoModal } from "./AchadoModal";
 import { CorrecaoModal } from "./CorrecaoModal";
 import { CorrecoesPainel } from "./CorrecoesPainel";
 import { NovaCorrecaoModal } from "./NovaCorrecaoModal";
-import { PrioridadeTag, StatusAchadoBadge } from "./formato";
+import { PrioridadeTag, StatusAchadoBadge, classeStatusAchado } from "./formato";
 import { VarreduraPainel } from "./VarreduraPainel";
 import { PageLede } from "@/shared/ui/PageLede";
 
@@ -30,6 +32,13 @@ export default function LgpdPage() {
     placeholderData: (anterior: AchadosLista | undefined) => anterior,
   });
   const dados = lista.data;
+  const grupos = useMemo(() => agruparPorRecurso(dados?.achados ?? []), [dados]);
+  const [abertos, setAbertos] = useState<Set<number>>(new Set());
+  const alternar = (recursoId: number) => setAbertos((s) => {
+    const n = new Set(s);
+    if (n.has(recursoId)) n.delete(recursoId); else n.add(recursoId);
+    return n;
+  });
   const set = (campo: keyof FiltrosLgpd) => (valor: string) => setFiltros((f) => ({ ...f, [campo]: valor }));
   const atualizarAchados = () => qc.invalidateQueries({ queryKey: ["lgpd", "achados"] });
   const atualizarTudo = () => { atualizarAchados(); qc.invalidateQueries({ queryKey: ["lgpd", "correcoes"] }); };
@@ -84,31 +93,41 @@ export default function LgpdPage() {
           </div>
         </div>
         <div className="table-scroll">
-          <table>
+          <table className="lgpd-grupos">
             <thead><tr>
-              <th>Prioridade</th><th>Órgão</th><th>Dataset</th><th>Recurso</th><th>Tipo identificado</th>
-              <th>Coluna</th><th>Linha</th><th>Confiança</th><th>Status</th>
+              <th style={{ width: 28 }} aria-label="Expandir" /><th>Prioridade</th><th>Órgão</th>
+              <th>Dataset</th><th>Arquivo</th><th>Dados pessoais encontrados</th><th>Achados</th>
+              <th>Situação</th>
             </tr></thead>
             <tbody>
               {lista.isError ? (
-                <tr><td colSpan={9} style={{ padding: 18 }}>
+                <tr><td colSpan={COLUNAS} style={{ padding: 18 }}>
                   <div className="inline-msg err" role="alert">Não foi possível carregar os achados: {lista.error.message}</div>
                 </td></tr>
               ) : !dados ? (
-                <tr><td colSpan={9} className="table-empty">Carregando…</td></tr>
+                <tr><td colSpan={COLUNAS} className="table-empty">Carregando…</td></tr>
               ) : dados.total === 0 ? (
-                <tr><td colSpan={9} className="table-empty">
+                <tr><td colSpan={COLUNAS} className="table-empty">
                   <i className="fa-solid fa-inbox" style={{ marginRight: 8 }} />
                   Nenhum possível dado pessoal encontrado até agora. Rode uma varredura no painel acima.
                 </td></tr>
-              ) : dados.achados.length === 0 ? (
-                <tr><td colSpan={9} className="table-empty">Nenhum alerta para os filtros selecionados.</td></tr>
+              ) : grupos.length === 0 ? (
+                <tr><td colSpan={COLUNAS} className="table-empty">Nenhum alerta para os filtros selecionados.</td></tr>
               ) : (
-                dados.achados.map((a) => <Linha key={a.id} a={a} onAbrir={setAberto} />)
+                grupos.map((g) => (
+                  <Grupo key={g.recurso_id} g={g} aberto={abertos.has(g.recurso_id)}
+                         onAlternar={() => alternar(g.recurso_id)} onAbrir={setAberto} />
+                ))
               )}
             </tbody>
           </table>
         </div>
+        {grupos.length > 0 && (
+          <div className="cell-muted" style={{ fontSize: 12.5, padding: "10px 14px" }}>
+            {grupos.length} arquivo(s) · {dados?.achados.length} achado(s). Clique num arquivo para ver
+            coluna, linha e confiança de cada achado.
+          </div>
+        )}
       </div>
 
       <AchadoModal id={aberto} onFechar={() => setAberto(null)} onDecidido={atualizarAchados}
@@ -136,6 +155,64 @@ function Filtro({ id, rotulo, valor, opcoes, onMudar }: {
   );
 }
 
+const COLUNAS = 8;
+
+/** Linha do arquivo (resumo) e, aberta, a tabela com o detalhe de cada achado. */
+function Grupo({ g, aberto, onAlternar, onAbrir }: {
+  g: GrupoRecurso; aberto: boolean; onAlternar: () => void; onAbrir: (id: number) => void;
+}) {
+  const teclado = (e: KeyboardEvent<HTMLTableRowElement>) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onAlternar(); }
+  };
+  const detalheId = `lgpd-grupo-${g.recurso_id}`;
+  return (
+    <Fragment>
+      <tr className={`lgpd-grupo${aberto ? " aberto" : ""}`} tabIndex={0} onClick={onAlternar}
+          onKeyDown={teclado} aria-expanded={aberto} aria-controls={detalheId}>
+        <td><i className={`fa-solid fa-chevron-${aberto ? "down" : "right"} cell-muted`} /></td>
+        <td><PrioridadeTag prioridade={g.prioridade} /></td>
+        <td title={g.orgao_nome ?? undefined}>{g.orgao}</td>
+        <td className="cell-strong">{g.dataset_titulo}</td>
+        <td className="mono cell-muted">{g.recurso_nome}</td>
+        <td>
+          <div className="lgpd-tipos">
+            {g.tipos.map((t) => (
+              <span key={t.rotulo} className="chip-tipo" title={`${t.celulas} célula(s)`}>
+                {t.rotulo} <b>{t.celulas}</b>
+              </span>
+            ))}
+          </div>
+        </td>
+        <td className="cell-muted" title={`${g.celulas} célula(s) sinalizadas no arquivo`}>
+          {g.achados.length} {g.achados.length === 1 ? "coluna" : "colunas"}
+        </td>
+        <td>
+          <div className="lgpd-tipos">
+            {(Object.entries(g.status) as [keyof typeof ROTULO_STATUS, number][]).map(([st, n]) => (
+              <span key={st} className={`badge ${classeStatusAchado(st)}`}>{n} {ROTULO_STATUS[st]}</span>
+            ))}
+          </div>
+        </td>
+      </tr>
+      {aberto && (
+        <tr className="lgpd-detalhe" id={detalheId}>
+          <td colSpan={COLUNAS}>
+            <table>
+              <thead><tr>
+                <th>Prioridade</th><th>Tipo identificado</th><th>Coluna</th><th>Linha</th>
+                <th>Confiança</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+                {g.achados.map((a) => <Linha key={a.id} a={a} onAbrir={onAbrir} />)}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  );
+}
+
 function Linha({ a, onAbrir }: { a: Achado; onAbrir: (id: number) => void }) {
   const teclado = (e: KeyboardEvent<HTMLTableRowElement>) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onAbrir(a.id); }
@@ -143,9 +220,6 @@ function Linha({ a, onAbrir }: { a: Achado; onAbrir: (id: number) => void }) {
   return (
     <tr tabIndex={0} onClick={() => onAbrir(a.id)} onKeyDown={teclado}>
       <td><PrioridadeTag prioridade={a.prioridade} /></td>
-      <td title={a.orgao_nome ?? undefined}>{a.orgao_sigla ?? a.orgao_nome ?? "—"}</td>
-      <td className="cell-strong">{a.dataset_titulo}</td>
-      <td className="mono cell-muted">{a.recurso_nome ?? a.recurso_id}</td>
       <td>{a.tipo_rotulo}{a.metodo === "ia" && <span className="cell-muted" title="Confirmado pelo modelo local"> · IA</span>}</td>
       <td className="mono">{a.coluna}</td>
       <td className="cell-muted" title={`${a.ocorrencias} célula(s) nesta coluna; a linha é a primeira`}>

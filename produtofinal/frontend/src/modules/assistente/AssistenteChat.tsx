@@ -13,14 +13,6 @@ interface Msg {
   local?: boolean;
 }
 
-// Mesmas sugestões do Protótipo V1, ajustadas aos dados reais
-const SUGESTOES = [
-  "Quais bases estão atrasadas?",
-  "Quantos alertas de LGPD existem?",
-  "Próximos prazos do PDA",
-  "Situação da Secretaria da Saúde",
-  "Datasets sem recurso publicado",
-];
 const SAUDACAO =
   "Olá! Sou o assistente de consulta da GEDA. Posso responder perguntas sobre bases do PDA, " +
   "datasets, arquivos, prazos e alertas de LGPD com base na última coleta do portal.";
@@ -123,12 +115,6 @@ export default function AssistenteChat() {
             <div className="msg-typing" aria-label="Consultando"><span /><span /><span /></div>
           )}
           <div ref={fim} />
-        </div>
-        <div className="chat-suggestions">
-          {SUGESTOES.map((s) => (
-            <button key={s} type="button" className="chip" onClick={() => enviar(s)}
-                    disabled={perguntar.isPending}>{s}</button>
-          ))}
         </div>
         <form className="chat-input-row" onSubmit={onSubmit}>
           <input ref={campo} value={entrada} onChange={(e) => setEntrada(e.target.value)}

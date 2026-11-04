@@ -62,6 +62,7 @@ a fonte.
 | 29/10/2026 | Fila da varredura LGPD executada pelo worker (a API só enfileira; interrompida volta à fila uma vez) e downloads espaçados por host, com espera no HTTP 429 do portal | Técnica | Aceita | [ADR-0025](0025-fila-da-varredura-lgpd-executada-pelo-worker.md) |
 | 29/10/2026 | Varredura deixa de rodar em segundo plano na API (desdobramento revisto pela ADR-0025) | Técnica | Revisão da ADR-0021 | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
 | 29/10/2026 | Worker passa a executar também a fila da varredura LGPD, a cada minuto | Técnica | Revisão da ADR-0012 | [ADR-0012](0012-agendamento-em-worker-proprio.md) |
+| 30/10/2026 | Base espontânea = dataset ativo no portal sem vínculo pelo ID com o PDA vigente, calculada a partir do inventário | Negócio | Aceita (validar com a GEDA) | [ADR-0026](0026-base-espontanea-dataset-sem-vinculo-no-pda-vigente.md) |
 
 ## Decisões em aberto
 
