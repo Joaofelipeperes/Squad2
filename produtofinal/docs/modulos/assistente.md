@@ -7,7 +7,7 @@
 | **User stories** | US28 (PBI-96, PBI-97) |
 | **Backend** | `backend/app/modules/assistente/` |
 | **Frontend** | `frontend/src/modules/assistente/` (widget global) |
-| **Última atualização** | 27/10/2026 |
+| **Última atualização** | 04/11/2026 |
 
 ## Propósito
 Responde em linguagem natural perguntas rápidas sobre órgãos, datasets, arquivos (recursos), prazos do
@@ -17,7 +17,7 @@ os dados reais e um modelo de IA redigindo a resposta.
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Botão flutuante + painel de chat | todas as telas | `assistente.usar` | Perguntar; sugestões rápidas (as 5 do protótipo); resposta com negrito/listas e linha "Consultado: …" com as fontes |
+| Botão flutuante + painel de chat | todas as telas | `assistente.usar` | Perguntar (campo livre); resposta com negrito/listas e linha "Consultado: …" com as fontes |
 
 Referência visual: `#chat-fab` e `#chat-panel` do Protótipo V1. É um `AppWidget` (fora das rotas).
 
@@ -101,3 +101,4 @@ Decisão em análise: [ADR-0020](../adr/0020-claude-haiku-no-assistente.md) (Cla
 | 22/10/2026 | Banco só pelo `AssistenteDao` (ADR-0019); contagens do contexto sem os registros excluídos | Victor |
 | 23/10/2026 | Contexto por dataset/arquivo citado, listas por intenção (como no Protótipo V1), PDA vigente e contagem LGPD; histórico curto da conversa; resposta com fontes; widget com sugestões, indicador de digitação e formatação do protótipo | Squad 2 |
 | 27/10/2026 | Merge com `desenvolvimento`: contexto lido pelo `AssistenteDao` (`datasets_visiveis`, `achados_por_dataset`; saem `datasets_ativos` e `recursos_validos`); chaves internas e fontes pelo `id` próprio (ADR-0018), ficha com o `id_ckan`; data de criação do recurso em `created_ckan` | Luiza |
+| 04/11/2026 | Chat: retiradas as sugestões de perguntas prontas; fica só o campo para digitar | Luiza |

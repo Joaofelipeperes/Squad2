@@ -195,7 +195,7 @@ def _agora_local() -> datetime:
 
 def exportar(db: Session, nome: str, formato: str, user: UsuarioAtual) -> tuple[bytes, str, str]:
     """PBI-60/61 — arquivo completo do relatório: (conteúdo, media type, nome do arquivo).
-    PDF (ADR-0026) leva também título, referência e data de geração."""
+    PDF (ADR-0027) leva também título, referência e data de geração."""
     if formato not in regras.FORMATOS:
         raise Invalido(f"Formato inválido: use {', '.join(regras.FORMATOS)}.")
     definicao, tabela = montar(db, nome, user)

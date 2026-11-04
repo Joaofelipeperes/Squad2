@@ -29,6 +29,7 @@ from app.core.deps import UsuarioAtual, exigir_mesmo_orgao
 from app.integrations.ai.base import AIProviderError
 from app.integrations.ckan.client import CkanClient, CkanError
 from app.integrations.ckan.writer import CkanWriteDisabled, CkanWriter
+from app.modules.ckan_config.service import cliente_leitura
 from app.modules.ia.gateway import IANaoConfigurada
 from app.modules.inventario.models import Dataset, Recurso
 from app.modules.lgpd import anonimizacao, deteccao, leitura, regras
@@ -212,7 +213,7 @@ def gerar_previa(db: Session, c: CorrecaoPublicada, client: CkanClient | None = 
     r = dao.recurso(c.recurso_id)
     ds = dao.dataset(r.dataset_id)
     proprio = client is None
-    client = client or CkanClient()
+    client = client or cliente_leitura()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
     try:
         url = client.url_download(r.id_ckan, ds.id_ckan if ds else None, r.url, r.url_type)
         limite = int(obter_parametro(db, "tamanho_maximo_recurso_lgpd_mb")) * 1024 * 1024
@@ -321,7 +322,7 @@ def aprovar(db: Session, correcao_id: int, justificativa: str | None, user: Usua
     except CkanWriteDisabled as exc:
         raise Conflito(f"{exc} A prévia continua disponível.") from exc
     proprio = client is None
-    client = client or CkanClient()
+    client = client or cliente_leitura()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
     try:
         atual = client.baixar(client.url_download(r.id_ckan, ds.id_ckan, r.url, r.url_type),
                               int(obter_parametro(db, "tamanho_maximo_recurso_lgpd_mb")) * 1048576)

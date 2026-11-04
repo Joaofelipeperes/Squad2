@@ -5,15 +5,18 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.core.deps import UsuarioAtual
+from app.core.permissoes import P
 from app.modules.atualizacoes import regras as regras_atualizacao
 from app.modules.inventario.models import Organizacao
 from app.modules.inventario.service import ultima_coleta
+from app.modules.lgpd.service import resumo_dados_pessoais
 from app.modules.metadados import regras as regras_metadados
 from app.modules.metadados.service import datasets_sem_recurso, recursos_formato_fechado
 from app.modules.painel.dao import PainelDao
 from app.modules.painel.schemas import (
     AlertaOut,
     ContagemOut,
+    EspontaneasOut,
     KpisOut,
     OrganizacaoOut,
     OrganizacoesOut,
@@ -58,8 +61,35 @@ def situacao_atualizacao(base, hoje: date) -> str:
         base.periodicidade, base.ultima_atualizacao, hoje, base.periodicidade_original)
 
 
+ORGAOS_NO_GRAFICO = 10  # bases espontâneas por órgão: os 10 com mais; o resto em "Outros"
+OUTROS = "Outros órgãos"
+SEM_ORGAO = "Sem organização"
+
+
+def espontaneas(ativos: list[tuple[int, int | None]], bases: list,
+                orgs: dict[int, Organizacao]) -> EspontaneasOut:
+    """US7 (ADR-0026) — base espontânea = dataset ATIVO no portal que nenhuma base do PDA vigente
+    vincula pelo ID. `ativos` = (dataset id, organizacao_id); `bases` = bases do PDA vigente."""
+    vinculados = {b.dataset_id for b in bases if b.dataset_id}
+    soltos = [org for ds, org in ativos if ds not in vinculados]
+    por_org = Counter(soltos)
+
+    def rotulo(org_id: int | None) -> str:
+        o = orgs.get(org_id) if org_id is not None else None
+        return (o.sigla or o.titulo).strip() if o else SEM_ORGAO
+
+    ranking = sorted(por_org.items(), key=lambda x: (-x[1], normalizar_texto(rotulo(x[0]))))
+    barras = [ContagemOut(rotulo=rotulo(o), total=n) for o, n in ranking[:ORGAOS_NO_GRAFICO]]
+    resto = sum(n for _, n in ranking[ORGAOS_NO_GRAFICO:])
+    if resto:
+        barras.append(ContagemOut(rotulo=f"{OUTROS} ({len(ranking) - ORGAOS_NO_GRAFICO})", total=resto))
+    return EspontaneasOut(datasets_no_portal=len(ativos), no_pda=len(ativos) - len(soltos),
+                          espontaneas=len(soltos), por_orgao=barras)
+
+
 def kpis(db: Session, user: UsuarioAtual, bases: list, *, orgaos: int, datasets: dict[bool, int],
-         recursos: int, sem_recurso: int, atualizacoes_atrasadas: int) -> KpisOut:
+         recursos: int, sem_recurso: int, atualizacoes_atrasadas: int,
+         dados_pessoais: int | None = None) -> KpisOut:
     """PBI-56 — cartões da Visão Geral a partir das bases do PDA vigente e do inventário.
     Atualizações em atraso só entre as bases vinculadas (None sem nenhuma); dados pessoais (lgpd)
     fica None."""
@@ -73,13 +103,15 @@ def kpis(db: Session, user: UsuarioAtual, bases: list, *, orgaos: int, datasets:
         bases_prazo_vencido=sum(1 for b in bases if b.situacao == PRAZO_VENCIDO),
         datasets_publicados=datasets.get(True, 0), datasets_fora_do_portal=datasets.get(False, 0),
         recursos_monitorados=recursos, datasets_sem_recurso=sem_recurso,
-        atualizacoes_em_atraso=atualizacoes_atrasadas if vinculadas else None)
+        atualizacoes_em_atraso=atualizacoes_atrasadas if vinculadas else None,
+        possiveis_dados_pessoais=dados_pessoais)
 
 
 def visao_geral(db: Session, user: UsuarioAtual) -> VisaoGeralOut:
     """US19 — tela Visão Geral (Dashboard): cartões, bases do PDA VIGENTE por situação do PDA e
-    por situação de atualização (periodicidade do PDA, ADR-0023) e alertas prioritários. Tudo no
-    escopo de órgão do usuário e a partir da última coleta (`ultima_coleta`, PBI-58)."""
+    por situação de atualização (periodicidade do PDA, ADR-0023), bases espontâneas (ADR-0026),
+    possíveis dados pessoais (resumo do módulo lgpd, só com `lgpd.acessar`) e alertas prioritários.
+    Tudo no escopo de órgão do usuário e a partir da última coleta (`ultima_coleta`, PBI-58)."""
     dao = PainelDao.de(db, user)
     hoje = pda.hoje_local()
     orgs = dao.organizacoes_visiveis(user)
@@ -118,17 +150,21 @@ def visao_geral(db: Session, user: UsuarioAtual) -> VisaoGeralOut:
                  [:ALERTAS_MAXIMO]]
     primeiros.sort(key=alertas.index)
     coleta = ultima_coleta(db)
+    # Dados pessoais só para quem pode ver o módulo lgpd (o painel não amplia o acesso)
+    lgpd = resumo_dados_pessoais(db, user) if user.pode(P.LGPD_ACESSAR) else None
     return VisaoGeralOut(
         plano=PlanoResumoOut(id=plano.id, nome=plano.nome) if plano else None, hoje=hoje,
         ultima_coleta=coleta.finalizada_em if coleta else None,
         kpis=kpis(db, user, bases, orgaos=len(orgs), datasets=dao.datasets_por_situacao(user),
                   recursos=len(recursos), sem_recurso=len(sem_recurso),
-                  atualizacoes_atrasadas=por_atualizacao.get(regras_atualizacao.ATRASADO, 0)),
+                  atualizacoes_atrasadas=por_atualizacao.get(regras_atualizacao.ATRASADO, 0),
+                  dados_pessoais=lgpd.aguardando_revisao if lgpd else None),
         situacoes_pda=[ContagemOut(rotulo=s, total=por_situacao.get(s, 0)) for s in SITUACOES],
         situacoes_atualizacao=[ContagemOut(rotulo=r, total=por_atualizacao.get(r, 0))
                                for r in rotulos_atualizacao],
         atualizacao_estimada=estimadas, alertas=primeiros, total_alertas=len(alertas),
-        alertas_por_tipo={t: por_tipo.get(t, 0) for t in TIPOS_DE_ALERTA})
+        alertas_por_tipo={t: por_tipo.get(t, 0) for t in TIPOS_DE_ALERTA},
+        espontaneas=espontaneas(dao.datasets_ativos(user), bases, orgs), dados_pessoais=lgpd)
 
 
 def indice_atencao_por_orgao(db):

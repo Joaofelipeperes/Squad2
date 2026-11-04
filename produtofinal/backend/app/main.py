@@ -41,10 +41,12 @@ def verificar_controle_de_acesso(modulos: list[BackendModule]) -> None:
 async def lifespan(_app: FastAPI):
     from app.core.db import SessionLocal
     from app.modules.acesso.service import sincronizar_papeis_padrao
+    from app.modules.ckan_config.service import semear_perfil_docker
 
     try:
         with SessionLocal() as db:
             sincronizar_papeis_padrao(db)
+            semear_perfil_docker(db)  # 1ª subida: grava o CKAN do Docker como perfil em uso
     except Exception:  # noqa: BLE001 — banco ainda sem migração: não impede a subida
         logging.getLogger(__name__).warning("Papéis padrão não sincronizados (rode o alembic).")
     yield

@@ -154,3 +154,29 @@ a.btn { text-decoration: none; }
 .varredura-opcao p { margin: 0; font-size: 13px; color: var(--gray-700); line-height: 1.45; }
 .varredura-dataset { display: flex; gap: 8px; flex-wrap: wrap; }
 .varredura-dataset .text-input, .varredura-dataset select { flex: 1 1 200px; min-width: 0; }
+
+/* Situação da triagem LGPD no Dashboard */
+.status-triagem { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; font-size: 12px;
+  color: var(--gray-700); }
+.status-triagem strong { color: var(--ink); font-variant-numeric: tabular-nums; margin-left: 2px; }
+
+/* Painel de varredura LGPD: lista com rolagem (fila inteira visível), cabeçalho fixo */
+.varreduras-lista { max-height: 430px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: 8px;
+  scrollbar-width: auto; scrollbar-color: var(--gray-500) var(--gray-100); scrollbar-gutter: stable; }
+/* barra sempre visível (Chrome/Edge escondem a barra fina até o mouse passar) */
+.varreduras-lista::-webkit-scrollbar { width: 10px; }
+.varreduras-lista::-webkit-scrollbar-track { background: var(--gray-100); border-radius: 0 8px 8px 0; }
+.varreduras-lista::-webkit-scrollbar-thumb { background: var(--gray-500); border-radius: 8px;
+  border: 2px solid var(--gray-100); }
+.varreduras-lista::-webkit-scrollbar-thumb:hover { background: var(--gray-700); }
+.varreduras-lista thead th { position: sticky; top: 0; z-index: 1; }
+
+/* Tela LGPD: achados agrupados por arquivo; a linha abre o detalhe por coluna */
+.lgpd-grupos tr.lgpd-grupo.aberto { background: var(--blue-100); }
+.lgpd-grupos tr.lgpd-detalhe, .lgpd-grupos tr.lgpd-detalhe:hover { background: var(--gray-50); cursor: default; }
+.lgpd-grupos tr.lgpd-detalhe > td { padding: 4px 14px 14px 42px; }
+.lgpd-grupos tr.lgpd-detalhe table { background: var(--surface); border: 1px solid var(--gray-200); border-radius: 8px; }
+.lgpd-tipos { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-tipo { display: inline-flex; gap: 5px; align-items: center; padding: 2px 9px; border-radius: 20px;
+  font-size: 11.5px; background: var(--gray-100); color: var(--ink); white-space: nowrap; }
+.chip-tipo b { color: var(--navy-900); }

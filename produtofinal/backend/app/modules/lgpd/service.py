@@ -28,6 +28,7 @@ from app.core.deps import UsuarioAtual, exigir_mesmo_orgao
 from app.integrations.ai.base import AIProviderError, ChatMessage, ChatRequest
 from app.integrations.ai.policy import TarefaIA
 from app.integrations.ckan.client import CkanClient, CkanError
+from app.modules.ckan_config.service import cliente_leitura
 from app.modules.ia.gateway import AIGateway, IANaoConfigurada
 from app.modules.inventario.models import Dataset, Organizacao, Recurso
 from app.modules.inventario.service import recursos_atuais
@@ -38,12 +39,14 @@ from app.modules.lgpd.schemas import (
     AchadoDetalheOut,
     AchadoOut,
     AchadosOut,
+    ContagemOut,
     DecisaoIn,
     DecisaoOut,
     KpisOut,
     OpcaoOut,
     OpcoesAchadosOut,
     PedidoVarreduraOut,
+    ResumoDadosPessoaisOut,
     VarreduraOut,
     VarredurasOut,
 )
@@ -86,6 +89,26 @@ def _kpis(dao: LgpdDao, user: UsuarioAtual, linhas: list[AchadoOut]) -> KpisOut:
         alertas_criticos=sum(1 for a in linhas
                              if a.prioridade == regras.ALTA and a.status == "revisar"),
         alertas_para_revisao=sum(1 for a in linhas if a.status == "revisar"))
+
+
+def resumo_dados_pessoais(db: Session, user: UsuarioAtual) -> ResumoDadosPessoaisOut:
+    """Dashboard (painel): achados agregados por tipo e por status da triagem, no escopo de órgão
+    do usuário. Falso positivo não entra na contagem por tipo. Só contagens (PBI-35)."""
+    dao = LgpdDao.de(db, user)
+    achados = [a for a, _r, _ds in dao.achados_visiveis(user)]
+    validos = [a for a in achados if a.status != "falso_positivo"]
+    por_tipo: dict[str, int] = {}
+    for a in validos:
+        por_tipo[a.tipo] = por_tipo.get(a.tipo, 0) + 1
+    return ResumoDadosPessoaisOut(
+        recursos_analisados=dao.recursos_analisados(user),
+        recursos_com_achados=len({a.recurso_id for a in validos}),
+        aguardando_revisao=sum(1 for a in achados if a.status == "revisar"),
+        criticos=sum(1 for a in achados if a.status == "revisar" and a.prioridade == regras.ALTA),
+        por_tipo=[ContagemOut(rotulo=regras.rotulo_tipo(t), total=n)
+                  for t, n in sorted(por_tipo.items(), key=lambda x: (-x[1], regras.rotulo_tipo(x[0])))],
+        por_status=[ContagemOut(rotulo=rotulo, total=sum(1 for a in achados if a.status == codigo))
+                    for codigo, rotulo in regras.STATUS.items()])
 
 
 def listar_achados(db: Session, user: UsuarioAtual, *, prioridade: str | None = None,
@@ -351,7 +374,7 @@ def executar_varredura(db: Session, v: Varredura, client: CkanClient | None = No
             f"{', '.join(sorted(leitura.FORMATOS_SUPORTADOS))})."))
     limite_mb = int(obter_parametro(db, "tamanho_maximo_recurso_lgpd_mb"))
     proprio = client is None
-    client = client or CkanClient()
+    client = client or cliente_leitura()  # CKAN em uso (perfil selecionado ou .env), ADR-0024
     try:
         url = client.url_download(r.id_ckan, ds.id_ckan if ds else None, r.url, r.url_type)
         if not url:

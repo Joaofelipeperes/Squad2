@@ -77,7 +77,9 @@ def ambiente(portal, monkeypatch, tmp_path):  # noqa: F811
         return httpx.Response(200, content=servido["conteudo"])
 
     t = httpx.MockTransport(ckan)
-    monkeypatch.setattr(correcoes, "CkanClient", lambda: CkanClient("http://ckan:5000", transport=t))
+    # O cliente CKAN agora vem da fábrica cliente_leitura (perfil ativo, ADR-0024).
+    monkeypatch.setattr(correcoes, "cliente_leitura",
+                        lambda: CkanClient("http://ckan:5000", transport=t))
     monkeypatch.setattr(correcoes, "_writer", lambda: CkanWriter(transport=t))
     return {"servido": servido, "uploads": uploads, "pasta": tmp_path}
 

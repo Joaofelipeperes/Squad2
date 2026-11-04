@@ -1,4 +1,4 @@
-# ADR-0026 — Gerar o PDF dos relatórios no backend com reportlab
+# ADR-0027 — Gerar o PDF dos relatórios no backend com reportlab
 
 | | |
 |---|---|

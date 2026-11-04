@@ -252,10 +252,11 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | consome | atualizacoes | `service.ultima_atualizacao_real(recursos)` → `UltimaAtualizacao(data, estimada)` (implementada em `atualizacoes/regras.py`) |
 | consome | acesso | `filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)` nas consultas de bases |
 | é consumido por | painel | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` — bases previstas, vinculadas, publicadas e metas por órgão na tela Organizações (US19); sempre o PDA vigente |
-| é consumido por | painel | `plano_vigente` + `bases_do_plano` e `regras` (situações) — cartões, gráfico por situação e alertas do Dashboard; `hoje_local()` |
+| é consumido por | painel | `plano_vigente` + `bases_do_plano` e `regras` (situações) — cartões, gráfico por situação e alertas do Dashboard; `hoje_local()`; `dataset_id` das bases para as **bases espontâneas** (ADR-0026) |
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
 | é consumido por | assistente | `plano_vigente` + `bases_do_plano(db, plano.id, user)` — situação e prazo das bases (do órgão ou do dataset citado) e listas de atraso/prazo; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
+| é consumido por | atualizacoes | `plano_vigente` + `bases_do_plano` — periodicidade, dataset vinculado e última atualização na tela Monitoramento de Atualizações; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | inventario (tela Datasets) | `GET /datasets/{id}/bases` — prazo, periodicidade e situação PDA no detalhe do dataset |
 
 ## Jobs agendados
@@ -370,8 +371,9 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
     preserva o texto original da planilha (ex.: "Mnsal").
   Usuário restrito a órgão só altera bases do próprio órgão (`exigir_mesmo_orgao`), embora os papéis
   padrão de órgão não tenham `pda.gerenciar_planos`.
-- Bases espontâneas também devem ser monitoradas (Paloma e Júnior, 17/09) — ainda não
-  implementado: `classificacao` é sempre "pda".
+- Bases espontâneas também devem ser monitoradas (Paloma e Júnior, 17/09). Critério (ADR-0026):
+  dataset ativo no portal que nenhuma base do PDA vigente vincula pelo ID — calculado no painel a
+  partir do inventário; `classificacao` continua sempre "pda" (sem reclassificação manual).
 
 ## Pendências
 - **Vínculo em lote pelo ID** resolvido para a tabela fato do PDA (coluna "ID_UNICO", 23/10/2026):
@@ -429,3 +431,5 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 28/10/2026 | Merge com `desenvolvimento`: mapeamento de colunas e Importar IDs do CKAN adaptados à chave própria (ADR-0018) e ao DAO (ADR-0019) — o ID do arquivo é procurado em `dataset.id_ckan` (`PdaDao.datasets_por_id_ckan`) e a base grava `dataset.id`; `importar_plano` recebe `user` e `mapeamento` | Humberto |
 | 28/10/2026 | Merge com `desenvolvimento` (#11): fica a importação configurável do Victor (ADR-0022, aba Configuração e ID_UNICO na própria importação); **sai a etapa de mapeamento de colunas** (`POST /planilha/colunas`, `MapeamentoIn`, `regras.ler_cabecalho`/`validar_mapeamento`, `MapeamentoColunas.tsx`); fica o **Importar IDs do CKAN** em lote para PDA já importado (`regras.ler_ids_ckan` sobre `_UUID`/`_SEM_ID` da ADR-0022) | Humberto |
 | 30/10/2026 | Interações: `bases_do_plano` consumido pelo módulo `relatorios` (relatórios de cumprimento do PDA e de atualizações); pendência de US20 resolvida | Victor |
+| 30/10/2026 | Interações: a tela Monitoramento de Atualizações (atualizacoes) consome `plano_vigente` + `bases_do_plano`; sem mudança de código neste módulo | Squad 2 |
+| 30/10/2026 | Interações e regras: bases espontâneas definidas pela ADR-0026 (dataset ativo sem vínculo com o PDA vigente), calculadas no painel; sem mudança de código neste módulo | Humberto |

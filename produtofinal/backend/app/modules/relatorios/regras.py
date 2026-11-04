@@ -146,7 +146,7 @@ def _larguras(colunas: list[str], linhas: list[list], total: float) -> list[floa
 
 def gerar_pdf(titulo: str, colunas: list[str], linhas: list[list], *, referencia: str | None,
               gerado_em: datetime) -> bytes:
-    """PDF em A4 paisagem (ADR-0026): título, referência, data de geração e total; tabela com o
+    """PDF em A4 paisagem (ADR-0027): título, referência, data de geração e total; tabela com o
     cabeçalho repetido em cada página e texto quebrado nas células; rodapé com a paginação."""
     estilos = getSampleStyleSheet()
     celula = ParagraphStyle("celula", parent=estilos["BodyText"], fontSize=PDF_FONTE, leading=9)

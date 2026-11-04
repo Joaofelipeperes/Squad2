@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 29/10/2026 |
+| **Última atualização** | 04/11/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -19,7 +19,9 @@ humana e, após aprovação, publica no CKAN a versão anonimizada do recurso.
 | Riscos de Dados Pessoais | `/lgpd` | `lgpd.acessar` | Varrer recursos novos/alterados ou um dataset (`lgpd.varrer`; a busca de dataset usa `inventario.acessar`); marcar falso positivo / confirmado / tratado / voltar para revisão, com justificativa (`lgpd.triar`); anonimizar recurso com achados confirmados — prévia, baixar prévia, aprovar e publicar, descartar, reverter (`lgpd.aprovar_correcao`); painel Anonimizações (`lgpd.acessar`) |
 
 Referência visual: `#screen-lgpd` e `#modal-lgpd` do Protótipo V1 (4 KPIs, filtros de
-prioridade/tipo/órgão/status, tabela e modal com barra de confiança; o callout do topo foi retirado). Acréscimos ao protótipo:
+prioridade/tipo/órgão/status, tabela e modal com barra de confiança; o callout do topo foi retirado). A tabela
+agrupa os achados por arquivo (tipos e células encontrados, situação); a linha abre o detalhe por coluna, e
+cada achado abre o modal. Acréscimos ao protótipo:
 painel "Varredura dos recursos" (o protótipo usava dados fixos), "Por que foi sinalizado" (trilha do
 score), histórico de decisões e, no lugar do valor mascarado, o aviso de não retenção com a
 coluna e a linha para conferir no arquivo.
@@ -120,7 +122,7 @@ Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`
 | consome | ia | `AIGateway.chat(TarefaIA.CLASSIFICACAO_DADO_PESSOAL)` e `AIGateway.embed(TarefaIA.EMBEDDINGS_DADO_PESSOAL)` — sensíveis, só modelo local |
 | consome | parametros | `tipos_dado_pessoal`, `confianca_minima_lgpd`, `margem_embeddings_lgpd`, `tamanho_maximo_recurso_lgpd_mb` |
 | consome | CKAN (integração) | `CkanClient.url_download` + `baixar` (leitura dos arquivos, com intervalo mínimo por host e espera no HTTP 429 — ADR-0025); `CkanWriter.replace_resource_file` (publicação e reversão da anonimização) — única escrita do sistema |
-| é consumido por | painel | ranking de exposição por órgão (US27) e indicador de risco (PBI-57) |
+| é consumido por | painel | `service.resumo_dados_pessoais(db, user)` — **apenas contagens** por tipo e status (cartão e gráfico "Possíveis dados pessoais" do Dashboard, só com `lgpd.acessar`); ranking de exposição por órgão (US27) a implementar |
 | é consumido por | atualizacoes | correções publicadas não contam como atualização (PBI-79) |
 | é consumido por | relatorios | relatório priorizado (PBI-38) |
 | é consumido por | assistente | `Achado`: **apenas contagens** por dataset, tipo e status — nunca coluna, linha ou valor |
@@ -193,3 +195,5 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 27/10/2026 | Merge com `desenvolvimento` (ADR-0018/0019): `LgpdDao` concentra o acesso ao banco; `lgpd_achado`, `lgpd_varredura` e `lgpd_correcao` apontam para `recurso.id` e herdam `id`/`deleted`/auditoria da `Base`; API e tela usam o `id` próprio de dataset e recurso; download e publicação no CKAN pelo `id_ckan`; migrações refeitas numa só (`9d583e5bd118`, sobre `a8e2f5c1d9b4`) | Luiza |
 | 28/10/2026 | Migração `9d583e5bd118`: `lgpd_varredura.deleted` com `server_default=sa.false()` (era `sa.text('0')`, aceito no SQLite e recusado no PostgreSQL — a API não subia no Docker) | Victor |
 | 29/10/2026 | Fila executada pelo worker (ADR-0025): `POST /varreduras` só enfileira; job `lgpd.fila_varredura` a cada minuto retoma a interrompida (uma vez por recurso) e varre as pendentes; `executar_fila` e a liberação após 12 h removidos; job incremental só enfileira; download com intervalo por host e espera no HTTP 429 | Victor |
+| 30/10/2026 | Resumo agregado para o Dashboard: `service.resumo_dados_pessoais` e `ResumoDadosPessoaisOut` (recursos analisados e com achados, aguardando revisão, críticos, por tipo sem falso positivo e por status) — só contagens, no escopo do usuário | Humberto |
+| 04/11/2026 | Tela: achados agrupados por arquivo, com resumo (tipos, células, situação) e detalhe ao clicar; lista de varreduras com rolagem, até 200 (fila inteira) | Luiza |
