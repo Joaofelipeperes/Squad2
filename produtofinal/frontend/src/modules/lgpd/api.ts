@@ -153,7 +153,7 @@ export const lgpdApi = {
   achado: (id: number) => api.get<AchadoDetalhe>(`/lgpd/achados/${id}`),
   decidir: (id: number, decisao: StatusAchado, justificativa: string | null) =>
     api.post<AchadoDetalhe>(`/lgpd/achados/${id}/decisao`, { decisao, justificativa }),
-  varreduras: () => api.get<{ em_andamento: number; varreduras: Varredura[] }>("/lgpd/varreduras?limite=15"),
+  varreduras: () => api.get<{ em_andamento: number; varreduras: Varredura[] }>("/lgpd/varreduras?limite=200"),
   cancelarFila: () => api.post<{ canceladas: number }>("/lgpd/varreduras/cancelar"),
   varrer: (escopo: EscopoVarredura, id?: number) =>
     api.post<{ criadas: number; ja_na_fila: number; varreduras: Varredura[] }>("/lgpd/varreduras", { escopo, id }),
