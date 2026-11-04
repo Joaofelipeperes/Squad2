@@ -4,6 +4,7 @@ import tempfile
 _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 os.environ["GDA_DATABASE_URL"] = f"sqlite:///{_tmp.name}"
 os.environ["GDA_ENVIRONMENT"] = "dev"
+os.environ["GDA_CKAN_DOWNLOAD_INTERVALO_S"] = "0"  # sem espera entre downloads simulados
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

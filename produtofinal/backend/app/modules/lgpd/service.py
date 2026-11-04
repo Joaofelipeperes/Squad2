@@ -11,11 +11,14 @@ Pipeline de uma varredura (um recurso por vez):
 
 Falha do modelo local para a varredura com erro (nada é gravado pela metade). Etapa sem modelo
 configurado é pulada com AVISO registrado na varredura — nunca em silêncio.
+
+A fila fica no banco (`lgpd_varredura` com status `pendente`): a API só enfileira e o worker é o
+único executor (`job_executar_fila`, a cada minuto — ADR-0025), o que sobrevive a reinícios.
 """
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -48,7 +51,8 @@ from app.modules.parametros.router import obter as obter_parametro
 
 log = logging.getLogger(__name__)
 
-VARREDURA_PRESA_APOS = timedelta(hours=12)  # API reiniciada no meio: libera o recurso de novo
+INTERROMPIDA = "Varredura interrompida: o worker foi reiniciado durante a execução."
+RETOMADAS_POR_RECURSO = 1  # um arquivo que derruba o processo não pode prender a fila em laço
 
 
 class ErroLgpd(Exception):
@@ -202,21 +206,11 @@ def recursos_do_escopo(db: Session, escopo: str, alvo: int | None, user: Usuario
     return saida[:limite] if limite else saida
 
 
-def _liberar_presas(dao: LgpdDao) -> None:
-    corte = utcnow() - VARREDURA_PRESA_APOS
-    for v in dao.em_fila():
-        if _utc(v.iniciada_em or v.solicitada_em) < corte:
-            v.status, v.finalizada_em = "erro", utcnow()
-            v.erro = "Varredura interrompida (a API foi reiniciada durante a execução)."
-            dao.save_generic(v)
-
-
 def solicitar(db: Session, escopo: str, alvo: int | None, user: UsuarioAtual | None,
               origem: str = "manual", limite: int | None = None) -> tuple[list[Varredura], int]:
-    """Cria varreduras `pendente` para o escopo. Recurso que já está na fila não é duplicado.
-    Devolve (criadas, quantas já estavam na fila)."""
+    """Cria varreduras `pendente` para o escopo; o worker as executa (ADR-0025). Recurso que já
+    está na fila não é duplicado. Devolve (criadas, quantas já estavam na fila)."""
     dao = LgpdDao.de(db, user)
-    _liberar_presas(dao)
     recursos = recursos_do_escopo(db, escopo, alvo, user, limite)
     na_fila = {v.recurso_id for v in dao.em_fila()}
     criadas = [Varredura(recurso_id=r.id, origem=origem,
@@ -407,25 +401,43 @@ def executar_varredura(db: Session, v: Varredura, client: CkanClient | None = No
             client.close()
 
 
-def executar_fila(ids: list[int]) -> None:
-    """Executa as varreduras indicadas, uma por vez, numa sessão própria (tarefa em segundo plano
-    da API ou job do worker)."""
+def _retomar_interrompidas(dao: LgpdDao) -> None:
+    """O worker é o único executor e um ciclo nunca roda junto de outro: varredura ainda em
+    `executando` no início do ciclo é de um processo que caiu. Ela vira erro e o recurso volta
+    à fila — uma vez só; se já tinha sido interrompido antes, fica o erro."""
+    for v in dao.executando():
+        retomadas = dao.interrupcoes_do_recurso(v.recurso_id, INTERROMPIDA)
+        v.status, v.finalizada_em, v.erro = "erro", utcnow(), INTERROMPIDA
+        dao.save_generic(v)
+        if retomadas < RETOMADAS_POR_RECURSO:
+            dao.save_generic(Varredura(recurso_id=v.recurso_id, origem=v.origem,
+                                       solicitada_por=v.solicitada_por))
+        log.warning("Varredura %s interrompida; recurso %s %s", v.id, v.recurso_id,
+                    "de volta à fila" if retomadas < RETOMADAS_POR_RECURSO else "não volta à fila")
+    dao.commit()
+
+
+def job_executar_fila() -> None:
+    """ADR-0025 — job do worker (a cada minuto): retoma as interrompidas e executa as pendentes,
+    a mais antiga primeiro, até a fila esvaziar; pedidos feitos no meio entram no mesmo ciclo."""
+    feitas = 0
     with SessionLocal() as db:
         dao = LgpdDao(db)
-        for vid in ids:
-            v = dao.varredura(vid)
-            if v is not None and v.status == "pendente":
-                executar_varredura(db, v)
+        _retomar_interrompidas(dao)
+        while (v := dao.proxima_pendente()) is not None:
+            executar_varredura(db, v)
+            feitas += 1
+    if feitas:
+        log.info("Fila LGPD: %s varredura(s) executada(s)", feitas)
 
 
 def job_varredura_incremental() -> None:
-    """PBI-34 — depois da coleta: varre recursos novos ou alterados, até o limite configurado."""
+    """PBI-34 — depois da coleta: enfileira recursos novos ou alterados, até o limite configurado
+    (o job da fila os executa)."""
     with SessionLocal() as db:
         criadas, _ = solicitar(db, "pendentes", None, None, origem="agendada",
                                limite=get_settings().lgpd_varredura_max_recursos)
-        ids = [v.id for v in criadas]
-    log.info("Varredura LGPD agendada: %s recurso(s)", len(ids))
-    executar_fila(ids)
+    log.info("Varredura LGPD agendada: %s recurso(s) na fila", len(criadas))
 
 
 # ------------------------------------------------------------------ apoio legado (ADR-0010)

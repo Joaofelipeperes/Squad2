@@ -173,10 +173,16 @@ def _configurar_ia(client, admin):
                json={"perfil_id": perfil("BGE", "bge-m3")})
 
 
+def _varrer(client, headers, **pedido):
+    """Pede pela API (só enfileira) e roda o ciclo do worker que executa a fila (ADR-0025)."""
+    r = client.post("/api/v1/lgpd/varreduras", headers=headers, json=pedido)
+    service.job_executar_fila()
+    return r
+
+
 def test_varredura_completa_triagem_e_reprocessamento(client, admin, gerente, portal):
     _configurar_ia(client, admin)
-    r = client.post("/api/v1/lgpd/varreduras", headers=gerente,
-                    json={"escopo": "dataset", "id": DS})
+    r = _varrer(client, gerente, escopo="dataset", id=DS)
     assert r.status_code == 202 and r.json()["criadas"] == 2
     # o arquivo enviado ao CKAN é baixado pelo endereço interno, não pela URL pública
     assert portal["baixados"] == [
@@ -219,8 +225,7 @@ def test_varredura_completa_triagem_e_reprocessamento(client, admin, gerente, po
     assert r.json()["decisoes"][0]["usuario"] == "paloma@cge.go.gov.br"
 
     # nova varredura: a decisão é preservada (PBI-41) e o achado não volta como novo
-    client.post("/api/v1/lgpd/varreduras", headers=gerente,
-                json={"escopo": "recurso", "id": REC_CSV})
+    _varrer(client, gerente, escopo="recurso", id=REC_CSV)
     dados = client.get("/api/v1/lgpd/achados?status=falso_positivo", headers=gerente).json()
     assert [a["id"] for a in dados["achados"]] == [tel]
     with SessionLocal() as db:
@@ -229,20 +234,16 @@ def test_varredura_completa_triagem_e_reprocessamento(client, admin, gerente, po
 
 def test_pendentes_so_recursos_novos_ou_alterados(client, admin, gerente, portal):
     _configurar_ia(client, admin)
-    assert client.post("/api/v1/lgpd/varreduras", headers=gerente,
-                       json={"escopo": "pendentes"}).json()["criadas"] == 1   # só o CSV
-    assert client.post("/api/v1/lgpd/varreduras", headers=gerente,
-                       json={"escopo": "pendentes"}).json()["criadas"] == 0   # nada mudou
+    assert _varrer(client, gerente, escopo="pendentes").json()["criadas"] == 1   # só o CSV
+    assert _varrer(client, gerente, escopo="pendentes").json()["criadas"] == 0   # nada mudou
     with SessionLocal() as db:
         db.get(Recurso, REC_CSV).last_modified = datetime.now(UTC)
         db.commit()
-    assert client.post("/api/v1/lgpd/varreduras", headers=gerente,
-                       json={"escopo": "pendentes"}).json()["criadas"] == 1
+    assert _varrer(client, gerente, escopo="pendentes").json()["criadas"] == 1
 
 
 def test_sem_modelo_vinculado_varre_so_regras_com_aviso(client, gerente, portal):
-    client.post("/api/v1/lgpd/varreduras", headers=gerente,
-                json={"escopo": "recurso", "id": REC_CSV})
+    _varrer(client, gerente, escopo="recurso", id=REC_CSV)
     v = client.get("/api/v1/lgpd/varreduras", headers=gerente).json()["varreduras"][0]
     assert v["status"] == "ok" and "Endereço não verificado" in v["aviso"]
     tipos = {a["tipo"] for a in client.get("/api/v1/lgpd/achados", headers=gerente).json()["achados"]}
@@ -257,8 +258,7 @@ def test_modelo_fora_do_ar_interrompe_sem_gravar(client, admin, gerente, portal,
         raise AIProviderError(f"Não foi possível conectar a {url}")
 
     monkeypatch.setattr(ollama, "post_json", caiu)
-    client.post("/api/v1/lgpd/varreduras", headers=gerente,
-                json={"escopo": "recurso", "id": REC_CSV})
+    _varrer(client, gerente, escopo="recurso", id=REC_CSV)
     v = client.get("/api/v1/lgpd/varreduras", headers=gerente).json()["varreduras"][0]
     assert v["status"] == "erro" and "Modelo local indisponível" in v["erro"]
     assert client.get("/api/v1/lgpd/achados", headers=gerente).json()["total"] == 0
@@ -273,19 +273,80 @@ def test_permissoes(client, analista, orgao, portal):
     assert client.get("/api/v1/lgpd/achados", headers=orgao).status_code == 403
 
 
-def test_cancelar_fila_e_mensagens_de_download(client, gerente, portal, monkeypatch):
-    from app.modules.lgpd import service as srv
-
-    monkeypatch.setattr(srv, "executar_fila", lambda ids: None)   # deixa tudo na fila
+def test_cancelar_fila_e_mensagens_de_download(client, gerente, portal):
+    # a API só enfileira: sem o ciclo do worker, tudo continua na fila
     client.post("/api/v1/lgpd/varreduras", headers=gerente, json={"escopo": "dataset", "id": DS})
     r = client.post("/api/v1/lgpd/varreduras/cancelar", headers=gerente)
     assert r.json() == {"canceladas": 2}
     vs = client.get("/api/v1/lgpd/varreduras", headers=gerente).json()
     assert vs["em_andamento"] == 0 and {v["status"] for v in vs["varreduras"]} == {"cancelada"}
+    service.job_executar_fila()   # cancelada não é executada
+    assert portal["baixados"] == []
 
     with SessionLocal() as db:
-        r404 = srv._explicar_download(srv.CkanError("HTTP 404 ao baixar x", 404),
-                                      db.get(Recurso, REC_PDF))
+        r404 = service._explicar_download(service.CkanError("HTTP 404 ao baixar x", 404),
+                                          db.get(Recurso, REC_PDF))
     assert "link quebrado" in r404 and "link do recurso" in r404
     with pytest.raises(leitura.FormatoNaoSuportado, match="ZIP"):
         leitura.ler(b"PK\x03\x04resto", "CSV")
+
+
+def test_worker_retoma_varredura_interrompida_uma_vez(client, gerente, portal):
+    """ADR-0025: varredura em "executando" no início do ciclo é de um worker que caiu."""
+    def cair_no_meio():
+        with SessionLocal() as db:
+            v = db.query(Varredura).filter_by(recurso_id=REC_CSV, status="pendente").one()
+            v.status, v.iniciada_em = "executando", datetime.now(UTC)
+            db.commit()
+
+    client.post("/api/v1/lgpd/varreduras", headers=gerente,
+                json={"escopo": "recurso", "id": REC_CSV})
+    cair_no_meio()
+    service.job_executar_fila()   # 1ª interrupção: vira erro e o recurso volta à fila
+    with SessionLocal() as db:
+        vs = db.query(Varredura).order_by(Varredura.id).all()
+    assert [(v.status, v.erro) for v in vs] == [("erro", service.INTERROMPIDA), ("ok", None)]
+    assert vs[1].solicitada_por == "paloma@cge.go.gov.br"
+
+    client.post("/api/v1/lgpd/varreduras", headers=gerente,
+                json={"escopo": "recurso", "id": REC_CSV})
+    cair_no_meio()
+    service.job_executar_fila()   # 2ª interrupção do mesmo recurso: fica o erro, sem laço
+    with SessionLocal() as db:
+        assert db.query(Varredura).filter_by(status="pendente").count() == 0
+        assert db.query(Varredura).filter_by(erro=service.INTERROMPIDA).count() == 2
+
+
+def test_download_espera_no_http_429(monkeypatch):
+    from app.integrations.ckan import client as ckan
+
+    pausas, vezes = [], []
+    respostas = [httpx.Response(429, headers={"Retry-After": "7"}), httpx.Response(429),
+                 httpx.Response(200, content=b"a;b")]
+    monkeypatch.setattr(ckan.time, "sleep", pausas.append)
+    monkeypatch.setattr(ckan, "_aguardar_vez", lambda host, intervalo: vezes.append(host))
+    c = CkanClient("http://portal", transport=httpx.MockTransport(lambda req: respostas.pop(0)))
+    assert c.baixar("http://portal/x.csv", 1000) == b"a;b"
+    assert pausas == [7.0, 120] and vezes == ["portal"] * 3  # Retry-After; sem ele, 60 s × 2^n
+
+    c.esperas_429 = 0
+    respostas.append(httpx.Response(429))
+    with pytest.raises(ckan.CkanLimiteDeRequisicoes):
+        c.baixar("http://portal/y.csv", 1000)
+
+
+def test_download_intervalo_minimo_por_host(monkeypatch):
+    from app.integrations.ckan import client as ckan
+
+    relogio, pausas = [100.0], []
+
+    def dormir(s):
+        pausas.append(s)
+        relogio[0] += s
+
+    monkeypatch.setattr(ckan.time, "monotonic", lambda: relogio[0])
+    monkeypatch.setattr(ckan.time, "sleep", dormir)
+    for host in ("a.gov", "a.gov", "a.gov", "b.gov"):
+        ckan._aguardar_vez(host, 2.0)
+    ckan._aguardar_vez("a.gov", 0)   # intervalo 0 desliga
+    assert pausas == [2.0, 2.0]

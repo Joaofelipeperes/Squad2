@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 22/10/2026 |
+| **Última atualização** | 29/10/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -52,6 +52,8 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 - `iniciar(db, origem, solicitante=None, usuario_id=None) -> Coleta` — registra a coleta; `ColetaEmAndamento` se já houver uma.
 - `executar(coleta_id, client=None)` — percorre `organization_list` e `package_search` paginado,
   faz upsert casando organização, dataset e recurso pelo `id_ckan` (a PK `id` é própria — ADR-0018), grava `dataset_snapshot` e marca como inativos os datasets que sumiram. Abre sessão própria.
+  Coleta concluída com sucesso chama `rastreabilidade.service.sincronizar(orgaos=...)` (leitura da
+  auditoria do CKAN e comparação do cadastro dos órgãos, ADR-0009); falha ali fica na própria sincronização e não muda o status da coleta.
 - `ultima_coleta(db)` · `coleta_em_andamento(db)` · `job_coleta_diaria()`.
 - `listar_datasets(db, user, *, busca, orgao, formato, situacao) -> DatasetsOut` e
   `obter_dataset(db, dataset_id, user) -> DatasetDetalheOut` (`DatasetNaoEncontrado`) — tela Datasets
@@ -107,8 +109,9 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | é consumido por | pda | `Dataset` (vínculo da base prevista pelo ID, `ativo_no_portal`), `Recurso` (recursos válidos e última atualização), `Organizacao` (órgão da base) |
 | é consumido por | atualizacoes, metadados | `Dataset`, `Recurso` |
 | é consumido por | lgpd | `Recurso` (varredura, url_type para anonimização) |
-| é consumido por | rastreabilidade | `Coleta`, `DatasetSnapshot` (diff entre coletas) |
-| é consumido por | painel | `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` — tela Organizações |
+| é consumido por | rastreabilidade | `Dataset` (lista de datasets cuja auditoria é lida, inclusive os que saíram do portal), `Recurso` (nome do recurso nos eventos); `Coleta`, `DatasetSnapshot` (diff entre coletas, complemento futuro) |
+| aciona | rastreabilidade | `sincronizar(orgaos=...)` ao fim de cada coleta concluída, com a lista de órgãos baixada (comparação do cadastro dos órgãos) |
+| é consumido por | painel | `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` — telas Organizações e Dashboard; `ultima_coleta(db)` — data da coleta no Dashboard (PBI-58) |
 | é consumido por | metadados | `Dataset`, `Recurso` e `condicao_recurso_atual()` — `recursos_formato_fechado` (PBI-53) |
 | é consumido por | relatorios | contagens e última coleta |
 | é consumido por | assistente | `ultima_coleta`, `recursos_atuais`, `regras.situacao_no_portal`; `Dataset` (sem `autor`/`autor_email`), `Recurso`, `Organizacao` — ficha do dataset citado na pergunta |
@@ -121,8 +124,9 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 ## Ambiente de testes com o CKAN local
 O CKAN em Docker da raiz do repositório serve de portal de testes. Para a coleta enxergá-lo, suba
-o produto final com `docker-compose.ckan-local.yml` (coloca `api` e `worker` na rede do CKAN e
-define `GDA_CKAN_BASE_URL=http://ckansquad2-ckan-1:5000`). Os dados devem ser carregados com
+o produto final com `docker-compose.ckan-local.yml` (coloca `api` e `worker` na rede do CKAN) e
+`GDA_ENVIRONMENT=homologacao` ou `dev`, que leem por padrão `http://ckansquad2-ckan-1:5000`; em
+`producao` o padrão é o portal oficial (ADR-0024). Os dados devem ser carregados com
 `importar_ckan_goias.py`, que preserva os IDs e o `last_modified` dos recursos do portal.
 
 ## Regras de negócio e decisões
@@ -161,6 +165,11 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 08/10/2026 | Periodicidade lida também do extra `Atualização` do portal (`regras.periodicidade_declarada`); `docker-compose.ckan-local.yml` liga a coleta ao CKAN local | João |
 | 18/10/2026 | Tela Datasets (PBI-83): `GET /datasets` e `GET /datasets/{id}`, busca e filtros, Status = situação no portal, detalhe com recursos atuais, data de metadado separada da última atualização real e dados do PDA da base vinculada pelo ID; coluna `dataset.descricao` (`notes`, migração `e5b2c7a9d1f4`) | Humberto |
 | 18/10/2026 | Interações: painel (tela Organizações) e metadados (formato fechado) passam a consumir `condicao_recurso_atual()` | Humberto |
+| 21/10/2026 | Coleta concluída aciona a sincronização da rastreabilidade (auditoria do CKAN, ADR-0009); Interações atualizadas | João |
 | 21/10/2026 | Chave primária própria (ADR-0018): `organizacao`, `dataset` e `recurso` ganham `id` inteiro e o ID do CKAN vai para `id_ckan` (único, opcional); FKs e `dataset_snapshot.dataset_id` apontam para o `id` (migração `f6c3a8d2b1e7`, dados preservados); coleta casa pelo `id_ckan`; `GET /datasets/{id}` e `?orgao=<id>`; saídas com `id` e `id_ckan` | Victor |
 | 22/10/2026 | Banco só pelo `InventarioDao` (ADR-0019): service e router sem acesso direto à sessão; coleta grava com auditoria (`iniciar(..., usuario_id=)` registra quem pediu a coleta manual); excluídos somem da tela Datasets; data de criação do recurso no CKAN em `recurso.created_ckan` (JSON `created` mantido) | Victor |
+| 23/10/2026 | A coleta passa a lista de órgãos baixada para a rastreabilidade (comparação do cadastro dos órgãos entre coletas) | João |
 | 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
+| 28/10/2026 | Interações: o Dashboard (painel) usa as contagens do inventário e `ultima_coleta`; sem mudança de código neste módulo | Humberto |
+| 28/10/2026 | Merge de `desenvolvimento` na rastreabilidade: sincronização pós-coleta mantida sobre o `InventarioDao` | Victor |
+| 29/10/2026 | Ambiente de testes: o CKAN coletado vem do `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local), `GDA_CKAN_BASE_URL` opcional (ADR-0024); `docker-compose.ckan-local.yml` só liga a rede | Victor |

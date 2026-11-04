@@ -126,3 +126,24 @@ def test_excluidos_nao_contam_no_painel(client, gerente, inventario):
     ses = _org(client.get(API, headers=gerente).json(), str(SES))
     assert ses["datasets_no_portal"] == 1 and ses["recursos_validos"] == 1
     assert ses["recursos_formato_fechado"] == 0 and ses["formatos_fechados"] == {}
+
+
+@pytest.mark.parametrize("periodicidade,pct,atrasadas", [
+    ("Mensal", 0, 1),     # última atualização em 01/09/2026: 47 dias > 30
+    ("Anual", 100, 0),    # 47 dias, bem dentro de 365
+    ("Eventual", None, None),  # sem prazo fixo: não entra no %
+])
+def test_atualizacao_pela_periodicidade_do_pda(client, gerente, inventario, periodicidade, pct,
+                                                atrasadas):
+    texto = ("Orgão;Base de Dados;Atualização;Disponível no Portal\n"
+             f"SES;Indicadores;{periodicidade};{URL}indicadores-saude\n"
+             f"SES;Leitos;Mensal;{URL}leitos\n"  # vinculada, mas sem data de atualização
+             "SES;Vacinas;Mensal;Não\n")         # sem vínculo: não é avaliada
+    r = client.post("/api/v1/pda/planos", headers=gerente, data={"nome": "PDA teste"},
+                    files={"arquivo": ("pda.csv", texto.encode(), "text/csv")})
+    assert r.status_code == 201, r.text
+    ses = _org(client.get(API, headers=gerente).json(), str(SES))
+    assert ses["atualizacao_pct"] == pct and ses["atualizacoes_atrasadas"] == atrasadas
+    assert ses["atualizacoes_avaliadas"] == (0 if pct is None else 1)
+    seduc = _org(client.get(API, headers=gerente).json(), str(SEDUC))
+    assert seduc["atualizacao_pct"] is None and seduc["atualizacoes_avaliadas"] == 0

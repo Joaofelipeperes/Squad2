@@ -14,6 +14,7 @@ Acesso ao banco só pelo `PdaDao` (ADR-0019): excluir é exclusão lógica e tod
 o usuário que agiu (`created_id`/`changed_id`).
 """
 import re
+from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -39,7 +40,9 @@ from app.modules.pda.schemas import (
     BasesOut,
     DatasetOpcaoOut,
     FormularioOut,
+    IdsCkanOut,
     ImportacaoResumoOut,
+    LinhaIdCkanOut,
     LinhaIgnoradaOut,
     OpcaoOut,
     OpcoesOut,
@@ -273,38 +276,56 @@ def _datasets_por_name(dao: PdaDao, names: set[str]) -> dict[str, Dataset]:
     return resultado
 
 
+def _datasets_por_id_ckan(dao: PdaDao, ids: set[str]) -> dict[str, Dataset]:
+    """ID do dataset no CKAN → Dataset do inventário (`id_ckan` é único entre os ativos)."""
+    return {ds.id_ckan: ds for ds in dao.datasets_por_id_ckan(ids) if ds.id_ckan}
+
+
 def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
                    vigencia_fim: date | None, definir_vigente: bool, arquivo_nome: str,
                    conteudo: bytes, importado_por: str | None,
-                   user: UsuarioAtual | None = None) -> ImportacaoResumoOut:
+                   user: UsuarioAtual | None = None,
+                   config: regras.ConfigLeitura = regras.SEM_CONFIG) -> ImportacaoResumoOut:
     """PBI-12/13 — importa a planilha de um PDA (atômico: qualquer erro → nada gravado).
 
-    Vínculo: name extraído da URL "Disponível no Portal" → `Dataset.id` do inventário
-    ("resolvido"); name sem dataset no inventário → "pendente" (resolver depois com
-    `resolver_vinculos_pendentes`); sem URL → "sem_vinculo". Órgão da base: o do dataset
-    vinculado; sem vínculo, o das bases da MESMA sigla vinculadas por ID neste PDA (se todas
-    apontarem para uma só organização); por fim, `regras.casar_orgao`. O primeiro PDA cadastrado
-    vira vigente mesmo sem `definir_vigente`. O arquivo bruto não é gravado.
+    `config`: colunas, linha do cabeçalho e delimitador escolhidos na aba Configuração do modal
+    (sem config, as colunas são reconhecidas pelos nomes usuais).
+
+    Vínculo, em ordem: ID do dataset no CKAN informado na planilha ("ID_UNICO") → `Dataset.id`
+    do inventário; sem ID, name extraído da URL "Disponível no Portal" → `Dataset.id`. Achou →
+    "resolvido"; ID ou name sem dataset no inventário → "pendente" (resolver depois com
+    `resolver_vinculos_pendentes`); nenhum dos dois → "sem_vinculo". Com ID informado o name não
+    é usado para vincular (fica só para auditoria). Órgão da base: o do dataset vinculado; sem
+    vínculo, o das bases da MESMA sigla vinculadas por ID neste PDA (se todas apontarem para uma
+    só organização); por fim, `regras.casar_orgao` pela sigla e, sem resultado, pelo nome do
+    órgão. O primeiro PDA cadastrado vira vigente mesmo sem `definir_vigente`. O arquivo bruto não
+    é gravado.
     """
     dao = PdaDao.de(db, user)
     nome = _validar_plano(dao, nome, vigencia_inicio, vigencia_fim)
     try:
-        lida = regras.ler_planilha(conteudo, arquivo_nome)
+        lida = regras.ler_planilha(conteudo, arquivo_nome, config)
     except regras.PlanilhaInvalida as exc:
         raise Invalido(str(exc)) from exc
     if not lida.linhas:
         raise Invalido("Nenhuma base prevista encontrada na planilha (verifique se as colunas "
-                       '"Órgão" e "Base de Dados" estão preenchidas).')
+                       "do órgão e do nome da base estão preenchidas).")
 
     with _transacao(dao):
         names = [regras.extrair_name_da_url(ln.disponivel_no_portal) for ln in lida.linhas]
-        datasets = _datasets_por_name(dao, {n for n in names if n})
-        vinculados = [datasets.get(n) if n else None for n in names]
+        por_id = _datasets_por_id_ckan(
+            dao, {ln.dataset_id_ckan for ln in lida.linhas if ln.dataset_id_ckan})
+        por_name = _datasets_por_name(
+            dao, {n for ln, n in zip(lida.linhas, names, strict=True)
+                  if n and not ln.dataset_id_ckan})
+        vinculados = [por_id.get(ln.dataset_id_ckan) if ln.dataset_id_ckan else
+                      por_name.get(n) if n else None
+                      for ln, n in zip(lida.linhas, names, strict=True)]
         org_por_evidencia = regras.orgao_por_evidencia(
             (ln.orgao_sigla, ds.organizacao_id)
             for ln, ds in zip(lida.linhas, vinculados, strict=True) if ds is not None)
         orgaos = [(o.id, o.name, o.titulo, o.sigla) for o in dao.organizacoes()]
-        orgao_por_sigla: dict[str, int | None] = {}
+        orgao_por_sigla: dict[tuple[str, str | None], int | None] = {}
         sem_correspondencia: set[str] = set()
         resolvidos = pendentes = sem_vinculo = 0
 
@@ -316,7 +337,7 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
         for ln, name, ds in zip(lida.linhas, names, vinculados, strict=True):
             if ds is not None:
                 resolvidos += 1
-            elif name:
+            elif name or ln.dataset_id_ckan:
                 pendentes += 1
             else:
                 sem_vinculo += 1
@@ -325,11 +346,15 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
             # 2) evidência por ID: outras bases da mesma sigla vinculadas a UMA organização
             if organizacao_id is None:
                 organizacao_id = org_por_evidencia.get(regras.chave_sigla(ln.orgao_sigla))
-            # 3) heurística pela sigla (nunca chuta)
+            # 3) heurística pela sigla e, sem resultado, pelo nome do órgão (nunca chuta)
             if organizacao_id is None:
-                if ln.orgao_sigla not in orgao_por_sigla:
-                    orgao_por_sigla[ln.orgao_sigla] = regras.casar_orgao(ln.orgao_sigla, orgaos)
-                organizacao_id = orgao_por_sigla[ln.orgao_sigla]
+                chave = (ln.orgao_sigla, ln.orgao_nome)
+                if chave not in orgao_por_sigla:
+                    orgao_por_sigla[chave] = (
+                        regras.casar_orgao(ln.orgao_sigla, orgaos)
+                        or (regras.casar_orgao(ln.orgao_nome, orgaos) if ln.orgao_nome
+                            else None))
+                organizacao_id = orgao_por_sigla[chave]
             if organizacao_id is None:
                 sem_correspondencia.add(ln.orgao_sigla)
             plano.bases.append(BasePrevista(
@@ -342,7 +367,8 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
                 politicas_publicas=_corte(ln.politicas_publicas, 500),
                 possui_conteudo_sigiloso=ln.possui_conteudo_sigiloso,
                 dataset_id=ds.id if ds is not None else None,
-                dataset_name_planilha=_corte(name, 200), linha_planilha=ln.linha,
+                dataset_name_planilha=_corte(name, 200),
+                dataset_id_ckan_planilha=ln.dataset_id_ckan, linha_planilha=ln.linha,
                 classificacao="pda"))
 
         dao.save_generic(plano, *plano.bases)
@@ -357,6 +383,8 @@ def importar_plano(db: Session, *, nome: str, vigencia_inicio: date | None,
         orgaos_sem_correspondencia=sorted(sem_correspondencia, key=regras.normalizar_texto),
         tem_coluna_prazo=lida.tem_coluna_prazo,
         tem_coluna_portal=lida.tem_coluna_portal,
+        tem_coluna_id_ckan=lida.tem_coluna_id_ckan,
+        avisos=[LinhaIgnoradaOut(linha=n, motivo=m) for n, m in lida.avisos],
         colunas_opcionais_ausentes=lida.colunas_opcionais_ausentes)
 
 
@@ -385,18 +413,23 @@ def _completar_orgao_por_evidencia(dao: PdaDao, plano_id: int) -> int:
 
 def resolver_vinculos_pendentes(db: Session, plano_id: int, user: UsuarioAtual | None = None
                                 ) -> dict[str, int]:
-    """PBI-12/13 — tenta de novo SÓ as bases com `dataset_id` nulo e name da planilha (ex.: o
-    dataset foi publicado depois da importação). Vínculo já resolvido nunca é recalculado pelo
-    nome. Depois, as bases do plano sem organização herdam a organização das bases da mesma sigla
-    vinculadas por ID (organização única). Retorna os vínculos resolvidos nesta execução e os que
-    continuam pendentes."""
+    """PBI-12/13 — tenta de novo SÓ as bases com `dataset_id` nulo e ID do CKAN ou name informado
+    (ex.: o dataset foi publicado ou coletado depois da importação): pelo ID quando há ID, senão
+    pelo name. Vínculo já resolvido nunca é recalculado. Depois, as bases do plano sem
+    organização herdam a organização das bases da mesma sigla vinculadas por ID (organização
+    única). Retorna os vínculos resolvidos nesta execução e os que continuam pendentes."""
     dao = PdaDao.de(db, user)
     _plano_ou_404(dao, plano_id)
     pendentes = dao.bases_pendentes(plano_id)
-    datasets = _datasets_por_name(dao, {b.dataset_name_planilha for b in pendentes})
+    por_id = _datasets_por_id_ckan(
+        dao, {b.dataset_id_ckan_planilha for b in pendentes if b.dataset_id_ckan_planilha})
+    por_name = _datasets_por_name(
+        dao, {b.dataset_name_planilha for b in pendentes
+              if b.dataset_name_planilha and not b.dataset_id_ckan_planilha})
     resolvidas = []
     for base in pendentes:
-        ds = datasets.get(base.dataset_name_planilha)
+        ds = (por_id.get(base.dataset_id_ckan_planilha) if base.dataset_id_ckan_planilha
+              else por_name.get(base.dataset_name_planilha))
         if ds is None:
             continue
         base.dataset_id = ds.id
@@ -408,6 +441,96 @@ def resolver_vinculos_pendentes(db: Session, plano_id: int, user: UsuarioAtual |
         _completar_orgao_por_evidencia(dao, plano_id)
     resolvidos = len(resolvidas)
     return {"vinculos_resolvidos": resolvidos, "vinculos_pendentes": len(pendentes) - resolvidos}
+
+
+# ------------------------------------------------------------------ IDs do CKAN em lote
+def importar_ids_ckan(db: Session, plano_id: int, conteudo: bytes, arquivo_nome: str,
+                      user: UsuarioAtual, *, aplicar: bool, sobrescrever: bool) -> IdsCkanOut:
+    """Grava o ID do dataset (o vínculo — ADR-0006) nas bases do PDA a partir de um CSV com
+    SIGLA, NOME_PDA, NOME_DATASET e ID_DATASET. Cada linha casa com UMA base pela SIGLA + nome da
+    base (sem diferença de maiúsculas, acentos e espaços extras). O ID precisa ser um UUID e
+    existir no inventário. `aplicar=False` só analisa; base que já tem OUTRO ID só é alterada com
+    `sobrescrever=True`. Bases fora do escopo de órgão do usuário não são vistas."""
+    dao = PdaDao.de(db, user)
+    plano = _plano_ou_404(dao, plano_id)
+    try:
+        linhas = regras.ler_ids_ckan(conteudo, arquivo_nome)
+    except regras.PlanilhaInvalida as exc:
+        raise Invalido(str(exc)) from exc
+    if not linhas:
+        raise Invalido("Nenhuma linha de dados no arquivo de IDs.")
+
+    por_chave: dict[tuple[str, str], list[BasePrevista]] = defaultdict(list)
+    for b in dao.bases_do_plano(plano.id, user):
+        por_chave[regras.chave_base(b.orgao_sigla, b.nome_previsto)].append(b)
+    uuids = {u for u in (regras.normalizar_uuid(ln.id_informado) for ln in linhas) if u}
+    datasets = {d.id_ckan: d for d in dao.datasets_por_id_ckan(uuids)}
+
+    sem_base: list[LinhaIdCkanOut] = []
+    invalidas: list[LinhaIdCkanOut] = []
+    candidatas: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    sem_id = 0
+    for ln in linhas:
+        uuid = regras.normalizar_uuid(ln.id_informado)
+        saida = LinhaIdCkanOut(linha=ln.linha, sigla=ln.sigla, nome_pda=ln.nome_pda,
+                               dataset_id=uuid or ln.id_informado)
+        if ln.id_informado is None:
+            sem_id += 1
+            continue
+        achadas = por_chave.get(regras.chave_base(ln.sigla, ln.nome_pda), [])
+        if not achadas:
+            sem_base.append(saida.model_copy(update={"motivo": "Nenhuma base do PDA com essa "
+                                                                "sigla e nome."}))
+        elif len(achadas) > 1:
+            sem_base.append(saida.model_copy(update={"motivo": f"{len(achadas)} bases do PDA com "
+                                                                "essa sigla e nome."}))
+        elif uuid is None:
+            invalidas.append(saida.model_copy(update={"motivo": "ID não é um UUID válido."}))
+        elif uuid not in datasets:
+            invalidas.append(saida.model_copy(update={
+                "motivo": "ID não encontrado no inventário do portal (rode a coleta)."}))
+        elif user.restrito_a_orgao and datasets[uuid].organizacao_id != user.orgao_id:
+            invalidas.append(saida.model_copy(update={"motivo": "Dataset de outro órgão."}))
+        else:
+            b = achadas[0]
+            atual = b.dataset.id_ckan if b.dataset is not None else None
+            candidatas.append((saida.model_copy(update={
+                "base_id": b.id, "base_nome": b.nome_previsto, "id_atual": atual}), b))
+
+    # Mesma base em mais de uma linha: com IDs diferentes, nenhuma é aplicada
+    ids_por_base: dict[int, set[str]] = defaultdict(set)
+    for saida, b in candidatas:
+        ids_por_base[b.id].add(saida.dataset_id or "")
+    atualizar: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    substituir: list[tuple[LinhaIdCkanOut, BasePrevista]] = []
+    iguais = 0
+    vistas: set[int] = set()
+    for saida, b in candidatas:
+        if len(ids_por_base[b.id]) > 1:
+            invalidas.append(saida.model_copy(update={
+                "motivo": "A mesma base aparece em outra linha com outro ID."}))
+        elif b.id in vistas or b.dataset_id == datasets[saida.dataset_id or ""].id:
+            iguais += 1
+        elif b.dataset_id is None:
+            atualizar.append((saida, b))
+        else:
+            substituir.append((saida, b))
+        vistas.add(b.id)
+
+    gravar = atualizar + (substituir if sobrescrever else [])
+    if aplicar and gravar:
+        for saida, b in gravar:
+            ds = datasets[saida.dataset_id or ""]
+            b.dataset_id = ds.id
+            if ds.organizacao_id:  # o órgão do dataset vinculado prevalece (como no CRUD)
+                b.organizacao_id = ds.organizacao_id
+        with _transacao(dao):
+            dao.save_generic(*(b for _, b in gravar))
+            _completar_orgao_por_evidencia(dao, plano.id)
+    return IdsCkanOut(
+        aplicado=aplicar, total_linhas=len(linhas), atualizadas=len(gravar) if aplicar else 0,
+        atualizar=[s for s, _ in atualizar], substituir=[s for s, _ in substituir], iguais=iguais,
+        sem_id=sem_id, sem_base=sem_base, invalidas=sorted(invalidas, key=lambda s: s.linha))
 
 
 # ------------------------------------------------------------------ situação (PBI-15/19/22)
@@ -435,6 +558,7 @@ class BaseCalculada:
     dataset_name: str | None
     dataset_titulo: str | None
     dataset_name_planilha: str | None
+    dataset_id_ckan_planilha: str | None
     dataset_ativo: bool | None
     data_publicacao: datetime | None  # metadata_created do dataset vinculado e ativo
     recursos_validos: int
@@ -473,12 +597,14 @@ def calcular_base(base: BasePrevista, plano_nome: str, hoje: date, janela_dias: 
         possui_conteudo_sigiloso=base.possui_conteudo_sigiloso,
         prazo_abertura=base.prazo_abertura,
         vinculo=("resolvido" if base.dataset_id else
-                 "pendente" if base.dataset_name_planilha else "sem_vinculo"),
+                 "pendente" if base.dataset_id_ckan_planilha or base.dataset_name_planilha
+                 else "sem_vinculo"),
         dataset_id=base.dataset_id,
         dataset_id_ckan=ds.id_ckan if ds is not None else None,
         dataset_name=ds.name if ds is not None else None,
         dataset_titulo=ds.titulo if ds is not None else None,
-        dataset_name_planilha=base.dataset_name_planilha, dataset_ativo=ativo,
+        dataset_name_planilha=base.dataset_name_planilha,
+        dataset_id_ckan_planilha=base.dataset_id_ckan_planilha, dataset_ativo=ativo,
         data_publicacao=(_utc(ds.metadata_created)
                          if ds is not None and ativo and ds.metadata_created else None),
         recursos_validos=len(validos),
@@ -637,35 +763,43 @@ def _vinculo_informado(dao: PdaDao, link: str | None, atual: BasePrevista | None
 
 
 def _vinculo_escolhido(dao: PdaDao, dataset_id: int, atual: BasePrevista | None
-                       ) -> tuple[int, str]:
-    """Dataset escolhido na busca → (dataset_id, dataset_name_planilha). Mesmo dataset da base
-    mantém o name lido da planilha (auditoria); outro dataset grava o name atual dele."""
+                       ) -> tuple[int, str, str | None]:
+    """Dataset escolhido na busca → (dataset_id, dataset_name_planilha,
+    dataset_id_ckan_planilha). Mesmo dataset da base mantém o name e o ID lidos da planilha
+    (auditoria); outro dataset grava o name e o ID atuais dele."""
     ds = dao.dataset(dataset_id)
     if ds is None:
         raise Invalido("Dataset não encontrado no inventário do portal.")
     if atual is not None and atual.dataset_id == ds.id:
-        return ds.id, atual.dataset_name_planilha or ds.name
-    return ds.id, ds.name
+        return (ds.id, atual.dataset_name_planilha or ds.name,
+                atual.dataset_id_ckan_planilha or ds.id_ckan)
+    return ds.id, ds.name, ds.id_ckan
 
 
 def _vinculo_por_id_ckan(dao: PdaDao, id_ckan: str | None, link: str | None,
-                         atual: BasePrevista | None) -> tuple[int | None, str | None]:
-    """ID do dataset no CKAN digitado (ADR-0006) → (dataset_id, dataset_name_planilha). Tem
-    prioridade sobre o endereço: precisa existir no inventário e, se o endereço também achar um
-    dataset, os dois têm de ser o mesmo. Endereço sem dataset no inventário (nome do PDA diferente
-    do name do portal) não impede: o name fica só para auditoria."""
+                         atual: BasePrevista | None
+                         ) -> tuple[int | None, str | None, str | None]:
+    """ID do dataset no CKAN digitado (ADR-0006) → (dataset_id, dataset_name_planilha,
+    dataset_id_ckan_planilha). Tem prioridade sobre o endereço: precisa existir no inventário e,
+    se o endereço também achar um dataset, os dois têm de ser o mesmo. Exceção: o ID pendente que
+    veio da planilha, mantido sem alteração na edição, continua pendente (o dataset pode ainda não
+    ter sido coletado). Endereço sem dataset no inventário (nome do PDA diferente do name do
+    portal) não impede: o name fica só para auditoria."""
     id_link, name = _vinculo_informado(dao, link, atual)
     ident = _limpo(id_ckan)
     if ident is None:
-        return id_link, name
+        return id_link, name, None
     ds = dao.dataset_por_id_ckan(ident)
     if ds is None:
+        if (atual is not None and atual.dataset_id is None and atual.dataset_id_ckan_planilha
+                and ident.lower() == atual.dataset_id_ckan_planilha.lower() and id_link is None):
+            return None, name, atual.dataset_id_ckan_planilha
         raise Invalido("ID do dataset não encontrado no inventário do portal: confira o ID ou "
                        "rode a coleta (Atualizar dados).")
     if id_link is not None and id_link != ds.id:
         raise Invalido("O ID e o endereço informados apontam para datasets diferentes: corrija um "
                        "deles ou deixe o endereço vazio.")
-    return ds.id, name
+    return ds.id, name, ds.id_ckan
 
 
 def _orgao_informado(dao: PdaDao, plano_id: int, sigla: str, escolhido: int | None,
@@ -703,9 +837,9 @@ def _valores_da_base(dao: PdaDao, plano_id: int, dados: BaseIn,
         original = atual.periodicidade_original  # mantém o texto da planilha ("Mnsal")
     # Prioridade: dataset escolhido na busca > ID do CKAN digitado > endereço (só acha o ID)
     escolhido = dados.dataset_id
-    dataset_id, name = (_vinculo_escolhido(dao, escolhido, atual) if escolhido is not None
-                        else _vinculo_por_id_ckan(dao, dados.dataset_id_ckan, dados.dataset_link,
-                                                  atual))
+    dataset_id, name, id_ckan = (
+        _vinculo_escolhido(dao, escolhido, atual) if escolhido is not None
+        else _vinculo_por_id_ckan(dao, dados.dataset_id_ckan, dados.dataset_link, atual))
     return {
         "orgao_sigla": sigla,
         "organizacao_id": _orgao_informado(dao, plano_id, sigla, dados.organizacao_id,
@@ -720,6 +854,7 @@ def _valores_da_base(dao: PdaDao, plano_id: int, dados: BaseIn,
         "possui_conteudo_sigiloso": dados.possui_conteudo_sigiloso,
         "dataset_id": dataset_id,
         "dataset_name_planilha": name,
+        "dataset_id_ckan_planilha": id_ckan,
     }
 
 

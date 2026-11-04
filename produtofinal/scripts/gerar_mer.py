@@ -47,6 +47,14 @@ REFERENCIAS_LOGICAS = [
     ("ia_vinculo_tarefa", "alterado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("parametro", "alterado_por", "usuario", "email", False, "Autoria congelada como e-mail."),
     ("acesso_log", "usuario", "usuario", "email", False, "Autoria congelada como e-mail."),
+    ("rastreabilidade_evento", "dataset_id_ckan", "dataset", "id_ckan", True,
+     "Evento histórico: sobrevive à saída do dataset do inventário."),
+    ("rastreabilidade_evento", "organizacao_id_ckan", "organizacao", "id_ckan", False,
+     "Órgão do dataset na sincronização; usado no filtro e no escopo de órgão."),
+    ("rastreabilidade_evento", "recurso_id_ckan", "recurso", "id_ckan", False,
+     "Recurso do evento; sobrevive à saída do recurso do inventário."),
+    ("rastreabilidade_orgao_snapshot", "organizacao_id_ckan", "organizacao", "id_ckan", True,
+     "Fotografia histórica do cadastro: sobrevive à saída do órgão do portal."),
 ]
 # (origem, coluna, destino, coluna destino, desenhar no diagrama?, observação)
 

@@ -71,6 +71,7 @@ def executar(coleta_id: int, client: CkanClient | None = None) -> None:
     own_client = client is None
     client = client or CkanClient()
     coleta = dao.obter_coleta(coleta_id)
+    orgs: list[dict] = []
     try:
         orgs = client.organizations()
         existentes = dao.organizacoes_por_id_ckan()
@@ -104,9 +105,23 @@ def executar(coleta_id: int, client: CkanClient | None = None) -> None:
         coleta.finalizada_em = utcnow()
         dao.save_generic(coleta)
         dao.commit()
+        concluida = coleta.status == "ok"
         db.close()
         if own_client:
             client.close()
+    if concluida:
+        _sincronizar_rastreabilidade(orgs)
+
+
+def _sincronizar_rastreabilidade(orgs: list[dict]) -> None:
+    """Depois de cada coleta concluída, lê a auditoria do CKAN e compara o cadastro dos órgãos
+    recém-coletados (módulo rastreabilidade, ADR-0009). Falha ali não altera o resultado da
+    coleta: fica na própria sincronização."""
+    from app.modules.rastreabilidade.service import sincronizar  # import tardio evita ciclo
+    try:
+        sincronizar(orgaos=orgs)
+    except Exception:
+        log.exception("Sincronização da rastreabilidade após a coleta falhou")
 
 
 def _upsert_dataset(dao: InventarioDao, pkg: dict, coleta_id: int,

@@ -6,7 +6,7 @@ import httpx
 import pytest
 from openpyxl import Workbook, load_workbook
 from pydantic import SecretStr
-from test_lgpd import CPF_A, CPF_B, REC_CSV, _configurar_ia, csv_alunos, portal  # noqa: F401  (fixture)
+from test_lgpd import CPF_A, CPF_B, REC_CSV, _configurar_ia, _varrer, csv_alunos, portal  # noqa: F401  (fixture)
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
@@ -89,7 +89,7 @@ def _escrita(monkeypatch, ligada: bool):
 
 def _varrer_e_confirmar(client, admin, gerente):
     _configurar_ia(client, admin)
-    client.post("/api/v1/lgpd/varreduras", headers=gerente, json={"escopo": "recurso", "id": REC_CSV})
+    _varrer(client, gerente, escopo="recurso", id=REC_CSV)
     achados = {a["tipo"]: a["id"] for a in
                client.get("/api/v1/lgpd/achados", headers=gerente).json()["achados"]}
     for tipo in ("cpf", "email"):

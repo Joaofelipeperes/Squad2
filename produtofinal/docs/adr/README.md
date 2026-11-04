@@ -28,7 +28,7 @@ a fonte.
 | 22/09/2026 | D3 — Eixos 1 e 2 em paralelo; João assume a base comum; Victor coordena | Processo | Aceita | Backlog v2, aba Alterações v1→v2 |
 | 22/09/2026 | D4 — Metadados obrigatórios (US16), login (US24) e Assistente (US28) viram compromisso | Escopo | Aceita | Backlog v2, aba Alterações v1→v2 |
 | 22/09/2026 | D5 — Protótipo V1 é a referência das telas | Escopo | Aceita | [ADR-0007](0007-prototipo-v1-referencia-das-telas.md) |
-| 22/09/2026 | Abrir a definição da fonte da rastreabilidade (US29) após incompatibilidade da extensão de auditoria | Técnica | Em análise | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 22/09/2026 | Abrir a definição da fonte da rastreabilidade (US29) após incompatibilidade da extensão de auditoria | Técnica | Decidida em 21/10 (opção A) | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
 | 30/09/2026 | Monólito modular com FastAPI e React | Técnica | Aceita | [ADR-0001](0001-monolito-modular.md) |
 | 30/09/2026 | Gateway de IA com provedores plugáveis e política de dados sensíveis | Técnica | Aceita | [ADR-0002](0002-camada-ia-plugavel.md) |
 | 30/09/2026 | Frontend em React reaproveitando o CSS do protótipo | Técnica | Aceita | [ADR-0003](0003-frontend-modular.md) |
@@ -46,18 +46,29 @@ a fonte.
 | 14/10/2026 | Log de acesso: toda requisição à API gravada em `acesso_log` por middleware | Técnica | Aceita | [ADR-0016](0016-log-de-acesso-no-banco.md) |
 | 21/10/2026 | Modo desenvolvimento no Docker: código montado do computador e recarga automática (`docker-compose.dev.yml`) | Técnica | Aceita | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
 | 21/10/2026 | Chave primária própria (`id`) nas tabelas espelhadas do CKAN, com o ID do CKAN em `id_ckan` | Técnica | Aceita | [ADR-0018](0018-chave-primaria-propria-e-id-ckan.md) |
+| 21/10/2026 | Fonte da rastreabilidade: auditoria da extensão `ckanext-dsaudit`, lida com token de editor (opção A) | Técnica | Aceita | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
 | 22/10/2026 | Banco só por DAOs (classe-pai `Dao`), `id` em toda tabela, exclusão lógica (`deleted`) e auditoria (`created`/`changed` + usuário) | Técnica | Aceita | [ADR-0019](0019-dao-exclusao-logica-e-auditoria.md) |
+| 22/10/2026 | Diff de arquivos lido do CKAN sob demanda, sem gravar valores; privação como evento próprio | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Cadastro dos órgãos rastreado por comparação entre coletas (a extensão não audita órgãos) | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Autoria das mudanças em órgãos lida das atividades nativas do CKAN | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Ações em lote e outras fora da edição auditada detectadas pelas atividades nativas do CKAN sem par na extensão | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
 | 23/10/2026 | Contexto do Assistente identifica datasets e arquivos citados e usa histórico curto da conversa | Técnica | Revisão da ADR-0011 | [ADR-0011](0011-assistente-sem-banco-vetorial.md) |
 | 23/10/2026 | Claude Haiku como modelo principal do Assistente (adaptador `anthropic` já disponível) | Técnica | Em análise | [ADR-0020](0020-claude-haiku-no-assistente.md) |
+| 23/10/2026 | Importação do PDA vinculando pelo ID do CKAN da planilha (`ID_UNICO`), com leitura configurável (colunas, linha do cabeçalho, delimitador) guardada no navegador | Técnica | Aceita | [ADR-0022](0022-importacao-do-pda-configuravel-com-id-do-ckan.md) |
 | 26/10/2026 | Varredura LGPD com o motor do detector3 portado para o backend, IA (chat e embeddings) pelo gateway | Técnica | Proposta | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
 | 26/10/2026 | Embeddings no contrato de IA e Qwen3 sem raciocínio no Ollama | Técnica | Revisão da ADR-0002 | [ADR-0002](0002-camada-ia-plugavel.md) |
+| 28/10/2026 | Situação de atualização pela periodicidade do PDA vigente: Mensal = 30 dias sem tolerância, "próximo do vencimento" a partir de 80% do prazo; Eventual/Estática sem prazo; Múltipla = menor periodicidade | Negócio | Aceita (validar com a GEDA) | [ADR-0023](0023-situacao-de-atualizacao-pela-periodicidade-do-pda.md) |
+| 28/10/2026 | CKAN lido escolhido pelo `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local do Docker), `GDA_CKAN_BASE_URL` opcional para forçar outro | Técnica | Aceita | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
+| 29/10/2026 | Fila da varredura LGPD executada pelo worker (a API só enfileira; interrompida volta à fila uma vez) e downloads espaçados por host, com espera no HTTP 429 do portal | Técnica | Aceita | [ADR-0025](0025-fila-da-varredura-lgpd-executada-pelo-worker.md) |
+| 29/10/2026 | Varredura deixa de rodar em segundo plano na API (desdobramento revisto pela ADR-0025) | Técnica | Revisão da ADR-0021 | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
+| 29/10/2026 | Worker passa a executar também a fila da varredura LGPD, a cada minuto | Técnica | Revisão da ADR-0012 | [ADR-0012](0012-agendamento-em-worker-proprio.md) |
 
 ## Decisões em aberto
 
 | Tema | Opções | Quem decide | Onde |
 |---|---|---|---|
 | Forma de entrega final | Extensão do CKAN × aplicação acessada pelo portal | Paloma / Júnior, com a SECTI | ADR-0004, PBI-102 |
-| Fonte da rastreabilidade | Extensão de auditoria × activity stream × diff entre coletas | João, com a SECTI | ADR-0009, PBI-70 (prazo previsto 28/09) |
+| Instalação da extensão de auditoria no portal oficial | Instalar `ckanext-dsaudit` (pacote em `instalacao-ckan-producao/`) × manter a rastreabilidade só no CKAN local | SECTI, via Paloma | ADR-0009 |
 | Modelo local para classificar dados pessoais | qwen2.5:7b-instruct × qwen3 × qwen3.5 (versões médias) × Qwen ajustado do LIGO × classificador especializado | Luiza | ADR-0010, ADR-0021 |
 | Prioridade e tipos dos achados LGPD | Regra proposta (CPF sempre Alta; confiança ≥90/≥70) e inclusão de CNPJ/CEP × regra da GEDA | Paloma, com a Luiza | docs/modulos/lgpd.md |
 | Modelo do Assistente | Gemini via SECTI/LIGO × Claude Haiku (custo próprio) × modelo local | Paloma, com SECTI/LIGO | ADR-0002, ADR-0020 |

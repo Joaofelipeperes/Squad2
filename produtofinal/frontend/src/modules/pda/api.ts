@@ -32,10 +32,51 @@ export interface ImportacaoResumo {
   orgaos_sem_correspondencia: string[];
   tem_coluna_prazo: boolean;
   tem_coluna_portal: boolean;
+  tem_coluna_id_ckan: boolean;
+  avisos: LinhaIgnorada[]; // bases importadas com ressalva (ex.: ID do CKAN não reconhecido)
   colunas_opcionais_ausentes: string[];
 }
 
+/** Campos da planilha que a configuração da importação aponta para uma coluna do arquivo. */
+export type CampoImportacao =
+  | "orgao" | "base" | "orgao_nome" | "id_ckan" | "descricao" | "unidade" | "periodicidade" | "prazo"
+  | "politicas" | "sigiloso" | "portal";
+
+/**
+ * Configuração da leitura enviada com a planilha (campo `config` do POST /pda/planos), guardada no
+ * navegador de quem importa. Coluna vazia = reconhecida pelos nomes usuais; `linha_cabecalho` = linha
+ * dos nomes das colunas (os dados começam na seguinte); `delimitador` vazio = detectar (só .csv).
+ */
+export interface ConfigImportacao {
+  colunas: Partial<Record<CampoImportacao, string>>;
+  linha_cabecalho: number | null;
+  delimitador: string;
+}
+
 export interface VinculosResultado { vinculos_resolvidos: number; vinculos_pendentes: number }
+
+/** Importação dos IDs do CKAN (POST /pda/planos/{id}/ids-ckan). */
+export interface LinhaIdCkan {
+  linha: number;
+  sigla: string | null;
+  nome_pda: string | null;
+  dataset_id: string | null;
+  base_id: number | null;
+  base_nome: string | null;
+  id_atual: string | null;
+  motivo: string | null;
+}
+export interface IdsCkanResumo {
+  aplicado: boolean;
+  total_linhas: number;
+  atualizadas: number;
+  atualizar: LinhaIdCkan[];
+  substituir: LinhaIdCkan[];
+  iguais: number;
+  sem_id: number;
+  sem_base: LinhaIdCkan[];
+  invalidas: LinhaIdCkan[];
+}
 
 export interface Opcao { valor: string; rotulo: string }
 
@@ -64,6 +105,7 @@ export interface BasePda {
   dataset_name: string | null;
   dataset_titulo: string | null;
   dataset_name_planilha: string | null;
+  dataset_id_ckan_planilha: string | null; // ID do CKAN informado; sem dataset = vínculo pendente
   dataset_ativo: boolean | null;
   data_publicacao: string | null;
   recursos_validos: number;
@@ -154,6 +196,13 @@ function consultaBases(planoId: number | null, f: FiltrosPda): string {
 export const pdaApi = {
   planos: () => api.get<PlanoPda[]>("/pda/planos"),
   importar: (form: FormData) => api.upload<ImportacaoResumo>("/pda/planos", form),
+  importarIds: (planoId: number, arquivo: File, aplicar: boolean, sobrescrever: boolean) => {
+    const form = new FormData();
+    form.append("arquivo", arquivo, arquivo.name);
+    form.append("aplicar", aplicar ? "true" : "false");
+    form.append("sobrescrever", sobrescrever ? "true" : "false");
+    return api.upload<IdsCkanResumo>(`/pda/planos/${planoId}/ids-ckan`, form);
+  },
   criarPlano: (dados: PlanoEntrada) => api.post<PlanoPda>("/pda/planos/manual", dados),
   atualizarPlano: (id: number, dados: PlanoEntrada) => api.put<PlanoPda>(`/pda/planos/${id}`, dados),
   formulario: () => api.get<FormularioPda>("/pda/formulario"),

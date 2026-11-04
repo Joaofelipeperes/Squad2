@@ -71,3 +71,4 @@ escolher o modelo (qwen2.5:7b-instruct × qwen3 × qwen3.5) e a margem do filtro
 | Data | Revisão | Autor |
 |---|---|---|
 | 27/10/2026 | Renumerada de ADR-0018 para ADR-0021 no merge com a `desenvolvimento` (as ADR-0017 a 0019 já existiam lá). Implementação ajustada às ADR-0018/0019: acesso ao banco pelo `LgpdDao`, chaves pelo `id` próprio, download pelo `id_ckan`. Sem mudança na decisão | Luiza |
+| 29/10/2026 | Desdobramento "varredura em segundo plano na API" revisto pela ADR-0025: a API só enfileira e o worker executa a fila (a tarefa em memória da API se perdia em reinícios). Motor e demais desdobramentos sem mudança | Victor |

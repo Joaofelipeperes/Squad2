@@ -2,7 +2,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import Settings
+from app.core.config import CKAN_LOCAL_DOCKER, CKAN_PORTAL_OFICIAL, Settings
 
 CHAVE_FORTE = "x" * 48
 CHAVE_FERNET = "a" * 43 + "="
@@ -46,3 +46,25 @@ def test_ambiente_desconhecido_e_tratado_como_fora_de_dev():
 
 def test_dev_aceita_chave_padrao():
     assert _settings(environment="dev").encryption_key is None
+
+
+@pytest.mark.parametrize(("ambiente", "esperado"), [
+    ("producao", CKAN_PORTAL_OFICIAL),
+    ("homologacao", CKAN_LOCAL_DOCKER),
+    ("dev", CKAN_LOCAL_DOCKER),
+])
+def test_ckan_padrao_pelo_ambiente(ambiente, esperado):
+    s = _settings(environment=ambiente, secret_key=CHAVE_FORTE, encryption_key=CHAVE_FERNET)
+    assert s.ckan_base_url == esperado
+
+
+@pytest.mark.parametrize("ambiente", ["dev", "producao"])
+def test_ckan_informado_prevalece_sobre_o_ambiente(ambiente):
+    s = _settings(environment=ambiente, secret_key=CHAVE_FORTE, encryption_key=CHAVE_FERNET,
+                  ckan_base_url="http://localhost:5000")
+    assert s.ckan_base_url == "http://localhost:5000"
+
+
+def test_ambiente_desconhecido_e_recusado_mesmo_com_segredos_fortes():
+    with pytest.raises(ValidationError, match="GDA_ENVIRONMENT"):
+        _settings(environment="production", secret_key=CHAVE_FORTE, encryption_key=CHAVE_FERNET)

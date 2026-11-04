@@ -5,6 +5,7 @@ Regras de projeto já decididas e que este cliente respeita:
 - `last_modified` do RECURSO é o indicador de atualização; `metadata_modified` do dataset não.
 """
 import logging
+import threading
 import time
 from collections.abc import Iterator
 from typing import Any
@@ -22,6 +23,46 @@ class CkanError(RuntimeError):
         self.status_http = status_http
 
 
+class CkanAcessoNegado(CkanError):
+    """HTTP 403: o token usado não tem permissão para a action naquele objeto."""
+
+
+class CkanNaoEncontrado(CkanError):
+    """HTTP 404: objeto inexistente (ou removido definitivamente) no CKAN."""
+
+
+class CkanLimiteDeRequisicoes(CkanError):
+    """HTTP 429 ao baixar arquivo: o servidor pediu para esperar (`espera_s`, do Retry-After)."""
+
+    def __init__(self, mensagem: str, espera_s: float | None = None) -> None:
+        super().__init__(mensagem, 429)
+        self.espera_s = espera_s
+
+
+def _segundos(retry_after: str | None) -> float | None:
+    try:
+        return max(float(retry_after), 0.0) if retry_after else None
+    except ValueError:  # Retry-After em formato de data: usa a espera padrão
+        return None
+
+
+# Download de arquivos: intervalo mínimo por host, comum a todos os clientes do processo (o
+# worker executa a fila de varredura e a API gera prévias; cada processo respeita o seu).
+_proximo_download: dict[str, float] = {}
+_trava_downloads = threading.Lock()
+
+
+def _aguardar_vez(host: str, intervalo_s: float) -> None:
+    if intervalo_s <= 0:
+        return
+    with _trava_downloads:
+        agora = time.monotonic()
+        inicio = max(agora, _proximo_download.get(host, 0.0))
+        _proximo_download[host] = inicio + intervalo_s
+    if inicio > agora:
+        time.sleep(inicio - agora)
+
+
 class CkanClient:
     def __init__(
         self,
@@ -30,15 +71,23 @@ class CkanClient:
         timeout: float | None = None,
         max_retries: int | None = None,
         transport: httpx.BaseTransport | None = None,  # injetável nos testes
+        api_token: str | None = None,  # só para actions que exigem login (auditoria)
+        intervalo_download_s: float | None = None,
     ) -> None:
         s = get_settings()
         self.base_url = (base_url or s.ckan_base_url).rstrip("/")
         self.max_retries = max_retries if max_retries is not None else s.ckan_max_retries
+        self.intervalo_download_s = (intervalo_download_s if intervalo_download_s is not None
+                                     else s.ckan_download_intervalo_s)
+        self.esperas_429 = s.ckan_download_esperas_429
+        headers = {"User-Agent": "monitor-dados-abertos-go/0.1 (CGE-GO/GEDA)"}
+        if api_token:
+            headers["Authorization"] = api_token
         self._transport = transport
         self._http = httpx.Client(
             base_url=f"{self.base_url}/api/3/action",
             timeout=timeout or s.ckan_timeout_s,
-            headers={"User-Agent": "monitor-dados-abertos-go/0.1 (CGE-GO/GEDA)"},
+            headers=headers,
             transport=transport,
         )
 
@@ -60,6 +109,10 @@ class CkanClient:
                 resp = self._http.get(f"/{name}", params=params)
                 if resp.status_code >= 500 or resp.status_code == 429:
                     raise httpx.HTTPStatusError("transitório", request=resp.request, response=resp)
+                if resp.status_code == 403:
+                    raise CkanAcessoNegado(f"{name}: acesso negado pelo CKAN (HTTP 403)", 403)
+                if resp.status_code == 404:
+                    raise CkanNaoEncontrado(f"{name}: não encontrado no CKAN (HTTP 404)", 404)
                 data = resp.json()
                 if not data.get("success"):
                     raise CkanError(f"{name} falhou: {data.get('error')}")
@@ -116,6 +169,41 @@ class CkanClient:
     def resource(self, resource_id: str) -> dict:
         return self.action("resource_show", id=resource_id)
 
+    # ------------------------------------------------------------------ auditoria (ADR-0009)
+    def auditoria_dataset(self, dataset_id: str, *, limit: int = 100, offset: int = 0,
+                          resource_id: str | None = None,
+                          activity_type: str | None = None) -> dict:
+        """Atividades gravadas pela extensão ckanext-dsaudit para um dataset (inclusive
+        excluído), da mais recente para a mais antiga: {"count": N, "results": [...]}.
+        Filtros opcionais por recurso e tipo de atividade. Exige token de usuário com permissão
+        de edição no dataset (CkanAcessoNegado se não)."""
+        params: dict = {"id": dataset_id, "limit": limit, "offset": offset}
+        if resource_id:
+            params["resource_id"] = resource_id
+        if activity_type:
+            params["activity_type"] = activity_type
+        return self.action("dsaudit_activity_list", **params)
+
+    def atividades_orgao(self, org_id: str, *, limit: int = 100, offset: int = 0) -> list[dict]:
+        """Atividades nativas do CKAN ligadas ao órgão (`organization_activity_list`), da mais
+        recente para a mais antiga: alterações no próprio órgão ("changed organization") e nos
+        datasets dele. Traz usuário e data; o conteúdo (`data`) vem resumido."""
+        return self.action("organization_activity_list", id=org_id, limit=limit, offset=offset)
+
+    def atividades_dataset(self, dataset_id: str, *, limit: int = 100,
+                           offset: int = 0) -> list[dict]:
+        """Atividades nativas do CKAN do dataset (`package_activity_list`), da mais recente para a
+        mais antiga: "new/changed/deleted package", com usuário e data (conteúdo resumido)."""
+        return self.action("package_activity_list", id=dataset_id, limit=limit, offset=offset)
+
+    def dados_atividade(self, activity_id: str) -> dict:
+        """Versão completa do objeto guardada pelo CKAN na atividade nativa (`activity_data_show`;
+        para dataset, o package_show daquele momento). Exige permissão de edição no dataset."""
+        return self.action("activity_data_show", id=activity_id, object_type="package")
+
+    def usuario(self, user_id: str) -> dict:
+        return self.action("user_show", id=user_id)
+
     # ------------------------------------------------------------------ arquivos dos recursos
     def url_download(self, recurso_id: str, dataset_id: str, url: str | None,
                      url_type: str | None) -> str | None:
@@ -131,12 +219,34 @@ class CkanClient:
         return url
 
     def baixar(self, url: str, limite_bytes: int) -> bytes:
-        """Baixa um arquivo (para a varredura LGPD), parando se passar de `limite_bytes`."""
+        """Baixa um arquivo (para a varredura LGPD), parando se passar de `limite_bytes`.
+        Respeita o intervalo mínimo entre downloads do mesmo host e, se o servidor responder
+        HTTP 429, espera (Retry-After ou 60 s, 2 min, 4 min…) e tenta de novo (ADR-0025)."""
+        host = httpx.URL(url).host
+        for tentativa in range(self.esperas_429 + 1):
+            _aguardar_vez(host, self.intervalo_download_s)
+            try:
+                return self._baixar_uma_vez(url, limite_bytes)
+            except CkanLimiteDeRequisicoes as exc:
+                if tentativa == self.esperas_429:
+                    raise
+                pausa = exc.espera_s or min(60 * 2 ** tentativa, 900)
+                log.warning("HTTP 429 de %s; nova tentativa em %.0f s (%s de %s)", host, pausa,
+                            tentativa + 1, self.esperas_429)
+                time.sleep(pausa)
+        raise AssertionError("inalcançável")
+
+    def _baixar_uma_vez(self, url: str, limite_bytes: int) -> bytes:
         partes, total = [], 0
+        # Sem o token da auditoria: a URL pode ser um link externo ao portal.
+        headers = {k: v for k, v in self._http.headers.items() if k.lower() != "authorization"}
         try:
             with httpx.Client(transport=self._transport, timeout=self._http.timeout,
-                              follow_redirects=True, headers=self._http.headers) as http, \
+                              follow_redirects=True, headers=headers) as http, \
                     http.stream("GET", url) as resp:
+                if resp.status_code == 429:
+                    raise CkanLimiteDeRequisicoes(
+                        f"HTTP 429 ao baixar {url}", _segundos(resp.headers.get("Retry-After")))
                 if resp.status_code >= 400:
                     raise CkanError(f"HTTP {resp.status_code} ao baixar {url}", resp.status_code)
                 for pedaco in resp.iter_bytes():

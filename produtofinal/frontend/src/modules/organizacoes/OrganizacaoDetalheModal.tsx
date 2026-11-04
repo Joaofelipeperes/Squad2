@@ -50,7 +50,10 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, onFechar }: {
           nota={vinculado ? `${o.bases_vinculadas} base(s) vinculada(s) ao portal` : "aguardando vínculo"} />
         <Stat n={vinculado ? o.bases_previstas - o.bases_publicadas : PENDENTE} rotulo="Bases não publicadas"
           nota={vinculado ? undefined : "aguardando vínculo"} />
-        <Stat n={PENDENTE} rotulo="Atualizações atrasadas" nota="regra de atualização a definir" />
+        <Stat n={o.atualizacoes_atrasadas ?? PENDENTE} rotulo="Atualizações atrasadas"
+          nota={o.atualizacoes_atrasadas != null
+            ? `de ${o.atualizacoes_avaliadas} base(s) com prazo (${o.atualizacao_pct}% em dia)`
+            : vinculado ? "sem base com prazo definido" : "aguardando vínculo"} />
         <Stat n={o.recursos_formato_fechado} rotulo="Recursos sem formato aberto"
           nota={`de ${o.recursos_validos} recurso(s) em ${o.datasets_no_portal} dataset(s)`} />
         <Stat n={PENDENTE} rotulo="Possíveis dados pessoais" nota="módulo de dados pessoais a definir" />
