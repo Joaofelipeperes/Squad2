@@ -106,6 +106,21 @@ def situacao_no_portal(ativo_no_portal: bool, recursos_validos: int) -> str:
     return PUBLICADO if recursos_validos > 0 else SEM_RECURSO
 
 
+# Tipo de base (ADR-0026): prevista = algum vínculo pelo ID com base do PDA vigente; espontânea =
+# dataset ATIVO no portal sem esse vínculo. Dataset fora do portal e sem vínculo não tem tipo.
+PREVISTA = "Prevista no PDA"
+ESPONTANEA = "Espontânea"
+TIPOS_DE_BASE: tuple[str, ...] = (PREVISTA, ESPONTANEA)
+
+
+def tipo_de_base(ativo_no_portal: bool, vinculado_ao_pda_vigente: bool) -> str | None:
+    """Prevista no PDA (vinculada pelo ID a uma base do PDA vigente) × Espontânea (ativa no portal
+    sem vínculo, ADR-0026). Fora do portal e sem vínculo → None (não é base espontânea)."""
+    if vinculado_ao_pda_vigente:
+        return PREVISTA
+    return ESPONTANEA if ativo_no_portal else None
+
+
 def contem_texto(busca: str | None, *campos: str | None) -> bool:
     """Busca sem diferenciar acento, maiúsculas e separadores ("_", "-", "."): 'saude' acha
     'Saúde' e 'indicadores-saude'. Busca vazia → True."""

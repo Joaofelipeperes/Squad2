@@ -7,7 +7,7 @@
 | **User stories** | US14 (PBI-43 a PBI-45, PBI-85), US29 (PBI-69, PBI-70) |
 | **Backend** | `backend/app/modules/rastreabilidade/` |
 | **Frontend** | `frontend/src/modules/rastreabilidade/` |
-| **Última atualização** | 29/10/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Registra inclusões, alterações, privações e exclusões de datasets, recursos e do cadastro dos
@@ -21,7 +21,7 @@ organização, `package_patch`), as atividades nativas do CKAN sem registro da e
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Rastreabilidade | `/rastreabilidade` | `rastreabilidade.acessar` | Busca por dataset ou órgão; filtros por tipo de alteração, órgão e período (de/até); ordenação por data; "Ver detalhes" de cada evento; "Ver diff do arquivo" quando houver comparação linha a linha |
+| Rastreabilidade | `/rastreabilidade` | `rastreabilidade.acessar` | Busca por dataset ou órgão; filtros por tipo de alteração, órgão e período (de/até); ordenação por data; paginação com total no rodapé (50 por página, até 999); "Ver detalhes" de cada evento; "Ver diff do arquivo" quando houver comparação linha a linha |
 
 Referência visual: `#screen-traceability` do Protótipo V1 (linha do tempo em linguagem humana,
 PBI-85). Cada cartão mostra tipo, data e hora (Brasília), órgão · dataset · recurso, uma frase com
@@ -44,7 +44,7 @@ removida), coluna, valor antes e depois, lida do CKAN no momento do clique (ver 
 ## API
 | Método | Rota (`/api/v1/rastreabilidade`) | Permissão | Descrição |
 |---|---|---|---|
-| GET | `/eventos?busca=&tipo=&orgao=&dataset=&desde=&ate=&ordem=recentes&limite=300` | `rastreabilidade.acessar` | Linha do tempo, opções dos filtros e última sincronização. `tipo` aceita o código ou o rótulo; `desde`/`ate` em ISO 8601; `ordem` = `recentes` ou `antigos`; `limite` até 2000; `orgao` = `id` do órgão no produto (ADR-0018). Escopo de órgão aplicado. Cada evento traz `dataset_id_ckan`, `organizacao_id` (`id` do órgão no inventário, vazio se ele não estiver lá), `organizacao_id_ckan` e `recurso_id_ckan` |
+| GET | `/eventos?busca=&tipo=&orgao=&dataset=&desde=&ate=&ordem=recentes&pagina=1&por_pagina=50` | `rastreabilidade.acessar` | Página da linha do tempo (ADR-0028: `total`, `exibidos`, `pagina`, `por_pagina`), opções dos filtros e última sincronização. `tipo` aceita o código ou o rótulo; `desde`/`ate` em ISO 8601; `ordem` = `recentes` ou `antigos`; `por_pagina` de 1 a 999 (422 fora disso); página além da última devolve a última; `orgao` = `id` do órgão no produto (ADR-0018). Escopo de órgão aplicado. Cada evento traz `dataset_id_ckan`, `organizacao_id` (`id` do órgão no inventário, vazio se ele não estiver lá), `organizacao_id_ckan` e `recurso_id_ckan` |
 | GET | `/eventos/{id}/diff` | `rastreabilidade.acessar` | Diff linha a linha do evento, lido do CKAN na hora (não gravado). 404 = evento inexistente ou de outro órgão; 409 = evento sem diff, token não configurado ou falha ao ler o CKAN |
 
 ## Serviços e métodos
@@ -273,3 +273,4 @@ Decisões registradas: [ADR-0009](../adr/0009-fonte-da-rastreabilidade.md) (Acei
 | 23/10/2026 | Ações fora da edição auditada (Make public/Make private/Delete em lote na organização, package_patch): atividades nativas do CKAN sem par na extensão (±2 s) viram eventos `atividade_nativa`, com o que mudou pelas versões guardadas pelo CKAN (`activity_data_show`); marca `atividades_nativas_ate` (migração `d5e1a9c3b742`); etiqueta "Fora da auditoria" | João |
 | 23/10/2026 | Correção: Make private em lote aparecia como "tornado público" (e vice-versa). Na ação em lote o CKAN 2.9 guarda a versão de antes da ação (cache do Solr); identificada por `metadata_modified` anterior à atividade (`regras.versao_anterior_a_acao`), o estado depois vem da atividade seguinte ou da visibilidade atual; exclusão em lote reconhecida pelo tipo da atividade. Sem schema novo | João |
 | 29/10/2026 | Merge de `desenvolvimento`: banco só pelo `RastreabilidadeDao` (ADR-0019); `id` próprio, exclusão lógica e auditoria nas três tabelas; IDs do CKAN em `dataset_id_ckan`, `organizacao_id_ckan` e `recurso_id_ckan` (ADR-0018); `?orgao=` e escopo pelo `id` do órgão; migração `e7a4c2f9b315` (une as duas linhas do Alembic) | Victor |
+| 05/11/2026 | Linha do tempo paginada no banco (ADR-0028): `GET /eventos` troca `limite` por `pagina` e `por_pagina` (50 por padrão, até 999) e devolve `pagina`/`por_pagina`; rodapé com o total e itens por página. A tela consulta de novo sozinha enquanto a sincronização pós-coleta não termina e a API não fica em cache do navegador — dados novos sem limpar o cache (ADR-0029) | Victor |

@@ -41,8 +41,8 @@ from app.modules.rastreabilidade.schemas import (
 log = logging.getLogger(__name__)
 
 PAGINA_CKAN = 100        # atividades por chamada (a extensão aceita até 500)
-LIMITE_PADRAO = 300      # eventos devolvidos à tela por consulta
-LIMITE_MAXIMO = 2000
+POR_PAGINA_PADRAO = 50   # eventos por página da tela (ADR-0028)
+POR_PAGINA_MAXIMO = 999
 
 MSG_SEM_TOKEN = ("GDA_CKAN_AUDITORIA_API_TOKEN não configurado: defina o token de um usuário "
                  "editor do CKAN para ler a auditoria.")
@@ -515,21 +515,30 @@ def listar_eventos(db: Session, user: UsuarioAtual, *, tipo: str | None = None,
                    orgao: int | None = None, dataset: str | None = None,
                    busca: str | None = None, desde: datetime | None = None,
                    ate: datetime | None = None, ordem: str = "recentes",
-                   limite: int = LIMITE_PADRAO) -> EventosOut:
+                   pagina: int = 1, por_pagina: int = POR_PAGINA_PADRAO) -> EventosOut:
     """Linha do tempo no escopo de órgão do usuário. Filtros: tipo (código), órgão (`id` da
     organização no inventário), dataset (ID do CKAN), busca (título ou nome do dataset, sem
     diferenciar acento nem maiúscula), período (desde/até, inclusive) e ordem por data
-    (recentes | antigos)."""
+    (recentes | antigos). Paginada no banco (ADR-0028): `pagina` a partir de 1, `por_pagina`
+    de 1 a 999; página além da última devolve a última."""
     dao = RastreabilidadeDao.de(db, user)
-    limite = max(1, min(limite, LIMITE_MAXIMO))
+    por_pagina = max(1, min(por_pagina, POR_PAGINA_MAXIMO))
+    pagina = max(1, pagina)
     orgaos = {o.id_ckan: o for o in dao.organizacoes()}
     presentes = dao.orgaos_com_eventos(user)
-    total, linhas = dao.eventos(user, tipo=tipo, orgao=orgao, dataset=dataset,
-                                condicao_busca=_condicao_busca(dao, busca) if busca else None,
-                                desde=desde, ate=ate, antigos=ordem == "antigos", limite=limite)
+    filtros = dict(tipo=tipo, orgao=orgao, dataset=dataset,
+                   condicao_busca=_condicao_busca(dao, busca) if busca else None,
+                   desde=desde, ate=ate, antigos=ordem == "antigos")
+    total, linhas = dao.eventos(user, **filtros, por_pagina=por_pagina,
+                                deslocamento=(pagina - 1) * por_pagina)
+    ultima = max(1, -(-total // por_pagina))
+    if pagina > ultima:  # filtro reduziu o total: devolve a última página que existe
+        pagina = ultima
+        total, linhas = dao.eventos(user, **filtros, por_pagina=por_pagina,
+                                    deslocamento=(pagina - 1) * por_pagina)
     sinc = dao.ultima_sincronizacao()
     return EventosOut(
-        total=total, exibidos=len(linhas),
+        total=total, exibidos=len(linhas), pagina=pagina, por_pagina=por_pagina,
         opcoes=EventosOpcoesOut(
             tipos=[OpcaoOut(valor=k, rotulo=v) for k, v in regras.TIPOS.items()],
             orgaos=sorted((OpcaoOut(valor=str(orgaos[i].id), rotulo=orgaos[i].titulo.strip())

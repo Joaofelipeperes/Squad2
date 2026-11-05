@@ -15,6 +15,21 @@ import { SituacaoBadge } from "./SituacaoBadge";
 import { Pode } from "@/shared/acesso/Pode";
 import { PageLede } from "@/shared/ui/PageLede";
 import { useToast } from "@/shared/ui/Toast";
+import type { Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
+
+type ColunaBase = "orgao" | "nome" | "dataset" | "id_ckan" | "prazo" | "periodicidade" | "atualizado" | "situacao";
+
+const ORDENADORES_BASE: Ordenadores<BasePda, ColunaBase> = {
+  orgao: (b) => b.orgao_sigla,
+  nome: (b) => b.nome_previsto,
+  dataset: (b) => b.dataset_name ?? b.dataset_name_planilha ?? b.dataset_id_ckan_planilha,
+  id_ckan: (b) => b.dataset_id_ckan,
+  prazo: (b) => b.prazo_abertura,
+  periodicidade: (b) => b.periodicidade,
+  atualizado: (b) => dataOrdenavel(b.ultima_atualizacao),
+  situacao: (b) => b.situacao,
+};
 
 /**
  * Tela "Monitoramento do PDA" (US6, US7, US8) — referência visual: #screen-pda do Protótipo V1.
@@ -55,6 +70,8 @@ export default function PdaPage() {
   });
 
   const recarregar = () => qc.invalidateQueries({ queryKey: ["pda"] });
+  const tabela = useTabela(bases.data?.bases, ORDENADORES_BASE);
+  const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
 
   function trocarPlano(id: number | null) {
     setPlanoSel(id);
@@ -159,12 +176,7 @@ export default function PdaPage() {
           <div className="panel">
             <Filtros filtros={filtros} onMudar={setFiltros} dados={bases.data} />
             <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <div className="sub" style={{ fontSize: 12.5 }} aria-live="polite">
-                {bases.data
-                  ? `${bases.data.bases.length} base(s) encontrada(s) de ${bases.data.total_previstas} previstas`
-                  : bases.isError ? "" : "Carregando…"}
-                {bases.isPlaceholderData && " · atualizando…"}
-              </div>
+              <div className="sub" style={{ fontSize: 12.5 }}>Bases previstas no {plano.nome}</div>
               <Pode permissao="pda.gerenciar_planos">
                 <button type="button" className="btn btn-outline btn-sm" onClick={() => setBaseForm({ base: null })}>
                   <i className="fa-solid fa-plus" />Incluir base
@@ -174,8 +186,14 @@ export default function PdaPage() {
             <div className="table-scroll">
               <table>
                 <thead><tr>
-                  <th>Órgão</th><th>Base prevista (PDA)</th><th>Dataset CKAN</th><th>ID CKAN</th>
-                  <th>Prazo</th><th>Periodicidade</th><th>Última atualização</th><th>Situação</th>
+                  <ColunaOrdenavel coluna="orgao" {...col}>Órgão</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="nome" {...col}>Base prevista (PDA)</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="dataset" {...col}>Dataset CKAN</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="id_ckan" {...col}>ID CKAN</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="prazo" {...col}>Prazo</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="periodicidade" {...col}>Periodicidade</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="atualizado" primeira="desc" {...col}>Última atualização</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="situacao" {...col}>Situação</ColunaOrdenavel>
                 </tr></thead>
                 <tbody>
                   {bases.isError ? (
@@ -192,11 +210,15 @@ export default function PdaPage() {
                       Nenhuma base encontrada para os filtros selecionados.
                     </td></tr>
                   ) : (
-                    bases.data.bases.map((b) => <LinhaBase key={b.id} base={b} onAbrir={setDetalhe} />)
+                    tabela.itens.map((b) => <LinhaBase key={b.id} base={b} onAbrir={setDetalhe} />)
                   )}
                 </tbody>
               </table>
             </div>
+            {bases.data && (
+              <Paginacao id="pda" {...tabela.paginacao} carregando={bases.isPlaceholderData}
+                resumo={<><strong>{bases.data.bases.length}</strong> base(s) encontrada(s) de {bases.data.total_previstas} previstas</>} />
+            )}
           </div>
 
           <ConfirmarModal aberto={confirmacao === "vigente"} titulo="Definir PDA vigente"

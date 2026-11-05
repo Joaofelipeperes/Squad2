@@ -41,15 +41,18 @@ def _vazio(valor: str | None) -> str | None:
 @router.get("/datasets", response_model=DatasetsOut)
 def listar_datasets(db: DbSession, user: UsuarioAtual = Depends(require(P.INVENTARIO_ACESSAR)),
                     busca: str | None = None, orgao: str | None = None,
-                    formato: str | None = None, situacao: str | None = None):
+                    formato: str | None = None, situacao: str | None = None,
+                    tipo_base: str | None = None):
     """Inventário de datasets do portal (tela Datasets) com filtros. `orgao` = id da organização
-    (vazio = sem filtro)."""
+    (vazio = sem filtro); `tipo_base` = "Prevista no PDA" ou "Espontânea" (ADR-0026). Ordem:
+    criação no CKAN, mais recente primeiro."""
     orgao_txt = _vazio(orgao)
     if orgao_txt is not None and not orgao_txt.isdigit():
         raise HTTPException(422, "orgao: informe o id (número inteiro) da organização.")
     return service.listar_datasets(db, user, busca=_vazio(busca),
                                    orgao=int(orgao_txt) if orgao_txt else None,
-                                   formato=_vazio(formato), situacao=_vazio(situacao))
+                                   formato=_vazio(formato), situacao=_vazio(situacao),
+                                   tipo_base=_vazio(tipo_base))
 
 
 @router.get("/datasets/{dataset_id}", response_model=DatasetDetalheOut)

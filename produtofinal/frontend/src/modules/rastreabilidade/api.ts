@@ -49,8 +49,10 @@ export interface Sincronizacao {
 }
 
 export interface EventosLista {
-  total: number;
-  exibidos: number;
+  total: number;      // eventos que atendem aos filtros (todas as páginas)
+  exibidos: number;   // eventos nesta página
+  pagina: number;     // página devolvida (o backend corrige página além da última)
+  por_pagina: number;
   opcoes: { tipos: Opcao[]; orgaos: Opcao[] };
   sincronizacao: Sincronizacao | null;
   eventos: Evento[];
@@ -88,20 +90,21 @@ export const FILTROS_VAZIOS: FiltrosEventos = { busca: "", tipo: "", orgao: "", 
 const inicioDoDia = (d: string) => `${d}T00:00:00-03:00`;
 const fimDoDia = (d: string) => `${d}T23:59:59.999-03:00`;
 
-function consulta(f: FiltrosEventos): string {
-  const qs = new URLSearchParams();
+function consulta(f: FiltrosEventos, pagina: number, porPagina: number): string {
+  const qs = new URLSearchParams({ pagina: String(pagina), por_pagina: String(porPagina) });
   if (f.busca.trim()) qs.set("busca", f.busca.trim());
   if (f.tipo) qs.set("tipo", f.tipo);
   if (f.orgao) qs.set("orgao", f.orgao);
   if (f.desde) qs.set("desde", inicioDoDia(f.desde));
   if (f.ate) qs.set("ate", fimDoDia(f.ate));
   if (f.ordem !== "recentes") qs.set("ordem", f.ordem);
-  const s = qs.toString();
-  return s ? `/rastreabilidade/eventos?${s}` : "/rastreabilidade/eventos";
+  return `/rastreabilidade/eventos?${qs}`;
 }
 
 export const rastreabilidadeApi = {
-  eventos: (f: FiltrosEventos) => api.get<EventosLista>(consulta(f)),
+  /** Página da linha do tempo (ADR-0028): paginada no banco, 50 por padrão, até 999. */
+  eventos: (f: FiltrosEventos, pagina: number, porPagina: number) =>
+    api.get<EventosLista>(consulta(f, pagina, porPagina)),
   diff: (eventoId: number) => api.get<Diff>(`/rastreabilidade/eventos/${eventoId}/diff`),
   /** CSV com TODAS as linhas da comparação do evento (sem o corte de 500 da tela). */
   baixarDiffCsv: (eventoId: number) => api.download(`/rastreabilidade/eventos/${eventoId}/diff.csv`),

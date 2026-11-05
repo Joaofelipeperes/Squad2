@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { api } from "@/shared/api/client";
 import { Pode } from "@/shared/acesso/Pode";
 import { useToast } from "@/shared/ui/Toast";
@@ -26,6 +27,18 @@ export function Topbar({ crumb, titulo }: { crumb: string; titulo: string }) {
   });
 
   const c = ultima.data;
+
+  // Coleta terminou (manual ou agendada): todas as telas abertas ou em memória recarregam do banco,
+  // sem precisar limpar o cache do navegador (ADR-0029). A rastreabilidade ainda sincroniza depois
+  // da coleta e acompanha a própria sincronização.
+  const statusAnterior = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const anterior = statusAnterior.current;
+    statusAnterior.current = c?.status;
+    if (anterior === "executando" && c && c.status !== "executando") {
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "coleta" });
+    }
+  }, [c, qc]);
   const meta = !c ? "Nenhuma coleta realizada"
     : c.status === "executando" ? "Coleta em andamento…"
     : `Última coleta: ${fmt(c.finalizada_em ?? c.iniciada_em)}${c.status === "erro" ? " (falhou)" : ""}`;

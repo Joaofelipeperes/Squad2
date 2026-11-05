@@ -24,7 +24,8 @@ async function executar<T>(method: string, path: string, body?: BodyInit, conten
   if (contentType) headers["Content-Type"] = contentType;
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const resp = await fetch(`${BASE}${path}`, { method, headers, body });
+  // no-store: nunca reaproveita resposta guardada pelo navegador (ADR-0029)
+  const resp = await fetch(`${BASE}${path}`, { method, headers, body, cache: "no-store" });
   if (resp.status === 401) {
     tokenStore.clear();
     window.dispatchEvent(new Event("gda:sessao-expirada"));
@@ -52,7 +53,7 @@ async function baixar(path: string): Promise<{ blob: Blob; filename: string }> {
   const headers: Record<string, string> = {};
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const resp = await fetch(`${BASE}${path}`, { method: "GET", headers });
+  const resp = await fetch(`${BASE}${path}`, { method: "GET", headers, cache: "no-store" });
   if (resp.status === 401) {
     tokenStore.clear();
     window.dispatchEvent(new Event("gda:sessao-expirada"));

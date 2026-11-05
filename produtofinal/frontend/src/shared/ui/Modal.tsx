@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
@@ -14,6 +14,17 @@ interface Props {
 
 const FOCAVEIS =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Clique no fundo escuro (fecha o modal). A barra de rolagem do fundo também dispara mousedown no
+ * próprio fundo: clique fora da área útil (clientWidth/clientHeight) é na barra e não fecha.
+ */
+function fundoClicado(e: MouseEvent<HTMLDivElement>) {
+  const fundo = e.currentTarget;
+  if (e.target !== fundo) return false;
+  const { left, top } = fundo.getBoundingClientRect();
+  return e.clientX - left < fundo.clientWidth && e.clientY - top < fundo.clientHeight;
+}
 
 /** Modais abertos, do mais antigo ao mais recente: só o do topo responde ao teclado. */
 const pilha: object[] = [];
@@ -77,7 +88,7 @@ export function Modal({ aberto, titulo, subtitulo, onFechar, children, rodape, l
 
   if (!aberto) return null;
   return createPortal(
-    <div className="modal-overlay open" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+    <div className="modal-overlay open" onMouseDown={(e) => fundoClicado(e) && onFechar()}>
       <div className={largo ? "modal modal-largo" : "modal"} role="dialog" aria-modal="true" aria-label={titulo} ref={dialogo} tabIndex={-1}>
         <div className="modal-head">
           <div>

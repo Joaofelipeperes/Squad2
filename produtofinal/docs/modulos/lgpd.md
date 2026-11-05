@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 04/11/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -16,7 +16,7 @@ humana e, após aprovação, publica no CKAN a versão anonimizada do recurso.
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Riscos de Dados Pessoais | `/lgpd` | `lgpd.acessar` | Varrer recursos novos/alterados ou um dataset (`lgpd.varrer`; a busca de dataset usa `inventario.acessar`); marcar falso positivo / confirmado / tratado / voltar para revisão, com justificativa (`lgpd.triar`); anonimizar recurso com achados confirmados — prévia, baixar prévia, aprovar e publicar, descartar, reverter (`lgpd.aprovar_correcao`); painel Anonimizações (`lgpd.acessar`) |
+| Riscos de Dados Pessoais | `/lgpd` | `lgpd.acessar` | Ordenação por coluna e paginação da tabela de arquivos (ADR-0028); Varrer recursos novos/alterados ou um dataset (`lgpd.varrer`; a busca de dataset usa `inventario.acessar`); marcar falso positivo / confirmado / tratado / voltar para revisão, com justificativa (`lgpd.triar`); anonimizar recurso com achados confirmados — prévia, baixar prévia, aprovar e publicar, descartar, reverter (`lgpd.aprovar_correcao`); painel Anonimizações (`lgpd.acessar`) |
 
 Referência visual: `#screen-lgpd` e `#modal-lgpd` do Protótipo V1 (4 KPIs, filtros de
 prioridade/tipo/órgão/status, tabela e modal com barra de confiança; o callout do topo foi retirado). A tabela
@@ -197,3 +197,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 29/10/2026 | Fila executada pelo worker (ADR-0025): `POST /varreduras` só enfileira; job `lgpd.fila_varredura` a cada minuto retoma a interrompida (uma vez por recurso) e varre as pendentes; `executar_fila` e a liberação após 12 h removidos; job incremental só enfileira; download com intervalo por host e espera no HTTP 429 | Victor |
 | 30/10/2026 | Resumo agregado para o Dashboard: `service.resumo_dados_pessoais` e `ResumoDadosPessoaisOut` (recursos analisados e com achados, aguardando revisão, críticos, por tipo sem falso positivo e por status) — só contagens, no escopo do usuário | Humberto |
 | 04/11/2026 | Tela: achados agrupados por arquivo, com resumo (tipos, células, situação) e detalhe ao clicar; lista de varreduras com rolagem, até 200 (fila inteira) | Luiza |
+| 05/11/2026 | Tela Riscos de Dados Pessoais: tabela de arquivos com ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); a tabela de achados de cada arquivo também ordena por coluna. Sem mudança na API | Victor |

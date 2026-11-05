@@ -153,3 +153,80 @@ def test_coleta_ignora_registro_excluido_logicamente():
         assert service.ultima_coleta(db).status == "ok"
         d1 = db.query(Dataset).filter_by(id_ckan="d1").order_by(Dataset.id).all()
         assert [(d.id == antigo_id, d.deleted) for d in d1] == [(True, True), (False, False)]
+
+
+# ------------------------------------------------------------------ ordem do CKAN e tipo de base
+def _coleta_com(pkgs_por_pagina: list[list[dict]], contagem: int, pedidos: list[str]) -> None:
+    def handler(request: httpx.Request):
+        action = request.url.path.rsplit("/", 1)[-1]
+        if action == "organization_list":
+            return httpx.Response(200, json={"success": True, "result": ORGS})
+        pedidos.append(request.url.params["sort"])
+        pagina = pkgs_por_pagina[min(len(pedidos) - 1, len(pkgs_por_pagina) - 1)]
+        return httpx.Response(200, json={"success": True,
+                                         "result": {"count": contagem, "results": pagina}})
+
+    import app.core.config as cfg
+    anterior = cfg.get_settings().ckan_page_size
+    cfg.get_settings().ckan_page_size = 2
+    try:
+        with SessionLocal() as db:
+            c = service.iniciar(db, origem="manual")
+        service.executar(c.id, client=CkanClient("http://ckan.local",
+                                                 transport=httpx.MockTransport(handler)))
+    finally:
+        cfg.get_settings().ckan_page_size = anterior
+
+
+def _pkg_criado(i: int, mes: int) -> dict:
+    return {**_pkg(i, "o1"), "metadata_created": f"2026-{mes:02d}-01T00:00:00"}
+
+
+def test_coleta_pede_mais_recentes_primeiro_e_ignora_repetido():
+    """package_search ordenado pela criação no CKAN (mais recente primeiro). Dataset criado
+    durante a coleta desloca as páginas: o repetido na página seguinte é ignorado."""
+    d3, d2, d1 = _pkg_criado(3, 3), _pkg_criado(2, 2), _pkg_criado(1, 1)
+    pedidos: list[str] = []
+    _coleta_com([[d3, d2], [d2, d1]], contagem=4, pedidos=pedidos)
+    assert pedidos and set(pedidos) == {"metadata_created desc, id asc"}
+    with SessionLocal() as db:
+        coleta = service.ultima_coleta(db)
+        assert coleta.status == "ok", coleta.erro
+        assert coleta.total_datasets == 3
+        assert db.query(DatasetSnapshot).count() == 3
+
+
+def test_tela_datasets_ordem_por_criacao_e_tipo_de_base(client, gerente):
+    from app.modules.pda.models import BasePrevista, PlanoPda
+
+    _coleta_com([[_pkg_criado(1, 1), _pkg_criado(3, 3)], [_pkg_criado(2, 2)]], contagem=3,
+                pedidos=[])
+    url = "/api/v1/inventario/datasets"
+    corpo = client.get(url, headers=gerente).json()
+    assert [d["id_ckan"] for d in corpo["datasets"]] == ["d3", "d2", "d1"]  # mais recente primeiro
+    assert corpo["datasets"][0]["metadata_created"].startswith("2026-03-01")
+    assert {d["tipo_base"] for d in corpo["datasets"]} == {regras.ESPONTANEA}  # sem PDA vigente
+    assert corpo["opcoes"]["tipos_base"] == [regras.PREVISTA, regras.ESPONTANEA]
+
+    with SessionLocal() as db:
+        plano = PlanoPda(nome="PDA 2025/2027", vigente=True)
+        db.add(plano)
+        db.flush()
+        db.add(BasePrevista(plano_id=plano.id, orgao_sigla="SES", nome_previsto="Base",
+                            dataset_id=_por_id_ckan(db, Dataset, "d1").id))
+        db.commit()
+    corpo = client.get(url, headers=gerente).json()
+    assert {d["id_ckan"]: d["tipo_base"] for d in corpo["datasets"]} == {
+        "d3": regras.ESPONTANEA, "d2": regras.ESPONTANEA, "d1": regras.PREVISTA}
+    prevista = client.get(url, params={"tipo_base": regras.PREVISTA}, headers=gerente).json()
+    assert [d["id_ckan"] for d in prevista["datasets"]] == ["d1"]
+    assert prevista["total"] == 3  # total do inventário, sem filtros
+    espontanea = client.get(url, params={"tipo_base": regras.ESPONTANEA}, headers=gerente).json()
+    assert [d["id_ckan"] for d in espontanea["datasets"]] == ["d3", "d2"]
+
+
+def test_tipo_de_base():
+    assert regras.tipo_de_base(True, True) == regras.PREVISTA
+    assert regras.tipo_de_base(False, True) == regras.PREVISTA  # vinculada, mesmo fora do portal
+    assert regras.tipo_de_base(True, False) == regras.ESPONTANEA
+    assert regras.tipo_de_base(False, False) is None  # fora do portal: não é espontânea

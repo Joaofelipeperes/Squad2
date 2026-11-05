@@ -62,6 +62,16 @@ def create_app() -> FastAPI:
     rota_completa: dict = {}  # endpoint → /api/v1/<modulo>/...; scope["route"] vem sem o prefixo
 
     @app.middleware("http")
+    async def sem_cache_na_api(request: Request, call_next):
+        """Respostas da API não ficam em cache do navegador nem de proxy (ADR-0029): depois de
+        "Atualizar dados" a tela precisa ler o banco, nunca uma cópia guardada."""
+        resposta = await call_next(request)
+        if request.url.path.startswith(s.api_prefix):
+            resposta.headers.setdefault("Cache-Control", "no-store, max-age=0")
+            resposta.headers.setdefault("Pragma", "no-cache")
+        return resposta
+
+    @app.middleware("http")
     async def log_de_acesso(request: Request, call_next):
         """Uma linha em `acesso_log` por requisição (ADR-0016). O e-mail vem de
         `get_current_user` ou do login, que gravam em `request.state.usuario`."""

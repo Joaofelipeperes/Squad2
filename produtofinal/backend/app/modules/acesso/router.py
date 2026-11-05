@@ -1,5 +1,6 @@
 """API do módulo acesso. Login é a única rota pública do sistema (além de /saude)."""
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from app.core.deps import CurrentUser, DbSession, UsuarioAtual, publico, require, require_qualquer
@@ -7,7 +8,7 @@ from app.core.permissoes import META, P, por_modulo
 from app.core.security import create_access_token
 from app.modules.acesso import service
 from app.modules.acesso.schemas import (
-    GrupoPermissoesOut, LogAcessoOut, LoginIn, OrgaoResumo, PapelIn, PapelOut, PermissaoOut,
+    GrupoPermissoesOut, LoginIn, LogsAcessoOut, OrgaoResumo, PapelIn, PapelOut, PermissaoOut,
     SessaoOut, TokenOut, UsuarioIn, UsuarioOut,
 )
 
@@ -124,9 +125,15 @@ def excluir_papel(papel_id: int, db: DbSession,
 
 
 # ------------------------------------------------------------------ log de acesso
-@router.get("/logs", response_model=list[LogAcessoOut],
+@router.get("/logs", response_model=LogsAcessoOut,
             dependencies=[Depends(require(P.ACESSO_VER_LOGS))])
 def listar_logs(db: DbSession, usuario: str | None = None, desde: datetime | None = None,
-                ate: datetime | None = None, limite: int = Query(200, ge=1, le=5000)):
-    """Mais recentes primeiro. `usuario` filtra por trecho do e-mail."""
-    return service.listar_logs(db, usuario, desde, ate, limite)
+                ate: datetime | None = None, pagina: int = Query(1, ge=1),
+                por_pagina: int = Query(50, ge=1, le=service.LOGS_POR_PAGINA_MAXIMO),
+                ordenar: Literal[service.COLUNAS_LOG] = "ocorrido_em",  # type: ignore[valid-type]
+                direcao: Literal["asc", "desc"] = "desc", ate_id: int | None = None):
+    """Página do log (ADR-0028), mais recentes primeiro por padrão. `usuario` filtra por trecho
+    do e-mail; `ordenar` = coluna; `ate_id` fixa o fim da lista entre uma página e outra. A tela
+    usa até 999 por página; a exportação CSV pede até 5.000."""
+    return service.listar_logs(db, usuario, desde, ate, pagina=pagina, por_pagina=por_pagina,
+                               ordenar=ordenar, direcao=direcao, ate_id=ate_id)

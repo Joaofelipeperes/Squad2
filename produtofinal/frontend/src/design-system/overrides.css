@@ -144,6 +144,9 @@ a.btn { text-decoration: none; }
 .lgpd-explicacao li { margin: 2px 0; }
 .inline-msg:not(.ok):not(.err) { background: var(--amber-100); color: var(--amber-600); }
 .modal.modal-largo { max-width: 1000px; width: calc(100vw - 48px); }
+/* Relatórios: a prévia rola dentro do modal, com o cabeçalho da tabela fixo */
+.relatorio-previa { max-height: 60vh; overflow: auto; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); }
+.relatorio-previa thead th { position: sticky; top: 0; z-index: 1; }
 .varredura-opcoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
 .varredura-opcao { border: 1px solid var(--gray-200); border-radius: var(--radius-md); background: var(--gray-50); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .varredura-opcao h4 { margin: 0; font-size: 14px; color: var(--ink); display: flex; gap: 8px; align-items: center; }
@@ -177,3 +180,24 @@ a.btn { text-decoration: none; }
 .chip-tipo { display: inline-flex; gap: 5px; align-items: center; padding: 2px 9px; border-radius: 20px;
   font-size: 11.5px; background: var(--gray-100); color: var(--ink); white-space: nowrap; }
 .chip-tipo b { color: var(--navy-900); }
+
+/* Tabelas: cabeçalho que ordena e rodapé de paginação com o total (ADR-0028) */
+th[aria-sort] { padding: 0; }
+.th-ordenar { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 10px 14px; cursor: pointer; font: inherit; color: inherit; text-transform: inherit;
+  letter-spacing: inherit; white-space: nowrap; }
+.th-ordenar i { font-size: 10.5px; color: var(--gray-500); opacity: .55; }
+.th-ordenar:hover { color: var(--navy-900); }
+.th-ordenar:hover i, .th-ordenar.ativa i { opacity: 1; }
+.th-ordenar.ativa { color: var(--navy-900); }
+.th-ordenar.ativa i { color: var(--blue-500); }
+.th-ordenar:focus-visible { outline: 2px solid var(--blue-500); outline-offset: -2px; }
+.paginacao { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px;
+  padding: 10px 14px; border-top: 1px solid var(--gray-200); font-size: 12.5px; color: var(--gray-700); }
+.paginacao-total strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.paginacao-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.paginacao-controles label { color: var(--gray-700); }
+.paginacao-controles input { width: 72px; padding: 4px 8px; }
+.paginacao-nav { display: flex; align-items: center; gap: 2px; }
+.paginacao-nav .btn { padding: 4px 8px; }
+.paginacao-pagina { padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }

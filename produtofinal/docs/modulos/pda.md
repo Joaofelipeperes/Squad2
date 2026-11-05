@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 30/10/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -17,7 +17,7 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes, e **Importar IDs do CKAN** (`pda.editar_vinculos`) |
+| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes, e **Importar IDs do CKAN** (`pda.editar_vinculos`) |
 
 - **Painel "PDA"** (acima dos filtros): select com os PDAs ("Nome (vigente)"), badge Vigente /
   Não vigente e a linha "N bases previstas · importado (ou criado manualmente) em dd/mm/aaaa por
@@ -394,7 +394,6 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   PBI-18, PBI-82); escolha do dataset numa lista com busca (hoje o vínculo manual é pelo endereço
   digitado).
 - Edição e remoção de bases não têm histórico de quem alterou o quê (entra com a `rastreabilidade`).
-- Relatórios e exportação das bases do PDA (US20): consumir `bases_do_plano` no módulo `relatorios`.
 - A última atualização usa `created` só quando nenhum recurso válido tem `last_modified`; o PBI-25
   pode pedir o fallback por recurso — validar.
 - O órgão de uma base já vinculada não acompanha mudança de órgão do dataset após a importação.
@@ -431,5 +430,7 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 28/10/2026 | Merge com `desenvolvimento` (LGPD): a ADR da importação configurável passa a ADR-0022 (o número 0020 já era da ADR do Claude Haiku) e a migração `b9d4e6f2a7c1` passa a vir depois de `9d583e5bd118` (LGPD), evitando duas pontas no Alembic; variante larga do `Modal` unificada com a da LGPD | Victor |
 | 28/10/2026 | Merge com `desenvolvimento`: mapeamento de colunas e Importar IDs do CKAN adaptados à chave própria (ADR-0018) e ao DAO (ADR-0019) — o ID do arquivo é procurado em `dataset.id_ckan` (`PdaDao.datasets_por_id_ckan`) e a base grava `dataset.id`; `importar_plano` recebe `user` e `mapeamento` | Humberto |
 | 28/10/2026 | Merge com `desenvolvimento` (#11): fica a importação configurável do Victor (ADR-0022, aba Configuração e ID_UNICO na própria importação); **sai a etapa de mapeamento de colunas** (`POST /planilha/colunas`, `MapeamentoIn`, `regras.ler_cabecalho`/`validar_mapeamento`, `MapeamentoColunas.tsx`); fica o **Importar IDs do CKAN** em lote para PDA já importado (`regras.ler_ids_ckan` sobre `_UUID`/`_SEM_ID` da ADR-0022) | Humberto |
+| 30/10/2026 | Interações: `bases_do_plano` consumido pelo módulo `relatorios` (relatórios de cumprimento do PDA e de atualizações); pendência de US20 resolvida | Victor |
 | 30/10/2026 | Interações: a tela Monitoramento de Atualizações (atualizacoes) consome `plano_vigente` + `bases_do_plano`; sem mudança de código neste módulo | Squad 2 |
 | 30/10/2026 | Interações e regras: bases espontâneas definidas pela ADR-0026 (dataset ativo sem vínculo com o PDA vigente), calculadas no painel; sem mudança de código neste módulo | Humberto |
+| 05/11/2026 | Tela Monitoramento do PDA: tabela de bases com ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador movido para o rodapé. Novo `service.datasets_vinculados_ao_vigente` / `PdaDao.ids_datasets_vinculados`, consumido pelo inventário (tipo de base na tela Datasets) | Victor |

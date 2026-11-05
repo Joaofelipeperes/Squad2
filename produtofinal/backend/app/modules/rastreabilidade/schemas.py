@@ -59,8 +59,10 @@ class EventosOpcoesOut(BaseModel):
 
 
 class EventosOut(BaseModel):
-    total: int            # eventos que atendem aos filtros (antes do limite)
-    exibidos: int
+    total: int            # eventos que atendem aos filtros (todas as páginas)
+    exibidos: int         # eventos nesta página
+    pagina: int           # página devolvida (1 = primeira)
+    por_pagina: int
     opcoes: EventosOpcoesOut
     sincronizacao: SincronizacaoOut | None  # última leitura da auditoria do CKAN
     eventos: list[EventoOut]

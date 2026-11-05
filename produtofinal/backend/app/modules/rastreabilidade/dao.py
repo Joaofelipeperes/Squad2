@@ -114,8 +114,9 @@ class RastreabilidadeDao(Dao):
 
     def eventos(self, user: UsuarioAtual, *, tipo: str | None, orgao: int | None,
                 dataset: str | None, condicao_busca, desde: datetime | None,
-                ate: datetime | None, antigos: bool, limite: int) -> tuple[int, list[Ev]]:
-        """(total que atende aos filtros, eventos até o limite, ordenados por data)."""
+                ate: datetime | None, antigos: bool, por_pagina: int,
+                deslocamento: int = 0) -> tuple[int, list[Ev]]:
+        """(total que atende aos filtros, eventos da página, ordenados por data)."""
         stmt = self._no_escopo(select(Ev), user)
         if tipo:
             stmt = stmt.where(Ev.tipo == tipo)
@@ -134,7 +135,8 @@ class RastreabilidadeDao(Dao):
             ordenacao = (Ev.ocorrido_em.asc(), Ev.id.asc())
         else:
             ordenacao = (Ev.ocorrido_em.desc(), Ev.id.desc())
-        return total, self.buscar_lista(stmt.order_by(*ordenacao).limit(limite))
+        return total, self.buscar_lista(
+            stmt.order_by(*ordenacao).offset(deslocamento).limit(por_pagina))
 
     @staticmethod
     def condicao_busca(texto: str, datasets_id_ckan: list[str], orgaos_id_ckan: list[str],

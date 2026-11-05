@@ -5,6 +5,20 @@ import type { Organizacao } from "./api";
 import { organizacoesApi } from "./api";
 import { OrganizacaoDetalheModal } from "./OrganizacaoDetalheModal";
 import { PageLede } from "@/shared/ui/PageLede";
+import type { Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, useTabela } from "@/shared/ui/tabela";
+
+type Coluna = "orgao" | "previstas" | "publicadas" | "atraso" | "atualizacao" | "lgpd" | "atencao";
+
+const ORDENADORES: Ordenadores<Organizacao, Coluna> = {
+  orgao: (o) => o.nome,
+  previstas: (o) => o.bases_previstas,
+  publicadas: (o) => (o.bases_vinculadas > 0 ? o.bases_publicadas : null),
+  atraso: (o) => o.bases_em_atraso,
+  atualizacao: (o) => o.atualizacao_pct,
+  lgpd: (o) => o.riscos_lgpd,
+  atencao: (o) => o.indice_atencao,
+};
 
 /**
  * Tela "Organizações" (US19) — referência visual: #screen-organizations do Protótipo V1.
@@ -20,6 +34,8 @@ export default function OrganizacoesPage() {
   const visiveis = useMemo(() => (d ? d.organizacoes.filter((o) => atende(o, filtros)) : []), [d, filtros]);
 
   const set = (campo: keyof FiltrosOrganizacoes) => (valor: string) => setFiltros((f) => ({ ...f, [campo]: valor }));
+  const tabela = useTabela(visiveis, ORDENADORES);
+  const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
 
   return (
     <section className="screen">
@@ -49,18 +65,21 @@ export default function OrganizacoesPage() {
         <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
           <div className="sub" style={{ fontSize: 12.5 }} aria-live="polite">
             {d && (d.plano
-              ? <>Bases do PDA vigente: <strong>{d.plano.nome}</strong> · {visiveis.length === d.organizacoes.length
-                  ? `${d.organizacoes.length} órgão(s)`
-                  : `${visiveis.length} de ${d.organizacoes.length} órgão(s)`}</>
+              ? <>Bases do PDA vigente: <strong>{d.plano.nome}</strong></>
               : "Nenhum PDA vigente: as colunas de bases ficam zeradas até um PDA ser cadastrado.")}
           </div>
         </div>
         <div className="table-scroll">
           <table>
             <thead><tr>
-              <th>Órgão</th><th>Bases previstas</th><th>Bases publicadas</th>
-              <th title="Bases vinculadas com prazo vencido e sem publicação no portal">Em atraso</th>
-              <th>Atualização</th><th>Riscos LGPD</th><th>Índice de atenção</th>
+              <ColunaOrdenavel coluna="orgao" {...col}>Órgão</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="previstas" primeira="desc" {...col}>Bases previstas</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="publicadas" primeira="desc" {...col}>Bases publicadas</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="atraso" primeira="desc" {...col}
+                title="Bases vinculadas com prazo vencido e sem publicação no portal">Em atraso</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="atualizacao" {...col}>Atualização</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="lgpd" primeira="desc" {...col}>Riscos LGPD</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="atencao" {...col}>Índice de atenção</ColunaOrdenavel>
             </tr></thead>
             <tbody>
               {dados.isError ? (
@@ -78,11 +97,17 @@ export default function OrganizacoesPage() {
               ) : visiveis.length === 0 ? (
                 <tr><td colSpan={7} className="table-empty">Nenhum órgão encontrado.</td></tr>
               ) : (
-                visiveis.map((o) => <Linha key={o.chave} o={o} onAbrir={setDetalhe} />)
+                tabela.itens.map((o) => <Linha key={o.chave} o={o} onAbrir={setDetalhe} />)
               )}
             </tbody>
           </table>
         </div>
+        {d && (
+          <Paginacao id="org" {...tabela.paginacao}
+            resumo={visiveis.length === d.organizacoes.length
+              ? <><strong>{d.organizacoes.length}</strong> órgão(s)</>
+              : <><strong>{visiveis.length}</strong> de {d.organizacoes.length} órgão(s)</>} />
+        )}
         <div className="panel-body" style={{ paddingTop: 10 }}>
           <p className="help-texto">
             <Pendente>aguardando vínculo</Pendente> depende de ligar as bases do PDA aos datasets do portal

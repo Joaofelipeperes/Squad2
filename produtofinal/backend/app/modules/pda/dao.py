@@ -74,6 +74,12 @@ class PdaDao(Dao):
         return self.buscar_lista(self._consulta_bases(user)
                                  .where(BasePrevista.plano_id == plano_id))
 
+    def ids_datasets_vinculados(self, plano_id: int) -> set[int]:
+        """Datasets vinculados (pelo ID) a alguma base do plano, sem escopo de órgão."""
+        return set(self.buscar_lista(
+            select(BasePrevista.dataset_id).where(BasePrevista.plano_id == plano_id,
+                                                  BasePrevista.dataset_id.is_not(None))))
+
     def bases_do_dataset(self, dataset_id: int, user: UsuarioAtual | None) -> list[BasePrevista]:
         return self.buscar_lista(self._consulta_bases(user)
                                  .where(BasePrevista.dataset_id == dataset_id))
