@@ -55,3 +55,4 @@ Apresentar à Paloma (GEDA) junto com o Dashboard; ajustes viram revisões desta
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 05/11/2026 | A tela Datasets passa a mostrar e filtrar o tipo de base (Prevista no PDA × Espontânea) com esta mesma definição (`inventario.regras.tipo_de_base`; vínculo pelo ID com o PDA vigente via `pda.service.datasets_vinculados_ao_vigente`) | Victor |

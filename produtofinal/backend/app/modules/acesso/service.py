@@ -10,9 +10,10 @@ from app.core.deps import UsuarioAtual
 from app.core.permissoes import PAPEIS_PADRAO, P
 from app.core.security import hash_password, verify_password
 from app.modules.acesso.dao import AcessoDao
-from app.modules.acesso.models import LogAcesso, Papel, Usuario
+from app.modules.acesso.models import Papel, Usuario
 from app.modules.acesso.schemas import (
-    OrgaoResumo, PapelIn, PapelOut, PapelResumo, SessaoOut, UsuarioIn, UsuarioOut,
+    LogAcessoOut, LogsAcessoOut, OrgaoResumo, PapelIn, PapelOut, PapelResumo, SessaoOut,
+    UsuarioIn, UsuarioOut,
 )
 
 CODIGOS_VALIDOS = {str(p) for p in P}
@@ -224,6 +225,23 @@ def registrar_acesso(**campos) -> None:
         logging.getLogger(__name__).exception("Falha ao gravar o log de acesso.")
 
 
+# Colunas do log que a tela ordena (ADR-0028) e limite por página (CSV pede até 5.000 de uma vez)
+COLUNAS_LOG = ("ocorrido_em", "usuario", "metodo", "caminho", "acao", "status_http", "ip",
+               "user_agent")
+LOGS_POR_PAGINA_MAXIMO = 5000
+
+
 def listar_logs(db: Session, usuario: str | None, desde: datetime | None, ate: datetime | None,
-                limite: int) -> list[LogAcesso]:
-    return AcessoDao(db).logs(usuario, desde, ate, limite)
+                *, pagina: int = 1, por_pagina: int = 50, ordenar: str = "ocorrido_em",
+                direcao: str = "desc", ate_id: int | None = None) -> LogsAcessoOut:
+    """Página do log de acesso com o total. Sem `ate_id`, fixa no maior `id` atual."""
+    dao = AcessoDao(db)
+    if ordenar not in COLUNAS_LOG:
+        ordenar = "ocorrido_em"
+    ate_id = ate_id if ate_id is not None else dao.maior_id_log()
+    por_pagina = max(1, min(por_pagina, LOGS_POR_PAGINA_MAXIMO))
+    total, registros = dao.logs(usuario, desde, ate, ate_id=ate_id, ordenar=ordenar,
+                                desc=direcao == "desc", por_pagina=por_pagina,
+                                deslocamento=(max(1, pagina) - 1) * por_pagina)
+    return LogsAcessoOut(total=total, pagina=max(1, pagina), por_pagina=por_pagina, ate_id=ate_id,
+                         registros=[LogAcessoOut.model_validate(r) for r in registros])

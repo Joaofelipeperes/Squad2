@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 29/10/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -16,17 +16,21 @@ local, para que nenhum indicador dependa de consulta ao CKAN em tempo de tela.
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Datasets | `/datasets` | `inventario.acessar` | Busca e filtros (Órgão, Formato, Status), "Limpar filtros"; detalhe do dataset com a lista de recursos (clique ou Enter na linha); prazo, periodicidade e situação do PDA no detalhe só com `pda.acessar` (PBI-83) |
+| Datasets | `/datasets` | `inventario.acessar` | Busca e filtros (Órgão, Formato, Status, Tipo de base), "Limpar filtros"; ordenação por coluna e paginação; detalhe do dataset com a lista de recursos (clique ou Enter na linha); prazo, periodicidade e situação do PDA no detalhe só com `pda.acessar` (PBI-83) |
 | Topbar (todas as telas) | — | autenticado | "Última coleta" (todos); botão **Atualizar dados** (`inventario.coletar`) |
 
 Referência visual: `#screen-datasets` do Protótipo V1.
 
 - **Tabela**: Dataset (título; name no `title`) | Órgão | ID CKAN (abreviado; completo no `title`) |
-  Qtd. recursos (válidos) | Última atualização (maior `last_modified` dos recursos válidos; "(est.)"
-  quando veio da criação) | Formato (badges dos formatos dos recursos válidos) | Status (situação no
-  **portal**: Publicado / Sem recurso / Fora do portal). Contador "N encontrado(s) de M no inventário".
+  Qtd. recursos (válidos) | Criado no CKAN (`metadata_created`) | Última atualização (maior
+  `last_modified` dos recursos válidos; "(est.)" quando veio da criação) | Formato (badges dos formatos
+  dos recursos válidos) | Tipo de base (Prevista no PDA × Espontânea, ADR-0026; "—" fora do portal sem
+  vínculo) | Status (situação no **portal**: Publicado / Sem recurso / Fora do portal).
+- **Ordem e paginação** (ADR-0028): padrão pela criação no CKAN, mais recente primeiro; clique no
+  título de qualquer coluna ordena (de novo, inverte). Rodapé com "N dataset(s) encontrado(s) de M no
+  inventário", faixa exibida, itens por página (50; até 999) e navegação.
 - **Filtros** (no backend): busca por título ou name (sem acento, com espera de 300 ms), Órgão,
-  Formato e Status — opções vindas da própria lista.
+  Formato, Status e Tipo de base — opções vindas da própria lista.
 - **Detalhe** (`DatasetDetalheModal.tsx`, `showDatasetDetails` do protótipo): nome, órgão, ID, name,
   data de publicação (`metadata_created`), periodicidade, última atualização real, **última alteração
   de metadados** (`metadata_modified`, com o aviso de que não indica atualização dos dados), formatos,
@@ -42,20 +46,22 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 | GET | `/coletas/ultima` | autenticado | Data/hora e status da última coleta (topbar) |
 | GET | `/coletas?limite=30` | `inventario.acessar` | Histórico de coletas |
 | POST | `/coletas` | `inventario.coletar` | Força nova coleta em segundo plano; 409 se já houver uma em execução |
-| GET | `/datasets?busca=&orgao=&formato=&situacao=` | `inventario.acessar` | `DatasetsOut`: total (sem filtros), opções dos filtros e as linhas (`DatasetOut`: `id`, `id_ckan`, `organizacao_id`…) por título; `orgao` = `id` da organização; escopo de órgão |
-| GET | `/datasets/{id}` | `inventario.acessar` | `DatasetDetalheOut`: linha + descrição, `metadata_created`, `periodicidade_declarada`, licença, recursos atuais (`RecursoOut`) e `recursos_removidos`; **404** se não existe ou é de outro órgão |
+| GET | `/datasets?busca=&orgao=&formato=&situacao=&tipo_base=` | `inventario.acessar` | `DatasetsOut`: total (sem filtros), opções dos filtros (inclui `tipos_base`) e as linhas (`DatasetOut`: `id`, `id_ckan`, `organizacao_id`, `metadata_created`, `tipo_base`…) da criação no CKAN mais recente para a mais antiga; `orgao` = `id` da organização; `tipo_base` = `Prevista no PDA` ou `Espontânea`; escopo de órgão |
+| GET | `/datasets/{id}` | `inventario.acessar` | `DatasetDetalheOut`: linha + descrição, `periodicidade_declarada`, licença, recursos atuais (`RecursoOut`) e `recursos_removidos`; **404** se não existe ou é de outro órgão |
 
 ## Serviços e métodos
 `dao.py` — `InventarioDao(Dao)` (ADR-0019) concentra todo acesso ao banco: coletas (`coleta_em_andamento`, `ultima_coleta`, `historico_coletas`, `criar_coleta`), espelho do CKAN (`organizacoes_por_id_ckan`, `dataset_por_id_ckan`, `recursos_por_id_ckan`, `salvar_recurso`, `marcar_fora_do_portal`, `gravar_fotografia`) e tela Datasets (`datasets_visiveis`, `dataset_visivel`, `organizacoes`). Registros excluídos (`deleted`) nunca aparecem; a coleta casa pelo `id_ckan` entre os ativos e grava pela auditoria do DAO (sistema: sem usuário; coleta manual: `created_id` = quem pediu).
 
 `service.py`:
 - `iniciar(db, origem, solicitante=None, usuario_id=None) -> Coleta` — registra a coleta; `ColetaEmAndamento` se já houver uma.
-- `executar(coleta_id, client=None)` — percorre `organization_list` e `package_search` paginado,
+- `executar(coleta_id, client=None)` — percorre `organization_list` e `package_search` paginado
+  (criados mais recentemente primeiro: `sort=metadata_created desc, id asc`; dataset repetido porque
+  outro foi criado durante a coleta é ignorado),
   faz upsert casando organização, dataset e recurso pelo `id_ckan` (a PK `id` é própria — ADR-0018), grava `dataset_snapshot` e marca como inativos os datasets que sumiram. Abre sessão própria.
   Coleta concluída com sucesso chama `rastreabilidade.service.sincronizar(orgaos=...)` (leitura da
   auditoria do CKAN e comparação do cadastro dos órgãos, ADR-0009); falha ali fica na própria sincronização e não muda o status da coleta.
 - `ultima_coleta(db)` · `coleta_em_andamento(db)` · `job_coleta_diaria()`.
-- `listar_datasets(db, user, *, busca, orgao, formato, situacao) -> DatasetsOut` e
+- `listar_datasets(db, user, *, busca, orgao, formato, situacao, tipo_base) -> DatasetsOut` e
   `obter_dataset(db, dataset_id, user) -> DatasetDetalheOut` (`DatasetNaoEncontrado`) — tela Datasets
   (PBI-83); recursos em lote (`selectinload`), escopo de órgão por `filtrar_por_orgao`.
 
@@ -68,6 +74,9 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 - `situacao_no_portal(ativo_no_portal, recursos_validos)` — "Publicado" / "Sem recurso" / "Fora do
   portal" (`SITUACOES_NO_PORTAL`); `contem_texto(busca, *campos)` e `chave_texto(texto)` — busca e
   ordenação sem acento.
+- `tipo_de_base(ativo_no_portal, vinculado_ao_pda_vigente)` — "Prevista no PDA" (vínculo pelo ID com
+  base do PDA vigente) / "Espontânea" (ativo sem vínculo, ADR-0026) / `None` (fora do portal sem
+  vínculo); `TIPOS_DE_BASE`.
 
 `service.py` (consultas para os outros módulos):
 - `recursos_atuais(ds) -> list[Recurso]` e `condicao_recurso_atual()` (mesma regra em SQL): só os
@@ -106,6 +115,7 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | consome | CKAN (integração) | API pública de leitura |
 | consome | atualizacoes | `regras.ultima_atualizacao_real(recursos)` — coluna "Última atualização" da tela Datasets |
 | consome | pda | `GET /pda/datasets/{id}/bases` (pelo frontend) — prazo, periodicidade e situação PDA no detalhe |
+| consome | pda | `service.datasets_vinculados_ao_vigente(db)` — tipo de base (prevista × espontânea) na tela Datasets |
 | é consumido por | pda | `Dataset` (vínculo da base prevista pelo ID, `ativo_no_portal`), `Recurso` (recursos válidos e última atualização), `Organizacao` (órgão da base) |
 | é consumido por | atualizacoes, metadados | `Dataset`, `Recurso` |
 | é consumido por | lgpd | `Recurso` (varredura, url_type para anonimização) |
@@ -173,3 +183,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 28/10/2026 | Interações: o Dashboard (painel) usa as contagens do inventário e `ultima_coleta`; sem mudança de código neste módulo | Humberto |
 | 28/10/2026 | Merge de `desenvolvimento` na rastreabilidade: sincronização pós-coleta mantida sobre o `InventarioDao` | Victor |
 | 29/10/2026 | Ambiente de testes: o CKAN coletado vem do `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local), `GDA_CKAN_BASE_URL` opcional (ADR-0024); `docker-compose.ckan-local.yml` só liga a rede | Victor |
+| 05/11/2026 | Tela Datasets: filtro e coluna **Tipo de base** (Prevista no PDA × Espontânea, ADR-0026; `DatasetOut.tipo_base`, `regras.tipo_de_base`, `?tipo_base=`); coluna **Criado no CKAN** (`DatasetOut.metadata_created`) e ordem padrão pela criação no CKAN, mais recente primeiro; ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); total no rodapé. Coleta: `package_search` com `sort=metadata_created desc, id asc` e dataset repetido entre páginas ignorado. Topbar recarrega as telas ao fim da coleta (ADR-0029) | Victor |

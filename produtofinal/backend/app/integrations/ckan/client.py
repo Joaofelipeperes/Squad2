@@ -157,12 +157,15 @@ class CkanClient:
             offset += len(batch)
 
     def iter_datasets(self, page_size: int | None = None) -> Iterator[dict]:
-        """Percorre TODOS os datasets públicos com paginação (package_search), recursos inclusos."""
+        """Percorre TODOS os datasets públicos com paginação (package_search), recursos inclusos,
+        dos criados mais recentemente no CKAN para os mais antigos (`metadata_created desc`; o `id`
+        desempata e mantém a paginação estável)."""
         rows = page_size or get_settings().ckan_page_size
         start = 0
         while True:
             result = self.action(
-                "package_search", q="*:*", rows=rows, start=start, sort="id asc",
+                "package_search", q="*:*", rows=rows, start=start,
+                sort="metadata_created desc, id asc",
                 include_private=False,
             )
             batch = result.get("results", [])

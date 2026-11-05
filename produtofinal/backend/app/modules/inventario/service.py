@@ -86,6 +86,8 @@ def executar(coleta_id: int, client: CkanClient | None = None) -> None:
         n_ds = n_res = 0
         vistos: set[str] = set()
         for pkg in client.iter_datasets():
+            if pkg["id"] in vistos:
+                continue  # dataset criado durante a coleta desloca as páginas: o repetido é ignorado
             _upsert_dataset(dao, pkg, coleta_id, org_por_id_ckan)
             vistos.add(pkg["id"])
             n_ds += 1
@@ -188,7 +190,7 @@ def _validos(ds: Dataset) -> list[Recurso]:
     return [r for r in recursos_atuais(ds) if not r.eh_dicionario_dados]
 
 
-def _linha(ds: Dataset, orgaos: dict[int, Organizacao]) -> DatasetOut:
+def _linha(ds: Dataset, orgaos: dict[int, Organizacao], vinculados: set[int]) -> DatasetOut:
     validos = _validos(ds)
     ultima = ultima_atualizacao_real(validos)
     org = orgaos.get(ds.organizacao_id) if ds.organizacao_id is not None else None
@@ -199,34 +201,53 @@ def _linha(ds: Dataset, orgaos: dict[int, Organizacao]) -> DatasetOut:
         recursos_validos=len(validos),
         formatos=sorted({r.formato for r in validos if r.formato}),
         ultima_atualizacao=_utc(ultima.data), ultima_atualizacao_estimada=ultima.estimada,
-        metadata_modified=_utc(ds.metadata_modified),
-        situacao=regras.situacao_no_portal(ds.ativo_no_portal, len(validos)))
+        metadata_created=_utc(ds.metadata_created), metadata_modified=_utc(ds.metadata_modified),
+        situacao=regras.situacao_no_portal(ds.ativo_no_portal, len(validos)),
+        tipo_base=regras.tipo_de_base(ds.ativo_no_portal, ds.id in vinculados))
+
+
+def _vinculados_ao_pda_vigente(db: Session) -> set[int]:
+    from app.modules.pda.service import datasets_vinculados_ao_vigente  # import tardio: ciclo
+    return datasets_vinculados_ao_vigente(db)
+
+
+def _mais_recente_primeiro(d: DatasetOut) -> tuple:
+    """Ordem padrão: criação no CKAN (`metadata_created`) mais recente primeiro; sem data no fim;
+    empate pelo título."""
+    criado = d.metadata_created
+    return (criado is None, -criado.timestamp() if criado else 0.0,
+            regras.chave_texto(d.titulo), d.id)
 
 
 def listar_datasets(db: Session, user: UsuarioAtual, *, busca: str | None = None,
                     orgao: int | None = None, formato: str | None = None,
-                    situacao: str | None = None) -> DatasetsOut:
+                    situacao: str | None = None, tipo_base: str | None = None) -> DatasetsOut:
     """PBI-83 — tela Datasets: inventário do portal com recursos válidos, formatos, última
-    atualização real e situação no portal. Filtros: busca (título ou name, sem acento), órgão
-    (`id` da organização), formato (algum recurso válido nesse formato) e situação."""
+    atualização real, situação no portal e tipo de base (prevista no PDA vigente × espontânea,
+    ADR-0026). Filtros: busca (título ou name, sem acento), órgão (`id` da organização), formato
+    (algum recurso válido nesse formato), situação e tipo de base. Ordem: criação no CKAN, mais
+    recente primeiro (a tela reordena por qualquer coluna)."""
     dao = InventarioDao.de(db, user)
     orgaos = dao.organizacoes()
-    todas = [_linha(ds, orgaos) for ds in dao.datasets_visiveis(user)]
+    vinculados = _vinculados_ao_pda_vigente(db)
+    todas = [_linha(ds, orgaos, vinculados) for ds in dao.datasets_visiveis(user)]
     filtradas = [
         d for d in todas
         if regras.contem_texto(busca, d.titulo, d.name)
         and (not orgao or d.organizacao_id == orgao)
         and (not formato or formato.upper() in d.formatos)
         and (not situacao or d.situacao == situacao)
+        and (not tipo_base or d.tipo_base == tipo_base)
     ]
-    filtradas.sort(key=lambda d: (regras.chave_texto(d.titulo), d.id))
+    filtradas.sort(key=_mais_recente_primeiro)
     presentes = {d.organizacao_id for d in todas if d.organizacao_id}
     opcoes = DatasetsOpcoesOut(
         orgaos=sorted((OpcaoOut(valor=str(i), rotulo=orgaos[i].titulo.strip())
                        for i in presentes if i in orgaos),
                       key=lambda o: regras.chave_texto(o.rotulo)),
         formatos=sorted({f for d in todas for f in d.formatos}),
-        situacoes=[s for s in regras.SITUACOES_NO_PORTAL if any(d.situacao == s for d in todas)])
+        situacoes=[s for s in regras.SITUACOES_NO_PORTAL if any(d.situacao == s for d in todas)],
+        tipos_base=list(regras.TIPOS_DE_BASE))
     return DatasetsOut(total=len(todas), opcoes=opcoes, datasets=filtradas)
 
 
@@ -241,8 +262,8 @@ def obter_dataset(db: Session, dataset_id: int, user: UsuarioAtual) -> DatasetDe
     recursos = sorted(atuais, key=lambda r: (r.eh_dicionario_dados,
                                              regras.chave_texto(r.nome), r.id))
     return DatasetDetalheOut(
-        **_linha(ds, dao.organizacoes()).model_dump(),
-        descricao=ds.descricao, metadata_created=_utc(ds.metadata_created),
+        **_linha(ds, dao.organizacoes(), _vinculados_ao_pda_vigente(db)).model_dump(),
+        descricao=ds.descricao,
         periodicidade_declarada=ds.periodicidade_declarada, licenca=ds.licenca,
         recursos=[RecursoOut(id=r.id, id_ckan=r.id_ckan, nome=r.nome, formato=r.formato,
                              url=r.url,

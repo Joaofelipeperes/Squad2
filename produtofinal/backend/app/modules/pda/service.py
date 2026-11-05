@@ -108,6 +108,14 @@ def plano_vigente(db: Session) -> PlanoPda | None:
     return PdaDao(db).plano_vigente()
 
 
+def datasets_vinculados_ao_vigente(db: Session) -> set[int]:
+    """IDs dos datasets que alguma base do PDA vigente vincula pelo ID (vazio sem PDA vigente).
+    Define o tipo de base da tela Datasets: prevista × espontânea (ADR-0026)."""
+    dao = PdaDao(db)
+    plano = dao.plano_vigente()
+    return dao.ids_datasets_vinculados(plano.id) if plano else set()
+
+
 def _plano_ou_404(dao: PdaDao, plano_id: int) -> PlanoPda:
     plano = dao.plano(plano_id)
     if plano is None:

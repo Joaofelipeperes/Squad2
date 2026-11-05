@@ -2,7 +2,26 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { Evento, EventosLista, FiltrosEventos, Sincronizacao } from "./api";
 import { FILTROS_VAZIOS, rastreabilidadeApi, salvarArquivo } from "./api";
+import { api } from "@/shared/api/client";
 import { PageLede } from "@/shared/ui/PageLede";
+import { POR_PAGINA_PADRAO, Paginacao } from "@/shared/ui/tabela";
+
+interface Coleta { status: string; iniciada_em: string; finalizada_em: string | null }
+
+/** SQLite devolve a data sem fuso; o backend grava em UTC. */
+const instante = (iso: string | null | undefined) =>
+  iso ? Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`) : NaN;
+
+/** Depois da coleta a auditoria do CKAN ainda é lida (sincronização): enquanto ela não termina,
+ *  a tela consulta de novo sozinha, sem precisar recarregar nem limpar o cache (ADR-0029). */
+const ESPERA_SINCRONIZACAO_MS = 15 * 60 * 1000;
+function aguardandoSincronizacao(coleta: Coleta | null | undefined, sinc: Sincronizacao | null | undefined): boolean {
+  if (sinc?.status === "executando") return true;
+  if (coleta?.status !== "ok" || !coleta.finalizada_em) return false;
+  const fim = instante(coleta.finalizada_em);
+  if (Date.now() - fim > ESPERA_SINCRONIZACAO_MS) return false;
+  return !sinc || instante(sinc.iniciada_em) < fim;
+}
 
 /**
  * Tela "Rastreabilidade" (US14, US29, PBI-85) — referência visual: #screen-traceability do
@@ -12,6 +31,9 @@ import { PageLede } from "@/shared/ui/PageLede";
 export default function RastreabilidadePage() {
   const [filtros, setFiltros] = useState<FiltrosEventos>(FILTROS_VAZIOS);
   const [busca, setBusca] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(POR_PAGINA_PADRAO);
+  useEffect(() => { setPagina(1); }, [filtros]);
 
   // A busca é enviada ao backend com uma pequena espera, para não consultar a cada tecla.
   useEffect(() => {
@@ -19,10 +41,16 @@ export default function RastreabilidadePage() {
     return () => clearTimeout(t);
   }, [busca]);
 
+  // Mesma consulta da topbar (cache compartilhado): só lê a última coleta, sem requisição a mais.
+  const coleta = useQuery({
+    queryKey: ["coleta", "ultima"],
+    queryFn: () => api.get<Coleta | null>("/inventario/coletas/ultima"),
+  });
   const lista = useQuery({
-    queryKey: ["rastreabilidade", "eventos", filtros],
-    queryFn: () => rastreabilidadeApi.eventos(filtros),
+    queryKey: ["rastreabilidade", "eventos", filtros, pagina, porPagina],
+    queryFn: () => rastreabilidadeApi.eventos(filtros, pagina, porPagina),
     placeholderData: (anterior: EventosLista | undefined) => anterior,
+    refetchInterval: (q) => (aguardandoSincronizacao(coleta.data, q.state.data?.sincronizacao) ? 5000 : false),
   });
   const set = (campo: keyof FiltrosEventos) => (valor: string) => setFiltros((f) => ({ ...f, [campo]: valor }));
   const limpar = () => { setBusca(""); setFiltros(FILTROS_VAZIOS); };
@@ -73,12 +101,6 @@ export default function RastreabilidadePage() {
             </button>
           </div>
         </div>
-        <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
-          <div className="sub" style={{ fontSize: 12.5 }} aria-live="polite">
-            {dados ? resumoContagem(dados, filtros.ordem) : lista.isError ? "" : "Carregando…"}
-            {lista.isPlaceholderData && " · atualizando…"}
-          </div>
-        </div>
         <div className="panel-body">
           {lista.isError ? (
             <div className="inline-msg err" role="alert">
@@ -99,14 +121,15 @@ export default function RastreabilidadePage() {
             </div>
           )}
         </div>
+        {dados && (
+          <Paginacao id="trace" total={dados.total} pagina={dados.pagina} porPagina={dados.por_pagina}
+            onPagina={setPagina} onPorPagina={(n) => { setPorPagina(n); setPagina(1); }}
+            carregando={lista.isPlaceholderData}
+            resumo={<><strong>{dados.total}</strong> evento(s){filtros.ordem === "antigos" ? ", mais antigos primeiro" : ", mais recentes primeiro"}</>} />
+        )}
       </div>
     </section>
   );
-}
-
-function resumoContagem(d: EventosLista, ordem: FiltrosEventos["ordem"]): string {
-  if (d.total === d.exibidos) return `${d.total} evento(s)`;
-  return `${d.exibidos} evento(s) ${ordem === "antigos" ? "mais antigos" : "mais recentes"} de ${d.total}`;
 }
 
 /** Mesmo mapa do typeIconMap do protótipo V1. */

@@ -18,8 +18,10 @@ export interface DatasetLinha {
   formatos: string[];
   ultima_atualizacao: string | null;
   ultima_atualizacao_estimada: boolean;
+  metadata_created: string | null; // criação do dataset no CKAN (ordem padrão: mais recente primeiro)
   metadata_modified: string | null;
   situacao: string;
+  tipo_base: string | null; // "Prevista no PDA" | "Espontânea" (ADR-0026); null = fora do portal sem vínculo
 }
 
 export interface Recurso {
@@ -35,7 +37,6 @@ export interface Recurso {
 
 export interface DatasetDetalhe extends DatasetLinha {
   descricao: string | null;
-  metadata_created: string | null;
   periodicidade_declarada: string | null;
   licenca: string | null;
   recursos: Recurso[];
@@ -44,13 +45,13 @@ export interface DatasetDetalhe extends DatasetLinha {
 
 export interface DatasetsLista {
   total: number;
-  opcoes: { orgaos: Opcao[]; formatos: string[]; situacoes: string[] };
+  opcoes: { orgaos: Opcao[]; formatos: string[]; situacoes: string[]; tipos_base: string[] };
   datasets: DatasetLinha[];
 }
 
-export interface FiltrosDatasets { busca: string; orgao: string; formato: string; situacao: string }
+export interface FiltrosDatasets { busca: string; orgao: string; formato: string; situacao: string; tipo_base: string }
 
-export const FILTROS_VAZIOS: FiltrosDatasets = { busca: "", orgao: "", formato: "", situacao: "" };
+export const FILTROS_VAZIOS: FiltrosDatasets = { busca: "", orgao: "", formato: "", situacao: "", tipo_base: "" };
 
 /** Base prevista do PDA vinculada ao dataset (subconjunto de BaseOut do módulo pda). */
 export interface BaseVinculada {

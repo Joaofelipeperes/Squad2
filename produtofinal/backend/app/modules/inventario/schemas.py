@@ -39,14 +39,17 @@ class DatasetOut(BaseModel):
     formatos: list[str]
     ultima_atualizacao: datetime | None
     ultima_atualizacao_estimada: bool
+    metadata_created: datetime | None  # criação do dataset no CKAN (ordem padrão da tela)
     metadata_modified: datetime | None  # só informativo: muda com qualquer edição de metadado
     situacao: str  # Publicado | Sem recurso | Fora do portal (situação no portal, não do PDA)
+    tipo_base: str | None  # Prevista no PDA | Espontânea (ADR-0026); None = fora do portal sem vínculo
 
 
 class DatasetsOpcoesOut(BaseModel):
     orgaos: list[OpcaoOut]
     formatos: list[str]
     situacoes: list[str]
+    tipos_base: list[str]
 
 
 class DatasetsOut(BaseModel):
@@ -68,7 +71,6 @@ class RecursoOut(BaseModel):
 
 class DatasetDetalheOut(DatasetOut):
     descricao: str | None
-    metadata_created: datetime | None  # data de publicação no portal
     periodicidade_declarada: str | None  # campo "Atualização" preenchido pelo órgão no CKAN
     licenca: str | None
     recursos: list[RecursoOut]  # recursos atuais (inclui dicionário, marcado)

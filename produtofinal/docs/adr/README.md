@@ -64,6 +64,9 @@ a fonte.
 | 29/10/2026 | Worker passa a executar também a fila da varredura LGPD, a cada minuto | Técnica | Revisão da ADR-0012 | [ADR-0012](0012-agendamento-em-worker-proprio.md) |
 | 30/10/2026 | Base espontânea = dataset ativo no portal sem vínculo pelo ID com o PDA vigente, calculada a partir do inventário | Negócio | Aceita (validar com a GEDA) | [ADR-0026](0026-base-espontanea-dataset-sem-vinculo-no-pda-vigente.md) |
 | 30/10/2026 | PDF dos relatórios gerado no backend com reportlab (A4 paisagem, cabeçalho repetido por página), na mesma rota de exportação do XLSX/CSV | Técnica | Aceita | [ADR-0027](0027-exportacao-pdf-com-reportlab.md) |
+| 05/11/2026 | Tabelas ordenadas e paginadas no navegador (50 por página, até 999, total no rodapé); rastreabilidade e log de acesso paginados no banco | Técnica | Proposta | [ADR-0028](0028-ordenacao-e-paginacao-das-tabelas.md) |
+| 05/11/2026 | API com `Cache-Control: no-store`, telas recarregadas ao fim da coleta e rastreabilidade acompanhando a sincronização; `index.html` sem cache no nginx | Técnica | Proposta | [ADR-0029](0029-api-sem-cache-e-telas-recarregadas-apos-a-coleta.md) |
+| 05/11/2026 | Tela Datasets mostra e filtra o tipo de base (prevista × espontânea) | Negócio | Revisão da ADR-0026 | [ADR-0026](0026-base-espontanea-dataset-sem-vinculo-no-pda-vigente.md) |
 
 ## Decisões em aberto
 

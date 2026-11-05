@@ -158,7 +158,9 @@ def test_log_de_acesso_registra_cada_requisicao(client, admin, analista):
     client.post(f"{API}/login", json={"email": "Paloma@cge.go.gov.br", "senha": "errada"})
     client.delete(f"{API}/papeis/999999", headers=analista)          # 403
     client.get("/api/v1/saude")                                       # fora do log
-    logs = client.get(f"{API}/logs", headers=admin).json()
+    pagina = client.get(f"{API}/logs", headers=admin).json()
+    logs = pagina["registros"]
+    assert pagina["pagina"] == 1 and pagina["por_pagina"] == 50 and pagina["total"] == len(logs)
     assert [(x["usuario"], x["metodo"], x["acao"], x["status_http"]) for x in logs[:2]] == [
         ("estagiario@cge.go.gov.br", "DELETE", "excluir_papel", 403),
         ("paloma@cge.go.gov.br", "POST", "login", 401),
@@ -167,8 +169,33 @@ def test_log_de_acesso_registra_cada_requisicao(client, admin, analista):
     assert logs[0]["caminho"] == "/api/v1/acesso/papeis/999999"
     assert not any(x["caminho"].endswith("/saude") for x in logs)
     assert [x["usuario"] for x in client.get(f"{API}/logs?usuario=paloma", headers=admin)
-            .json()] == ["paloma@cge.go.gov.br"]
+            .json()["registros"]] == ["paloma@cge.go.gov.br"]
     assert client.get(f"{API}/logs", headers=analista).status_code == 403
+
+
+def test_log_de_acesso_paginado_e_ordenado(client, admin, analista):
+    """ADR-0028: página com total; `ate_id` fixa a lista entre páginas; qualquer coluna ordena."""
+    for _ in range(3):
+        client.delete(f"{API}/papeis/999999", headers=analista)
+    p1 = client.get(f"{API}/logs?por_pagina=2", headers=admin).json()
+    assert len(p1["registros"]) == 2 and p1["total"] >= 4 and p1["ate_id"]
+    # requisições novas (inclusive esta navegação) não deslocam as páginas seguintes
+    p2 = client.get(f"{API}/logs?por_pagina=2&pagina=2&ate_id={p1['ate_id']}",
+                    headers=admin).json()
+    assert p2["total"] == p1["total"]
+    assert {x["id"] for x in p1["registros"]}.isdisjoint({x["id"] for x in p2["registros"]})
+    asc = client.get(f"{API}/logs?ordenar=status_http&direcao=asc&por_pagina=999",
+                     headers=admin).json()["registros"]
+    assert [x["status_http"] for x in asc] == sorted(x["status_http"] for x in asc)
+    assert client.get(f"{API}/logs?ordenar=senha", headers=admin).status_code == 422
+    assert client.get(f"{API}/logs?por_pagina=0", headers=admin).status_code == 422
+
+
+def test_api_nunca_fica_em_cache(client, admin):
+    """ADR-0029: depois de "Atualizar dados" o navegador precisa ler o banco de novo."""
+    r = client.get(f"{API}/me", headers=admin)
+    assert r.headers["cache-control"] == "no-store, max-age=0"
+    assert client.get(f"{API}/catalogo", headers=admin).headers["cache-control"].startswith("no-store")
 
 
 # ---------------------------------------------------------- exclusão lógica e auditoria (ADR-0019)

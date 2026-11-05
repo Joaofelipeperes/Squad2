@@ -97,3 +97,15 @@ class LogAcessoOut(BaseModel):
     status_http: int
     ip: str | None
     user_agent: str | None
+
+
+class LogsAcessoOut(BaseModel):
+    """Página do log de acesso (ADR-0028). `ate_id` = maior `id` considerado: as páginas seguintes
+    o repetem para que as requisições novas (inclusive as da própria navegação) não desloquem a
+    lista."""
+
+    total: int
+    pagina: int
+    por_pagina: int
+    ate_id: int | None
+    registros: list[LogAcessoOut]

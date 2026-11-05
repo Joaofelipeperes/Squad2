@@ -108,13 +108,25 @@ class AcessoDao(Dao):
         self.save_generic(LogAcesso(**campos))
         self.commit()
 
-    def logs(self, usuario: str | None, desde: datetime | None, ate: datetime | None,
-             limite: int) -> list[LogAcesso]:
-        stmt = select(LogAcesso).order_by(LogAcesso.id.desc()).limit(limite)
+    def maior_id_log(self) -> int | None:
+        return self.buscar_valor(select(func.max(LogAcesso.id)))
+
+    def logs(self, usuario: str | None, desde: datetime | None, ate: datetime | None, *,
+             ate_id: int | None, ordenar: str, desc: bool, por_pagina: int,
+             deslocamento: int) -> tuple[int, list[LogAcesso]]:
+        """(total, página) ordenada por `ordenar` (vazios no fim) e, no empate, pelo `id`."""
+        stmt = select(LogAcesso)
+        if ate_id is not None:
+            stmt = stmt.where(LogAcesso.id <= ate_id)
         if usuario:
             stmt = stmt.where(LogAcesso.usuario.contains(usuario.lower()))
         if desde:
             stmt = stmt.where(LogAcesso.ocorrido_em >= desde)
         if ate:
             stmt = stmt.where(LogAcesso.ocorrido_em <= ate)
-        return self.buscar_lista(stmt)
+        total = self.buscar_valor(select(func.count()).select_from(stmt.subquery())) or 0
+        coluna = getattr(LogAcesso, ordenar)
+        ordem = (coluna.desc() if desc else coluna.asc()).nulls_last()
+        desempate = LogAcesso.id.desc() if desc else LogAcesso.id.asc()
+        return total, self.buscar_lista(
+            stmt.order_by(ordem, desempate).offset(deslocamento).limit(por_pagina))

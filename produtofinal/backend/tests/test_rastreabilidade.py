@@ -785,3 +785,22 @@ def test_versoes_do_ckan_dao_o_que_mudou_em_cada_acao_em_lote():
         vis = [[(d["anterior"], d["novo"]) for d in e.detalhes if d["campo"] == "visibilidade"]
                for e in nativos[:2]]
         assert vis == [[("False", "True")], [("True", "False")]]
+
+
+def test_eventos_paginados(client, analista):
+    """ADR-0028: a tela pagina no banco (50 por padrão, até 999) e informa o total."""
+    _datasets()
+    service.sincronizar(CkanClient("http://ckan.local",
+                                   transport=httpx.MockTransport(_handler([]))))
+    url = "/api/v1/rastreabilidade/eventos"
+    todos = client.get(url, headers=analista).json()
+    assert todos["pagina"] == 1 and todos["por_pagina"] == 50
+    total = todos["total"]
+    assert total >= 2
+    p1 = client.get(url, params={"por_pagina": 1}, headers=analista).json()
+    p2 = client.get(url, params={"por_pagina": 1, "pagina": 2}, headers=analista).json()
+    assert (p1["total"], p1["exibidos"], p2["exibidos"]) == (total, 1, 1)
+    assert [p1["eventos"][0]["id"], p2["eventos"][0]["id"]] == [e["id"] for e in todos["eventos"][:2]]
+    alem = client.get(url, params={"por_pagina": 1, "pagina": total + 5}, headers=analista).json()
+    assert alem["pagina"] == total and alem["eventos"][0]["id"] == todos["eventos"][-1]["id"]
+    assert client.get(url, params={"por_pagina": 1000}, headers=analista).status_code == 422

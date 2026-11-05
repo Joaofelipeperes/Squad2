@@ -6,6 +6,20 @@ import { FILTROS_VAZIOS, atualizacoesApi } from "./api";
 import { DatasetDetalheModal } from "@/modules/datasets/DatasetDetalheModal";
 import { fmtData, fmtDataHora } from "@/modules/pda/formato";
 import { PageLede } from "@/shared/ui/PageLede";
+import type { Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
+
+type Coluna = "dataset" | "orgao" | "periodicidade" | "atualizado" | "dias" | "prazo" | "situacao";
+
+const ORDENADORES: Ordenadores<AtualizacaoLinha, Coluna> = {
+  dataset: (d) => d.dataset_titulo,
+  orgao: (d) => d.orgao_sigla,
+  periodicidade: (d) => d.periodicidade,
+  atualizado: (d) => dataOrdenavel(d.ultima_atualizacao),
+  dias: (d) => d.dias_desde_atualizacao,
+  prazo: (d) => d.prazo_esperado,
+  situacao: (d) => d.situacao,
+};
 
 /**
  * Tela "Monitoramento de Atualizações" (US9/US10) — referência visual: #screen-updates do
@@ -32,6 +46,8 @@ export default function AtualizacoesPage() {
   const set = (campo: keyof FiltrosAtualizacoes) => (valor: string) => setFiltros((f) => ({ ...f, [campo]: valor }));
   const limpar = () => { setBusca(""); setFiltros(FILTROS_VAZIOS); };
   const dados = lista.data;
+  const tabela = useTabela(dados?.datasets, ORDENADORES);
+  const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
 
   return (
     <section className="screen">
@@ -83,18 +99,16 @@ export default function AtualizacoesPage() {
             <button type="button" className="btn btn-ghost btn-sm" onClick={limpar}>Limpar filtros</button>
           </div>
         </div>
-        <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
-          <div className="sub" style={{ fontSize: 12.5 }} aria-live="polite">
-            {dados ? `${dados.datasets.length} dataset(s) encontrado(s) de ${dados.total} monitorados${dados.plano_nome ? ` no ${dados.plano_nome}` : ""}`
-              : lista.isError ? "" : "Carregando…"}
-            {lista.isPlaceholderData && " · atualizando…"}
-          </div>
-        </div>
         <div className="table-scroll">
           <table>
             <thead><tr>
-              <th>Dataset</th><th>Órgão</th><th>Periodicidade</th><th>Último recurso atualizado</th>
-              <th>Dias desde atualização</th><th>Prazo esperado</th><th>Situação</th>
+              <ColunaOrdenavel coluna="dataset" {...col}>Dataset</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="orgao" {...col}>Órgão</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="periodicidade" {...col}>Periodicidade</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="atualizado" primeira="desc" {...col}>Último recurso atualizado</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="dias" primeira="desc" {...col}>Dias desde atualização</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="prazo" {...col}>Prazo esperado</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="situacao" {...col}>Situação</ColunaOrdenavel>
             </tr></thead>
             <tbody>
               {lista.isError ? (
@@ -113,11 +127,16 @@ export default function AtualizacoesPage() {
               ) : dados.datasets.length === 0 ? (
                 <tr><td colSpan={7} className="table-empty">Nenhum registro para os filtros selecionados.</td></tr>
               ) : (
-                dados.datasets.map((d) => <Linha key={d.base_id} d={d} onAbrir={setDetalhe} />)
+                tabela.itens.map((d) => <Linha key={d.base_id} d={d} onAbrir={setDetalhe} />)
               )}
             </tbody>
           </table>
         </div>
+        {dados && (
+          <Paginacao id="at" {...tabela.paginacao} carregando={lista.isPlaceholderData}
+            resumo={<><strong>{dados.datasets.length}</strong> dataset(s) encontrado(s) de {dados.total} monitorados
+              {dados.plano_nome ? ` no ${dados.plano_nome}` : ""}</>} />
+        )}
       </div>
 
       <DatasetDetalheModal datasetId={detalhe} onFechar={() => setDetalhe(null)} />

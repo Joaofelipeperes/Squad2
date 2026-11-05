@@ -7,7 +7,7 @@
 | **User stories** | US9 (PBI-23 a PBI-26, PBI-78, PBI-79, PBI-81), US10 (PBI-27 a PBI-30) |
 | **Backend** | `backend/app/modules/atualizacoes/` |
 | **Frontend** | `frontend/src/modules/atualizacoes/` |
-| **Última atualização** | 30/10/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Indica se cada dataset está de fato sendo atualizado conforme a periodicidade declarada, usando a
@@ -16,7 +16,7 @@ data do recurso e não a do metadado — eliminando as "falsas atualizações".
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento de Atualizações | `/atualizacoes` | `atualizacoes.acessar` | Filtros por dataset (busca), órgão, periodicidade e situação (PBI-81); clicar na linha abre o detalhe do dataset (modal da tela Datasets) |
+| Monitoramento de Atualizações | `/atualizacoes` | `atualizacoes.acessar` | Filtros por dataset (busca), órgão, periodicidade e situação (PBI-81); ordenação por coluna e paginação com total no rodapé (ADR-0028); clicar na linha abre o detalhe do dataset (modal da tela Datasets) |
 
 Referência visual: `#screen-updates` do Protótipo V1, incluindo o aviso sobre `last_modified`. Os filtros **dataset** e **órgão** são adicionais ao protótipo. A lista traz os datasets vinculados às bases do **PDA vigente** (a periodicidade vem do PDA, ADR-0023); base sem vínculo não aparece. Os cartões contam todas as linhas do escopo, sem os filtros.
 
@@ -101,3 +101,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
 | 28/10/2026 | Situação por periodicidade (PBI-27/28, ADR-0023): `regras.situacao_periodicidade`, `prazo_em_dias`, `vencimento_atualizacao`; contrato `service.situacao_periodicidade` implementado; usado pelo Dashboard | Humberto |
 | 30/10/2026 | Tela Monitoramento de Atualizações (US9/US10, PBI-81): `GET /atualizacoes/datasets`, `listagem.py`, `schemas.py`, `AtualizacoesPage` com cartões e filtros dataset, órgão, periodicidade e situação; teste `test_atualizacoes_api.py` | Squad 2 |
+| 05/11/2026 | Tela Monitoramento de Atualizações: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador movido para o rodapé. Sem mudança na API | Victor |

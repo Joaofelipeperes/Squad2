@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
@@ -22,18 +22,21 @@ def listar_eventos(db: DbSession, user: UsuarioAtual = Depends(require(P.RASTREA
                    dataset: str | None = None, busca: str | None = None,
                    desde: datetime | None = None, ate: datetime | None = None,
                    ordem: Literal["recentes", "antigos"] = "recentes",
-                   limite: int = service.LIMITE_PADRAO):
+                   pagina: int = Query(1, ge=1),
+                   por_pagina: int = Query(service.POR_PAGINA_PADRAO, ge=1,
+                                           le=service.POR_PAGINA_MAXIMO)):
     """Linha do tempo de alterações (tela Rastreabilidade, PBI-85). `tipo` aceita o código
     (inclusao, alteracao, exclusao, privacao, recurso_atualizado) ou o rótulo da tela; `orgao`
     é o `id` da organização; `dataset` é o ID do CKAN; `busca` procura no título ou nome do
     dataset; `desde`/`ate` em ISO 8601 (com fuso); `ordem` por data: recentes (padrão) ou
-    antigos."""
+    antigos; `pagina`/`por_pagina` (padrão 50, até 999)."""
     tipo = _vazio(tipo)
     if tipo and tipo not in regras.TIPOS:
         tipo = next((k for k, v in regras.TIPOS.items() if v == tipo), tipo)
     return service.listar_eventos(db, user, tipo=tipo, orgao=orgao,
                                   dataset=_vazio(dataset), busca=_vazio(busca),
-                                  desde=desde, ate=ate, ordem=ordem, limite=limite)
+                                  desde=desde, ate=ate, ordem=ordem, pagina=pagina,
+                                  por_pagina=por_pagina)
 
 
 @router.get("/eventos/{evento_id}/diff", response_model=DiffOut)

@@ -12,6 +12,32 @@ import { NovaCorrecaoModal } from "./NovaCorrecaoModal";
 import { PrioridadeTag, StatusAchadoBadge, classeStatusAchado } from "./formato";
 import { VarreduraPainel } from "./VarreduraPainel";
 import { PageLede } from "@/shared/ui/PageLede";
+import type { Direcao, Ordem, Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, alternarOrdem, ordenar, useTabela } from "@/shared/ui/tabela";
+
+/** Prioridade como número para ordenar: "desc" = Alta primeiro. */
+const NIVEL: Record<string, number> = { Alta: 3, "Média": 2, Baixa: 1 };
+
+type ColunaGrupo = "prioridade" | "orgao" | "dataset" | "arquivo" | "tipos" | "achados" | "situacao";
+const ORDENADORES_GRUPO: Ordenadores<GrupoRecurso, ColunaGrupo> = {
+  prioridade: (g) => NIVEL[g.prioridade],
+  orgao: (g) => g.orgao,
+  dataset: (g) => g.dataset_titulo,
+  arquivo: (g) => g.recurso_nome,
+  tipos: (g) => g.celulas,
+  achados: (g) => g.achados.length,
+  situacao: (g) => g.status.revisar ?? 0, // quantos ainda aguardam revisão
+};
+
+type ColunaAchado = "prioridade" | "tipo" | "coluna" | "linha" | "confianca" | "status";
+const ORDENADORES_ACHADO: Ordenadores<Achado, ColunaAchado> = {
+  prioridade: (a) => NIVEL[a.prioridade],
+  tipo: (a) => a.tipo_rotulo,
+  coluna: (a) => a.coluna,
+  linha: (a) => a.linha,
+  confianca: (a) => a.confianca,
+  status: (a) => ROTULO_STATUS[a.status],
+};
 
 /**
  * Tela "Riscos de Dados Pessoais" (US11/US12) — referência visual: #screen-lgpd e #modal-lgpd do
@@ -33,6 +59,8 @@ export default function LgpdPage() {
   });
   const dados = lista.data;
   const grupos = useMemo(() => agruparPorRecurso(dados?.achados ?? []), [dados]);
+  const tabela = useTabela(grupos, ORDENADORES_GRUPO);
+  const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
   const [abertos, setAbertos] = useState<Set<number>>(new Set());
   const alternar = (recursoId: number) => setAbertos((s) => {
     const n = new Set(s);
@@ -95,9 +123,16 @@ export default function LgpdPage() {
         <div className="table-scroll">
           <table className="lgpd-grupos">
             <thead><tr>
-              <th style={{ width: 28 }} aria-label="Expandir" /><th>Prioridade</th><th>Órgão</th>
-              <th>Dataset</th><th>Arquivo</th><th>Dados pessoais encontrados</th><th>Achados</th>
-              <th>Situação</th>
+              <th style={{ width: 28 }} aria-label="Expandir" />
+              <ColunaOrdenavel coluna="prioridade" primeira="desc" {...col}>Prioridade</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="orgao" {...col}>Órgão</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="dataset" {...col}>Dataset</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="arquivo" {...col}>Arquivo</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="tipos" primeira="desc" {...col}
+                title="Ordena pelo total de células sinalizadas no arquivo">Dados pessoais encontrados</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="achados" primeira="desc" {...col}>Achados</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="situacao" primeira="desc" {...col}
+                title="Ordena pelo número de achados que ainda aguardam revisão">Situação</ColunaOrdenavel>
             </tr></thead>
             <tbody>
               {lista.isError ? (
@@ -114,7 +149,7 @@ export default function LgpdPage() {
               ) : grupos.length === 0 ? (
                 <tr><td colSpan={COLUNAS} className="table-empty">Nenhum alerta para os filtros selecionados.</td></tr>
               ) : (
-                grupos.map((g) => (
+                tabela.itens.map((g) => (
                   <Grupo key={g.recurso_id} g={g} aberto={abertos.has(g.recurso_id)}
                          onAlternar={() => alternar(g.recurso_id)} onAbrir={setAberto} />
                 ))
@@ -122,11 +157,10 @@ export default function LgpdPage() {
             </tbody>
           </table>
         </div>
-        {grupos.length > 0 && (
-          <div className="cell-muted" style={{ fontSize: 12.5, padding: "10px 14px" }}>
-            {grupos.length} arquivo(s) · {dados?.achados.length} achado(s). Clique num arquivo para ver
-            coluna, linha e confiança de cada achado.
-          </div>
+        {dados && (
+          <Paginacao id="lgpd" {...tabela.paginacao} carregando={lista.isPlaceholderData}
+            resumo={<><strong>{grupos.length}</strong> arquivo(s) · {dados.achados.length} achado(s).
+              {grupos.length > 0 && " Clique num arquivo para ver coluna, linha e confiança de cada achado."}</>} />
         )}
       </div>
 
@@ -165,6 +199,9 @@ function Grupo({ g, aberto, onAlternar, onAbrir }: {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onAlternar(); }
   };
   const detalheId = `lgpd-grupo-${g.recurso_id}`;
+  const [ordem, setOrdem] = useState<Ordem<ColunaAchado> | null>(null);
+  const achados = useMemo(() => ordenar(g.achados, ordem, ORDENADORES_ACHADO), [g.achados, ordem]);
+  const col = { ordem, onOrdenar: (c: ColunaAchado, p: Direcao) => setOrdem((o) => alternarOrdem(o, c, p)) };
   return (
     <Fragment>
       <tr className={`lgpd-grupo${aberto ? " aberto" : ""}`} tabIndex={0} onClick={onAlternar}
@@ -199,11 +236,15 @@ function Grupo({ g, aberto, onAlternar, onAbrir }: {
           <td colSpan={COLUNAS}>
             <table>
               <thead><tr>
-                <th>Prioridade</th><th>Tipo identificado</th><th>Coluna</th><th>Linha</th>
-                <th>Confiança</th><th>Status</th>
+                <ColunaOrdenavel coluna="prioridade" primeira="desc" {...col}>Prioridade</ColunaOrdenavel>
+                <ColunaOrdenavel coluna="tipo" {...col}>Tipo identificado</ColunaOrdenavel>
+                <ColunaOrdenavel coluna="coluna" {...col}>Coluna</ColunaOrdenavel>
+                <ColunaOrdenavel coluna="linha" {...col}>Linha</ColunaOrdenavel>
+                <ColunaOrdenavel coluna="confianca" primeira="desc" {...col}>Confiança</ColunaOrdenavel>
+                <ColunaOrdenavel coluna="status" {...col}>Status</ColunaOrdenavel>
               </tr></thead>
               <tbody>
-                {g.achados.map((a) => <Linha key={a.id} a={a} onAbrir={onAbrir} />)}
+                {achados.map((a) => <Linha key={a.id} a={a} onAbrir={onAbrir} />)}
               </tbody>
             </table>
           </td>

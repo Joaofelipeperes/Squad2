@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 30/10/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -17,7 +17,7 @@ Superintendência (inclusive para o Prêmio de Transparência).
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
 | Dashboard (Visão Geral) | `/` | `painel.acessar` | Cartões, gráficos e alertas prioritários; **Ver monitoramento completo** e **Ver** de cada alerta levam ao PDA (`/pda?orgao=<chave>`) ou a Datasets; "Atualizar dados" (`inventario.coletar`) |
-| Organizações | `/organizacoes` | `painel.acessar` | Detalhe do órgão (clique ou Enter na linha); **Ver bases no PDA** abre `/pda?orgao=<chave>` (`pda.acessar`) |
+| Organizações | `/organizacoes` | `painel.acessar` | Ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe do órgão (clique ou Enter na linha); **Ver bases no PDA** abre `/pda?orgao=<chave>` (`pda.acessar`) |
 
 Referência visual: `#screen-dashboard` e `#screen-organizations`. Ressalvas de 17/09: gráficos de
 evolução temporal abaixo dos cards (PBI-75).
@@ -167,3 +167,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 28/10/2026 | Organizações: coluna **Atualização** (% em dia pela periodicidade do PDA, ADR-0023) e cartão "Atualizações atrasadas" no detalhe (`atualizacao_pct`, `atualizacoes_atrasadas`, `atualizacoes_avaliadas`) | Humberto |
 | 30/10/2026 | Interações: `organizacoes` e `situacao_atualizacao` consumidos pelo módulo `relatorios` (sem mudança no código do painel) | Victor |
 | 30/10/2026 | Dashboard: gráficos **Possíveis dados pessoais** (resumo do lgpd, só com `lgpd.acessar`; cartão com os achados aguardando revisão) e **Bases espontâneas** (ADR-0026: datasets ativos sem vínculo com o PDA vigente, por órgão); `espontaneas()`, `PainelDao.datasets_ativos`, `EspontaneasOut`, `dados_pessoais` | Humberto |
+| 05/11/2026 | Tela Organizações: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador de órgãos movido para o rodapé. Sem mudança na API | Victor |

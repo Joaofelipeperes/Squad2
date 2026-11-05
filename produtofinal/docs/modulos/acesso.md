@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 27/10/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -32,8 +32,8 @@ Usuário ──< papéis >── Papel ──< permissões >── código do ca
 |---|---|---|---|
 | Login | `/login` | pública | — |
 | Sem acesso | qualquer rota, se o usuário não tem nenhuma tela | autenticado | Sair |
-| Usuários e papéis | `/admin/usuarios` | `acesso.gerenciar_usuarios` | Criar/editar usuário (`acesso.gerenciar_usuarios`); criar/editar/excluir papel (`acesso.gerenciar_papeis` — sem ela, papéis aparecem só para leitura) |
-| Log de acesso | `/admin/logs` | `acesso.ver_logs` | Filtrar por usuário (trecho do e-mail), período (hora de Brasília) e limite; exportar CSV gerado no navegador (`;`, UTF-8 com BOM, só as linhas carregadas) |
+| Usuários e papéis | `/admin/usuarios` | `acesso.gerenciar_usuarios` | Ordenação por coluna e paginação nas duas tabelas (ADR-0028); Criar/editar usuário (`acesso.gerenciar_usuarios`); criar/editar/excluir papel (`acesso.gerenciar_papeis` — sem ela, papéis aparecem só para leitura) |
+| Log de acesso | `/admin/logs` | `acesso.ver_logs` | Filtrar por usuário (trecho do e-mail) e período (hora de Brasília); ordenar por qualquer coluna; paginação com total no rodapé (50 por página, até 999); exportar CSV gerado no navegador (`;`, UTF-8 com BOM, até 5.000 linhas com os filtros e a ordem atuais) |
 
 Após o login o usuário cai na **primeira tela permitida** (órgão publicador → `/envio`).
 
@@ -51,7 +51,7 @@ Após o login o usuário cai na **primeira tela permitida** (órgão publicador 
 | POST | `/papeis` | `acesso.gerenciar_papeis` | Cria papel personalizado |
 | PUT | `/papeis/{id}` | `acesso.gerenciar_papeis` | Edita papel (exceto Administrador) |
 | DELETE | `/papeis/{id}` | `acesso.gerenciar_papeis` | Exclui papel personalizado sem usuários |
-| GET | `/logs?usuario=&desde=&ate=&limite=200` | `acesso.ver_logs` | Log de acesso, mais recente primeiro; `usuario` filtra por trecho do e-mail; `limite` até 5000 |
+| GET | `/logs?usuario=&desde=&ate=&pagina=1&por_pagina=50&ordenar=ocorrido_em&direcao=desc&ate_id=` | `acesso.ver_logs` | `LogsAcessoOut` (`total`, `pagina`, `por_pagina`, `ate_id`, `registros`), mais recente primeiro por padrão (ADR-0028); `usuario` filtra por trecho do e-mail; `ordenar` = coluna do log; `por_pagina` até 5000; `ate_id` (devolvido na 1ª página) fixa o fim da lista para as requisições novas não deslocarem as páginas seguintes |
 
 ## Serviços e métodos
 Portão (`app/core/deps.py`) — usado por **todos** os módulos:
@@ -190,3 +190,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `usuario.orgao_id` passa a inteiro → `organizacao.id`; `OrgaoResumo` com `id` e `id_ckan`; `UsuarioIn.orgao_id` inteiro; CLI `criar-usuario --orgao` aceita `id_ckan` ou `name` da organização | Victor |
 | 22/10/2026 | Banco só pelo `AcessoDao` (ADR-0019): exclusão lógica de papéis (com vínculos) e de usuários (`excluir_usuario`); vínculos usuário–papel e papel–permissão viram tabelas com `id` e são trocados por exclusão lógica + criação; auditoria `created_id`/`changed_id` com o editor; e-mail e código únicos só entre ativos | Victor |
 | 26/10/2026 | Permissão `lgpd.varrer` (pedir varredura LGPD) para Administrador e Gerência GEDA. Em banco já existente, o papel Gerência não recebe a permissão sozinho: incluir na tela Usuários e papéis | Squad 2 |
+| 05/11/2026 | Log de acesso paginado e ordenado no banco (ADR-0028): `GET /logs` devolve `LogsAcessoOut` (`total`, `pagina`, `por_pagina`, `ate_id`, `registros`) com `pagina`, `por_pagina` (até 999 na tela, 5.000 na exportação), `ordenar`, `direcao` e `ate_id` (fixa o fim da lista entre páginas); o seletor de limite sai da tela. Tela Usuários e papéis: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028). Middleware `sem_cache_na_api` em `main.py`: toda resposta da API com `Cache-Control: no-store` (ADR-0029) | Victor |
