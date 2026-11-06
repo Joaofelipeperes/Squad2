@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import type { CriterioAtencao, Organizacao } from "./api";
 import { organizacoesApi } from "./api";
 import { OrganizacaoDetalheModal } from "./OrganizacaoDetalheModal";
+import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
+import { ExportarTabela, descreverFiltros } from "@/shared/ui/ExportarTabela";
 import { PageLede } from "@/shared/ui/PageLede";
 import type { Ordenadores } from "@/shared/ui/tabela";
 import { ColunaOrdenavel, Paginacao, useTabela } from "@/shared/ui/tabela";
@@ -64,6 +66,15 @@ export default function OrganizacoesPage() {
           <div className="filter-actions">
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFiltros(FILTROS_VAZIOS)}>
               Limpar filtros</button>
+            {d && (
+              <ExportarTabela titulo="Organizações" colunas={exportacao(d.lgpd_visivel)} linhas={tabela.todas}
+                filtros={descreverFiltros([
+                  ["PDA", d.plano?.nome], ["Busca", filtros.busca],
+                  ["Em atraso", rotulo(OPCOES_ATRASO, filtros.atraso)],
+                  ["Bases no PDA", rotulo(OPCOES_PDA, filtros.pda)],
+                  ["Organização no portal", rotulo(OPCOES_PORTAL, filtros.portal)],
+                  ["Índice de atenção", rotulo(OPCOES_ATENCAO, filtros.atencao)]])} />
+            )}
           </div>
         </div>
         <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
@@ -187,6 +198,28 @@ const OPCOES_ATENCAO = [
   { valor: "Baixo", rotulo: "Baixo" },
   { valor: "sem", rotulo: "Sem dados" },
 ];
+
+const rotulo = (opcoes: { valor: string; rotulo: string }[], valor: string) =>
+  opcoes.find((o) => o.valor === valor)?.rotulo ?? null;
+
+/** Colunas do Excel/PDF: as da tabela, com os valores como a tela mostra (Riscos LGPD só com acesso). */
+function exportacao(lgpdVisivel: boolean): ColunaExportacao<Organizacao>[] {
+  return [
+    { titulo: "Órgão", valor: (o) => o.nome },
+    { titulo: "Siglas no PDA", valor: (o) => o.siglas.join(", ") || "—" },
+    { titulo: "Bases previstas", valor: (o) => o.bases_previstas },
+    { titulo: "Bases publicadas",
+      valor: (o) => (o.bases_vinculadas > 0 ? `${o.bases_publicadas} de ${o.bases_vinculadas} vinculada(s)` : "aguardando vínculo") },
+    { titulo: "Em atraso", valor: (o) => (o.bases_em_atraso == null ? "aguardando vínculo" : o.bases_em_atraso) },
+    { titulo: "Atualização (% no prazo)",
+      valor: (o) => (o.atualizacao_pct != null ? `${o.atualizacao_pct}%`
+        : o.bases_vinculadas === 0 ? "aguardando vínculo" : "sem prazo definido") },
+    ...(lgpdVisivel ? [{ titulo: "Riscos LGPD (recursos varridos)",
+      valor: (o: Organizacao) => (o.riscos_lgpd == null ? "não varrido" : `${o.riscos_lgpd} de ${o.lgpd_recursos_analisados}`) }] : []),
+    { titulo: "Índice de atenção",
+      valor: (o) => (o.indice_atencao ? `${o.indice_atencao} (${o.indice_atencao_valor})` : "sem dados") },
+  ];
+}
 
 /** Busca sem diferenciar maiúsculas nem acentos ("saude" acha "Saúde"). */
 function normalizar(t: string) {

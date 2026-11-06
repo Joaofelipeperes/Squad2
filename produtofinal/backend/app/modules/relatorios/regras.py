@@ -317,5 +317,10 @@ def nome_arquivo(relatorio_id: str, formato: str, hoje: date) -> str:
     return f"relatorio-{relatorio_id}-{hoje.isoformat()}.{formato}"
 
 
+def nome_arquivo_tabela(titulo: str, formato: str, hoje: date) -> str:
+    """Exportação de uma tabela das telas (ADR-0031): `<titulo>-<aaaa-mm-dd>.<formato>`."""
+    return f"{slug(titulo) or 'tabela'}-{hoje.isoformat()}.{formato}"
+
+
 def nome_arquivo_orgao(orgao: str, formato: str, hoje: date) -> str:
     return f"relatorio-{slug(orgao)}-{hoje.isoformat()}.{formato}"

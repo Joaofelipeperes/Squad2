@@ -12,6 +12,7 @@ from app.modules.relatorios.schemas import (
     PreviaOut,
     RelatorioOrgaoOut,
     RelatorioOut,
+    TabelaExportarIn,
 )
 
 router = APIRouter()
@@ -29,6 +30,19 @@ def listar(user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))]
 
 
 # ------------------------------------------------------------------ relatório de um órgão
+@router.post("/tabela/exportar")
+def exportar_tabela(dados: TabelaExportarIn,
+                    _user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_EXPORTAR))]):
+    """PDF ou Excel de uma tabela das telas (Datasets, PDA, Atualizações, Organizações), com as
+    linhas que o usuário vê — filtros e ordenação da tela, todas as páginas (ADR-0031)."""
+    try:
+        conteudo, media_type, arquivo = service.exportar_tabela(dados)
+    except service.ErroRelatorio as exc:
+        raise _erro(exc) from exc
+    return Response(conteudo, media_type=media_type,
+                    headers={"Content-Disposition": f'attachment; filename="{arquivo}"'})
+
+
 @router.get("/por-orgao/orgaos", response_model=list[OrgaoOpcaoOut])
 def orgaos(db: DbSession, user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))]):
     """Órgãos que o usuário pode escolher (escopo de órgão dele)."""

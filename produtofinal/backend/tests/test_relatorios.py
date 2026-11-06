@@ -246,3 +246,36 @@ def test_regras_secoes_e_slug():
     assert wb.sheetnames == ["Atualizações", "Atualizações (2)"]
     assert regras.slug("Secretaria da Administração") == "secretaria-da-administracao"
     assert regras.transpor(["X", "Y"], [1, None]) == (["Indicador", "Valor"], [["X", 1], ["Y", None]])
+
+
+# ---------------------------------------------------------- exportação das tabelas das telas
+TABELA = f"{API}/tabela/exportar"
+
+
+def _tabela(formato="xlsx", **extra):
+    return {"titulo": "Monitoramento do PDA", "filtros": "Órgão: SES · Situação: Em atraso",
+            "colunas": ["Órgão", "Base prevista", "Bases"],
+            "linhas": [["SES", "Leitos", 3], ["SES", "Vacinas", None]], "formato": formato,
+            **extra}
+
+
+def test_exportar_tabela_da_tela(client, gerente):
+    r = client.post(TABELA, headers=gerente, json=_tabela())
+    assert r.status_code == 200, r.text
+    assert re.search(r'filename="monitoramento-do-pda-\d{4}-\d{2}-\d{2}\.xlsx"',
+                     r.headers["content-disposition"])
+    ws = load_workbook(io.BytesIO(r.content)).active
+    assert [c.value for c in ws[1]] == ["Órgão", "Base prevista", "Bases"]
+    assert ws.max_row == 3
+    r = client.post(TABELA, headers=gerente, json=_tabela("pdf"))
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+    assert r.headers["content-type"] == "application/pdf"
+
+
+def test_exportar_tabela_valida(client, gerente, orgao):
+    assert client.post(TABELA, headers=gerente, json=_tabela("csv")).status_code == 422
+    corpo = _tabela(linhas=[["SES", "Leitos"]])  # linha com menos colunas que o cabeçalho
+    assert client.post(TABELA, headers=gerente, json=corpo).status_code == 422
+    assert client.post(TABELA, headers=gerente, json=_tabela(colunas=[])).status_code == 422
+    # órgão publicador não tem relatorios.exportar
+    assert client.post(TABELA, headers=orgao, json=_tabela()).status_code == 403

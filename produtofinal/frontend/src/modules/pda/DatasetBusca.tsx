@@ -70,7 +70,6 @@ export function DatasetBusca({ id, valor, onEscolher }: Props) {
         <div>
           <strong>{valor.titulo}</strong>
           {!valor.ativo_no_portal && <>{" "}<span className="badge badge-red">Fora do portal</span></>}
-          <div className="cell-muted mono">{valor.name}</div>
           <div className="cell-muted">{valor.orgao_nome ?? "Sem organização no portal"}</div>
         </div>
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEscolher(null)}
@@ -106,7 +105,7 @@ export function DatasetBusca({ id, valor, onEscolher }: Props) {
               {d.titulo}
               {!d.ativo_no_portal && <>{" "}<span className="badge badge-red">Fora do portal</span></>}
             </span>
-            <span className="meta"><span className="mono">{d.name}</span> · {d.orgao_nome ?? "sem organização"}</span>
+            <span className="meta">{d.orgao_nome ?? "sem organização"}</span>
           </li>
         ))}
       </ul>

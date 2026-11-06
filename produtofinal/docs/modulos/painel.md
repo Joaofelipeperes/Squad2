@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 06/11/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -17,7 +17,7 @@ Superintendência (inclusive para o Prêmio de Transparência).
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
 | Dashboard (Visão Geral) | `/` | `painel.acessar` | Cartões, gráficos e alertas prioritários; **Ver monitoramento completo** e **Ver** de cada alerta levam ao PDA (`/pda?orgao=<chave>`) ou a Datasets; "Atualizar dados" (`inventario.coletar`) |
-| Organizações | `/organizacoes` | `painel.acessar` | Ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe do órgão (clique ou Enter na linha); **Ver bases no PDA** abre `/pda?orgao=<chave>` (`pda.acessar`); **Gerar relatório** do órgão (`relatorios.acessar`; exportar com `relatorios.exportar`) |
+| Organizações | `/organizacoes` | `painel.acessar` | Ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe do órgão (clique ou Enter na linha); **Ver bases no PDA** abre `/pda?orgao=<chave>` (`pda.acessar`); **Gerar relatório** do órgão (`relatorios.acessar`; exportar com `relatorios.exportar`); **Excel** e **PDF** da tabela como está na tela — filtros, ordem e todas as páginas (`relatorios.exportar`, ADR-0031) |
 
 Referência visual: `#screen-dashboard` e `#screen-organizations`. Ressalvas de 17/09: gráficos de
 evolução temporal abaixo dos cards (PBI-75).
@@ -147,6 +147,7 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 | é consumido por | relatorios | `organizacoes(db, user)` (relatório por órgão) e `situacao_atualizacao(base, hoje)` (relatório de atualizações) |
 | consome | rastreabilidade | tela: `HistoricoRecente` (`GET /rastreabilidade/eventos?orgao=<id>`) — "Últimas alterações" no detalhe do órgão em Organizações |
 | consome | relatorios | tela: `GerarRelatorioOrgaoModal` (`relatorios/RelatorioOrgao.tsx`) no detalhe do órgão em Organizações — marca os relatórios e gera o documento do órgão (`/relatorios/por-orgao/{organizacao_id}/…`) |
+| consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
 ## Jobs agendados
 Nenhum.
@@ -191,3 +192,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 05/11/2026 | Organizações: botão **Gerar relatório** no detalhe do órgão (com `relatorios.acessar` e organização no portal) — marca os relatórios, como na tela Relatórios, e gera o documento só daquele órgão (`GerarRelatorioOrgaoModal`). Sem mudança na API | Humberto |
 | 05/11/2026 | Organizações: **Últimas alterações** no detalhe do órgão com os últimos eventos da rastreabilidade (`HistoricoRecente`), no lugar do texto pendente. Sem mudança na API | Humberto |
 | 05/11/2026 | Organizações: colunas **Riscos LGPD** e **Índice de atenção** (ADR-0030) — `regras.py` novo (`indice_atencao`, média ponderada com pesos e faixas dos Parâmetros), `criterio_atencao`, campos novos em `OrganizacaoOut`/`OrganizacoesOut`; filtro por faixa, ordenação pelo valor, cartão de dados pessoais e índice explicado no detalhe; `indice_atencao_por_orgao` (stub) removido | Humberto |
+| 06/11/2026 | Organizações: botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031); Riscos LGPD só entra no arquivo com `lgpd.acessar` | Humberto |

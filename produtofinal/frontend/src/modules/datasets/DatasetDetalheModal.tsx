@@ -91,9 +91,6 @@ function Conteudo({ d, verPda, bases, carregandoBases, onFechar }: {
         <Item rotulo="ID do dataset (CKAN)" mono>
           <span style={{ wordBreak: "break-all" }}>{d.id_ckan ?? "—"}</span>
         </Item>
-        <Item rotulo="Name no portal" mono>
-          <span style={{ wordBreak: "break-all" }}>{d.name}</span>
-        </Item>
         {verPda && (
           <Item rotulo="Prazo previsto (PDA)">
             {base ? <>{fmtData(base.prazo_abertura)}<Nota>{base.plano_nome}</Nota></> : carregandoBases ? "…" : <>—{notaSemBase}</>}

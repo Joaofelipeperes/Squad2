@@ -7,7 +7,7 @@
 | **User stories** | US20 (PBI-60, PBI-61, PBI-77) |
 | **Backend** | `backend/app/modules/relatorios/` |
 | **Frontend** | `frontend/src/modules/relatorios/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 06/11/2026 |
 
 ## Propósito
 Substitui o controle manual em planilhas da GEDA por relatórios exportáveis com as mesmas colunas.
@@ -43,7 +43,7 @@ vem com o órgão escolhido, mostra a mesma marcação e abre a mesma prévia/ex
 | Atualizações (`atualizacoes`) | atualizacoes (`atualizacoes.acessar`) | Bases vinculadas do PDA vigente com atualização **Atrasada** ou **Próxima do vencimento** (ADR-0023); atrasadas primeiro |
 | Dados Pessoais (`lgpd`) | lgpd (`lgpd.acessar`) | Achados com status `revisar`, por prioridade e confiança; só localização e tipo, nunca o valor |
 | Por Órgão (`orgaos`) | painel (`painel.acessar`) | Mesmos indicadores da tela Organizações, com Riscos LGPD e recursos varridos (só com `lgpd.acessar`) e o índice de atenção (faixa e valor, ADR-0030) |
-| Datasets sem Recurso (`sem-recurso`) | inventario (`inventario.acessar`) | Datasets ativos sem recurso válido (PBI-51) |
+| Datasets sem Recurso (`sem-recurso`) | inventario (`inventario.acessar`) | Datasets ativos sem recurso válido (PBI-51): órgão, título do dataset, ID no CKAN e criação |
 | Formatos não Abertos (`formatos`) | inventario (`inventario.acessar`) | Recursos atuais fora do parâmetro `formatos_abertos` (PBI-53) |
 
 ## API
@@ -51,6 +51,7 @@ vem com o órgão escolhido, mostra a mesma marcação e abre a mesma prévia/ex
 |---|---|---|---|
 | GET | `/api/v1/relatorios` | `relatorios.acessar` | Catálogo filtrado pela permissão do módulo de origem |
 | GET | `/api/v1/relatorios/{id}/previa` | `relatorios.acessar` + origem | Colunas, primeiras 50 linhas como texto, total e referência |
+| POST | `/api/v1/relatorios/tabela/exportar` | `relatorios.exportar` | Excel ou PDF de uma tabela das telas (ADR-0031): corpo `TabelaExportarIn` `{titulo, filtros, colunas, linhas, formato: pdf\|xlsx}` com as linhas como a tela mostra; arquivo `<titulo>-<aaaa-mm-dd>.<formato>`. Não consulta o banco. **422** formato inválido, sem colunas, linha com número de colunas diferente do cabeçalho, mais de 30 colunas ou 20 mil linhas |
 | GET | `/api/v1/relatorios/{id}/exportar?formato=xlsx\|csv\|pdf` | `relatorios.acessar` + `relatorios.exportar` + origem | Arquivo `relatorio-<id>-<aaaa-mm-dd>.<formato>` |
 | GET | `/api/v1/relatorios/por-orgao/orgaos` | `relatorios.acessar` | `OrgaoOpcaoOut[]` (`{id, nome}`): órgãos do escopo do usuário, por nome |
 | GET | `/api/v1/relatorios/por-orgao/{orgao}/previa?relatorios=pda&relatorios=…` | `relatorios.acessar` + origem de cada relatório | `RelatorioOrgaoOut`: `orgao`, `hoje` e `secoes` — um `PreviaOut` por item escolhido, já filtrado; `orgaos` = resumo do órgão (título "Resumo do órgão", `painel.acessar`), sempre a primeira seção. **404** órgão fora do escopo ou relatório desconhecido; **403** sem a permissão de origem; **422** nada escolhido |
@@ -81,6 +82,11 @@ Erros: relatório inexistente → 404; sem a permissão do módulo de origem →
   total; XLSX com uma aba por seção (nome sem "Relatório de", único, até 31 caracteres); CSV com
   título e uma linha em branco entre as seções. `regras.slug` monta o nome do arquivo.
 
+Exportação das tabelas das telas (ADR-0031):
+- `exportar_tabela(dados: TabelaExportarIn) -> (bytes, media_type, nome_arquivo)` — gera o Excel
+  (`regras.gerar_xlsx`) ou o PDF (`regras.gerar_pdf`, com os filtros ativos como referência) das
+  linhas recebidas, sem consultar o banco; `regras.nome_arquivo_tabela(titulo, formato, hoje)`.
+
 ## Modelo de dados
 Sem tabelas próprias. `RelatoriosDao` só lê as organizações visíveis ao usuário.
 
@@ -104,6 +110,7 @@ por órgão.
 | consome | metadados | `datasets_sem_recurso(db)` e `recursos_formato_fechado(db, formatos_abertos)` |
 | consome | parametros | `formatos_abertos` |
 | consome | inventario | `Organizacao` (nome/sigla do órgão nas listas do inventário) |
+| é consumido por | pda, atualizacoes, painel, inventario | `POST /tabela/exportar` — Excel e PDF das tabelas de Monitoramento do PDA, Atualizações, Organizações e Datasets (`shared/ui/ExportarTabela.tsx`, ADR-0031) |
 
 ## Jobs agendados
 Nenhum.
@@ -136,3 +143,5 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 05/11/2026 | `GerarRelatorioOrgaoModal`: relatório de um órgão já escolhido (marcação + prévia/exportação), usado no detalhe do órgão em Organizações; marcação extraída para `useEscolha`/`EscolhaRelatorios`, compartilhada com o painel da tela | Humberto |
 | 05/11/2026 | Relatório de um órgão: o **Resumo do órgão** volta a ser uma opção da marcação (primeira, já marcada) e pode ser desmarcado; entra só quando pedido (`orgaos`), sempre como 1ª seção; nada escolhido = 422 | Humberto |
 | 05/11/2026 | Relatório por Órgão: colunas Riscos LGPD (recursos) e Recursos varridos (só com `lgpd.acessar`), Índice de atenção e Índice de atenção (0-100) | Humberto |
+| 06/11/2026 | `POST /tabela/exportar` (`exportar_tabela`, `TabelaExportarIn`, `nome_arquivo_tabela`): Excel e PDF das tabelas das telas, usado por PDA, Atualizações, Organizações e Datasets (ADR-0031) | Humberto |
+| 06/11/2026 | Relatório Datasets sem Recurso: sai a coluna "Name (CKAN)" (`name` técnico); ficam o título e o ID no CKAN | Humberto |

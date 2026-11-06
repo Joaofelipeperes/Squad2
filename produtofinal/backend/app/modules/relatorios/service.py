@@ -29,6 +29,7 @@ from app.modules.relatorios.schemas import (
     PreviaOut,
     RelatorioOrgaoOut,
     RelatorioOut,
+    TabelaExportarIn,
 )
 
 PREVIA_LINHAS = 50
@@ -167,10 +168,10 @@ def _sem_recurso(db: Session, user: UsuarioAtual, orgao: int | None = None) -> T
     datasets = [d for d in datasets_sem_recurso(db)
                 if (not user.restrito_a_orgao or d.organizacao_id in orgs)
                 and (orgao is None or d.organizacao_id == orgao)]
-    linhas = [[_nome_orgao(orgs, d.organizacao_id), d.titulo, d.name, d.id_ckan,
+    linhas = [[_nome_orgao(orgs, d.organizacao_id), d.titulo, d.id_ckan,
                d.metadata_created] for d in datasets]
     linhas.sort(key=lambda x: (normalizar_texto(x[0] or ""), normalizar_texto(x[1] or "")))
-    return Tabela(colunas=["Órgão", "Dataset", "Name (CKAN)", "ID no CKAN", "Criado em"],
+    return Tabela(colunas=["Órgão", "Dataset", "ID no CKAN", "Criado em"],
                   linhas=linhas)
 
 
@@ -327,3 +328,19 @@ def exportar(db: Session, nome: str, formato: str, user: UsuarioAtual) -> tuple[
         conteudo = regras.gerar_csv(tabela.colunas, tabela.linhas)
     return conteudo, regras.MIME[formato], regras.nome_arquivo(definicao.id, formato,
                                                                pda.hoje_local())
+
+
+def exportar_tabela(dados: TabelaExportarIn) -> tuple[bytes, str, str]:
+    """Exportação de uma tabela das telas (ADR-0031): o navegador manda as linhas que o usuário já
+    vê (filtros e ordenação da tela) e aqui só se gera o arquivo, com o mesmo gerador dos
+    relatórios. Não consulta o banco: nada além do que a tela já mostrou sai no arquivo."""
+    largura = len(dados.colunas)
+    if any(len(linha) != largura for linha in dados.linhas):
+        raise Invalido("Toda linha deve ter o mesmo número de colunas do cabeçalho.")
+    if dados.formato == "xlsx":
+        conteudo = regras.gerar_xlsx(dados.titulo, dados.colunas, dados.linhas)
+    else:
+        conteudo = regras.gerar_pdf(dados.titulo, dados.colunas, dados.linhas,
+                                    referencia=dados.filtros, gerado_em=_agora_local())
+    return (conteudo, regras.MIME[dados.formato],
+            regras.nome_arquivo_tabela(dados.titulo, dados.formato, pda.hoje_local()))
