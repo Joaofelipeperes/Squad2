@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
 from app.modules.relatorios import service
-from app.modules.relatorios.schemas import PreviaOut, RelatorioOut
+from app.modules.relatorios.schemas import (
+    OrgaoOpcaoOut,
+    PreviaOut,
+    RelatorioOrgaoOut,
+    RelatorioOut,
+)
 
 router = APIRouter()
 
@@ -23,6 +28,43 @@ def listar(user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))]
     return service.catalogo(user)
 
 
+# ------------------------------------------------------------------ relatório de um órgão
+@router.get("/por-orgao/orgaos", response_model=list[OrgaoOpcaoOut])
+def orgaos(db: DbSession, user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))]):
+    """Órgãos que o usuário pode escolher (escopo de órgão dele)."""
+    return service.orgaos_disponiveis(db, user)
+
+
+@router.get("/por-orgao/{orgao}/previa", response_model=RelatorioOrgaoOut)
+def previa_orgao(orgao: int, db: DbSession,
+                 user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))],
+                 relatorios: Annotated[list[str] | None, Query()] = None):
+    """Prévia do relatório de um órgão: uma seção por item escolhido (?relatorios=orgaos&
+    relatorios=pda&...; "orgaos" = resumo do órgão, sempre a primeira seção)."""
+    try:
+        return service.previa_orgao(db, orgao, relatorios or [], user)
+    except service.ErroRelatorio as exc:
+        raise _erro(exc) from exc
+
+
+@router.get("/por-orgao/{orgao}/exportar")
+def exportar_orgao(orgao: int, db: DbSession,
+                   user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR,
+                                                                 P.RELATORIOS_EXPORTAR))],
+                   relatorios: Annotated[list[str] | None, Query()] = None,
+                   formato: Annotated[str, Query(pattern="^(xlsx|csv|pdf)$")] = "pdf"):
+    """Arquivo do relatório de um órgão (itens escolhidos): PDF com seções, XLSX com
+    uma aba por seção ou CSV com as seções em sequência."""
+    try:
+        conteudo, media_type, arquivo = service.exportar_orgao(db, orgao, relatorios or [],
+                                                               formato, user)
+    except service.ErroRelatorio as exc:
+        raise _erro(exc) from exc
+    return Response(conteudo, media_type=media_type,
+                    headers={"Content-Disposition": f'attachment; filename="{arquivo}"'})
+
+
+# ------------------------------------------------------------------ relatórios gerais
 @router.get("/{nome}/previa", response_model=PreviaOut)
 def previa(nome: str, db: DbSession,
            user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))]):

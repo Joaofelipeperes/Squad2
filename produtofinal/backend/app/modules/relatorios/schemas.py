@@ -22,3 +22,18 @@ class PreviaOut(BaseModel):
     colunas: list[str]
     linhas: list[list[str]]
     total: int  # linhas do relatório completo (a exportação leva todas)
+
+
+class OrgaoOpcaoOut(BaseModel):
+    """Órgão que pode ser escolhido no relatório de um órgão (escopo de órgão do usuário)."""
+
+    id: int
+    nome: str
+
+
+class RelatorioOrgaoOut(BaseModel):
+    """Prévia do relatório de um órgão: uma seção por relatório escolhido, já filtrada."""
+
+    orgao: OrgaoOpcaoOut
+    hoje: date
+    secoes: list[PreviaOut]

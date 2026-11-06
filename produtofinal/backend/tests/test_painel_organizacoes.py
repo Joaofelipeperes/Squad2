@@ -147,3 +147,105 @@ def test_atualizacao_pela_periodicidade_do_pda(client, gerente, inventario, peri
     assert ses["atualizacoes_avaliadas"] == (0 if pct is None else 1)
     seduc = _org(client.get(API, headers=gerente).json(), str(SEDUC))
     assert seduc["atualizacao_pct"] is None and seduc["atualizacoes_avaliadas"] == 0
+
+
+# ---------------------------------------------------------- riscos LGPD e índice de atenção
+@pytest.fixture
+def achados(inventario):
+    """SES: 4 recursos varridos (1, 2, 5, 6). Em aberto: recurso 1 (um achado a revisar e um
+    confirmado) e recurso 5 (a revisar); recurso 2 só com falso positivo; recurso 6 tratado."""
+    from app.modules.lgpd.models import Achado, Varredura
+    with SessionLocal() as db:
+        db.add_all([Varredura(recurso_id=r, status="ok") for r in (1, 2, 5, 6)]
+                   + [Varredura(recurso_id=7, status="erro")])
+        for i, (rec, status) in enumerate([(1, "revisar"), (1, "confirmado"),
+                                           (2, "falso_positivo"), (5, "revisar"), (6, "tratado")]):
+            db.add(Achado(recurso_id=rec, coluna=f"c{i}", tipo="cpf", metodo="regra",
+                          confianca=95, prioridade="Alta", status=status,
+                          impressao_digital=f"h{i}"))
+        db.commit()
+
+
+def _pda_mensal(client, gerente):
+    """Indicadores (SES) vinculada, Mensal, atualizada em 01/09/2026: atrasada em 18/10/2026."""
+    texto = ("Orgão;Base de Dados;Atualização;Disponível no Portal\n"
+             f"SES;Indicadores;Mensal;{URL}indicadores-saude\n")
+    r = client.post("/api/v1/pda/planos", headers=gerente, data={"nome": "PDA teste"},
+                    files={"arquivo": ("pda.csv", texto.encode(), "text/csv")})
+    assert r.status_code == 201, r.text
+
+
+def test_riscos_lgpd_por_orgao(client, gerente, achados):
+    corpo = client.get(API, headers=gerente).json()
+    assert corpo["lgpd_visivel"] is True
+    assert corpo["criterio_atencao"] == {"peso_lgpd": 70, "peso_atualizacao": 30,
+                                         "limite_medio": 25, "limite_alto": 50}
+    ses = _org(corpo, str(SES))
+    # Falso positivo e tratado não contam; o recurso com dois achados conta uma vez
+    assert ses["riscos_lgpd"] == 2 and ses["lgpd_recursos_analisados"] == 4
+    assert ses["lgpd_aguardando_revisao"] == 2 and ses["lgpd_confirmados"] == 1
+    assert ses["risco_lgpd_pct"] == 50
+    # Sem PDA não há atualização avaliada: o índice usa só o risco LGPD (50 = início do Alto)
+    assert (ses["indice_atencao"], ses["indice_atencao_valor"]) == ("Alto", 50)
+    assert ses["indice_atencao_componentes"] == ["Risco LGPD"]
+    seduc = _org(corpo, str(SEDUC))  # nenhum recurso varrido, nenhuma base: sem índice
+    assert seduc["riscos_lgpd"] is None and seduc["indice_atencao"] is None
+    assert seduc["indice_atencao_componentes"] == []
+
+
+def test_indice_de_atencao_com_pesos_dos_parametros(client, admin, gerente, achados):
+    _pda_mensal(client, gerente)
+    ses = _org(client.get(API, headers=gerente).json(), str(SES))
+    # 0,7 × 50 (risco LGPD) + 0,3 × 100 (a única base avaliada está atrasada) = 65
+    assert (ses["indice_atencao"], ses["indice_atencao_valor"]) == ("Alto", 65)
+    assert ses["indice_atencao_componentes"] == ["Risco LGPD", "Atraso de atualização"]
+    assert ses["atraso_atualizacao_pct"] == 100
+
+    def alterar(chave, valor):
+        r = client.put(f"/api/v1/parametros/{chave}", headers=admin, json={"valor": valor})
+        assert r.status_code == 200, r.text
+
+    alterar("indice_atencao_limite_alto", 70)
+    assert _org(client.get(API, headers=gerente).json(), str(SES))["indice_atencao"] == "Médio"
+    alterar("peso_lgpd_indice_atencao", 0)  # peso 0: o componente sai da média
+    ses = _org(client.get(API, headers=gerente).json(), str(SES))
+    assert ses["indice_atencao_valor"] == 100
+    assert ses["indice_atencao_componentes"] == ["Atraso de atualização"]
+
+
+def test_sem_lgpd_acessar_indice_so_com_atualizacao(client, gerente, achados):
+    from app.modules.acesso.service import criar_usuario
+    from tests.conftest import SENHA, login
+    _pda_mensal(client, gerente)
+    with SessionLocal() as db:
+        criar_usuario(db, "junior@cge.go.gov.br", "Júnior", SENHA, ["superintendencia"])
+    corpo = client.get(API, headers=login(client, "junior@cge.go.gov.br")).json()
+    assert corpo["lgpd_visivel"] is False
+    ses = _org(corpo, str(SES))
+    # O painel não amplia o acesso: nada do LGPD, nem dentro do índice
+    assert ses["riscos_lgpd"] is None and ses["lgpd_recursos_analisados"] == 0
+    assert ses["indice_atencao_valor"] == 100
+    assert ses["indice_atencao_componentes"] == ["Atraso de atualização"]
+
+
+def test_parametros_do_indice_validam_a_faixa(client, admin):
+    for valor in (-1, 101):
+        r = client.put("/api/v1/parametros/peso_lgpd_indice_atencao", headers=admin,
+                       json={"valor": valor})
+        assert r.status_code == 422, r.text
+    r = client.put("/api/v1/parametros/peso_lgpd_indice_atencao", headers=admin,
+                   json={"valor": 0.5})
+    assert r.status_code == 422  # tipo do padrão: inteiro
+
+
+def test_regra_do_indice_de_atencao():
+    from app.modules.painel import regras as r
+    c = r.CriterioAtencao(peso_lgpd=70, peso_atualizacao=30, limite_medio=25, limite_alto=50)
+    assert r.indice_atencao(None, None, c) is None
+    i = r.indice_atencao(20, 10, c)  # 0,7 × 20 + 0,3 × 10 = 17
+    assert (i.valor, i.faixa, i.componentes) == (17, r.BAIXO, [r.LGPD, r.ATUALIZACAO])
+    assert r.indice_atencao(None, 40, c).valor == 40  # pesos redistribuídos
+    assert r.indice_atencao(25, None, c).faixa == r.MEDIO  # limite é inclusivo
+    zero = r.CriterioAtencao(peso_lgpd=0, peso_atualizacao=0, limite_medio=25, limite_alto=50)
+    assert r.indice_atencao(80, 80, zero) is None
+    assert r.pct(1, 3) == 33 and r.pct(0, 0) is None

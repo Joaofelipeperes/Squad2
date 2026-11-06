@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { Evento, EventosLista, FiltrosEventos, Sincronizacao } from "./api";
 import { FILTROS_VAZIOS, rastreabilidadeApi, salvarArquivo } from "./api";
 import { api } from "@/shared/api/client";
@@ -29,8 +30,12 @@ function aguardandoSincronizacao(coleta: Coleta | null | undefined, sinc: Sincro
  * sincronizada ao fim de cada coleta ("Atualizar dados").
  */
 export default function RastreabilidadePage() {
-  const [filtros, setFiltros] = useState<FiltrosEventos>(FILTROS_VAZIOS);
-  const [busca, setBusca] = useState("");
+  // "?busca=<ID do dataset>" e "?orgao=<id>" vêm do histórico recente dos detalhes de dataset e órgão
+  const [params] = useSearchParams();
+  const [filtros, setFiltros] = useState<FiltrosEventos>(() => ({
+    ...FILTROS_VAZIOS, busca: params.get("busca") ?? "", orgao: params.get("orgao") ?? "",
+  }));
+  const [busca, setBusca] = useState(filtros.busca);
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(POR_PAGINA_PADRAO);
   useEffect(() => { setPagina(1); }, [filtros]);

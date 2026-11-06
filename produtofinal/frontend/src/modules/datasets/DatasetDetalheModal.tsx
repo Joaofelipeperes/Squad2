@@ -6,6 +6,7 @@ import { SituacaoPortalBadge, fmtDataHora } from "./formato";
 import { useAuth } from "@/app/auth/AuthContext";
 import { fmtData } from "@/modules/pda/formato";
 import { SituacaoBadge } from "@/modules/pda/SituacaoBadge";
+import { HistoricoRecente } from "@/modules/rastreabilidade/HistoricoRecente";
 import { Modal } from "@/shared/ui/Modal";
 
 const PORTAL = "https://dadosabertos.go.gov.br/dataset/";
@@ -62,13 +63,15 @@ export function DatasetDetalheModal({ datasetId, onFechar }: { datasetId: number
         <div className="inline-msg err" role="alert">Não foi possível carregar o dataset: {detalhe.error.message}</div>
       )}
       {!d && !detalhe.isError && <p className="cell-muted">Carregando…</p>}
-      {d && <Conteudo d={d} verPda={verPda} bases={bases.data} carregandoBases={bases.isPending && verPda} />}
+      {d && <Conteudo d={d} verPda={verPda} bases={bases.data} carregandoBases={bases.isPending && verPda}
+        onFechar={onFechar} />}
     </Modal>
   );
 }
 
-function Conteudo({ d, verPda, bases, carregandoBases }: {
+function Conteudo({ d, verPda, bases, carregandoBases, onFechar }: {
   d: DatasetDetalhe; verPda: boolean; bases: BaseVinculada[] | undefined; carregandoBases: boolean;
+  onFechar: () => void;
 }) {
   const base = bases?.[0] ?? null; // a do PDA vigente vem primeiro
   const semBase = !carregandoBases && !base;
@@ -140,10 +143,7 @@ function Conteudo({ d, verPda, bases, carregandoBases }: {
           Também vinculado em: {bases.slice(1).map((b) => `${b.plano_nome} (${b.nome_previsto})`).join("; ")}.
         </p>
       )}
-      <div className="mini-history">
-        <h4>Histórico recente</h4>
-        <div className="hist-row"><span>Disponível quando a rastreabilidade for implementada.</span></div>
-      </div>
+      <HistoricoRecente titulo="Histórico recente" dataset={d.id_ckan} onSair={onFechar} />
     </>
   );
 }

@@ -127,6 +127,15 @@ class LgpdDao(Dao):
             .join(Dataset, Dataset.id == Recurso.dataset_id)
             .where(Varredura.status == "ok"), Dataset.organizacao_id, user)) or 0
 
+    def recursos_analisados_por_orgao(self, user: UsuarioAtual) -> dict[int | None, int]:
+        """organizacao.id → recursos distintos com varredura concluída, no escopo do usuário."""
+        return dict(self.buscar_linhas(filtrar_por_orgao(
+            select(Dataset.organizacao_id, func.count(func.distinct(Varredura.recurso_id)))
+            .join(Recurso, Recurso.id == Varredura.recurso_id)
+            .join(Dataset, Dataset.id == Recurso.dataset_id)
+            .where(Varredura.status == "ok").group_by(Dataset.organizacao_id),
+            Dataset.organizacao_id, user)))
+
     def ultima_varredura_concluida(self) -> dict[int, datetime]:
         """recurso.id → início da última varredura concluída (ok ou ignorada)."""
         return {rid: quando for rid, quando in self.buscar_linhas(

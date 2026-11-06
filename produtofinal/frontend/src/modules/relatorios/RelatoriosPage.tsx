@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Formato, Relatorio } from "./api";
 import { relatoriosApi } from "./api";
+import { RelatorioOrgaoPainel } from "./RelatorioOrgao";
 import { Pode } from "@/shared/acesso/Pode";
 import { Modal } from "@/shared/ui/Modal";
 import { PageLede } from "@/shared/ui/PageLede";
@@ -11,7 +12,8 @@ import { useToast } from "@/shared/ui/Toast";
  * Tela "Relatórios" (US20, PBI-60/61/77) — referência visual: #screen-reports do Protótipo V1.
  * Só aparecem os relatórios cujo módulo de origem o usuário acessa. "Gerar relatório" abre a
  * prévia (primeiras linhas); a exportação XLSX/CSV/PDF leva o relatório inteiro e exige
- * relatorios.exportar.
+ * relatorios.exportar. "Relatório de um órgão" junta, num documento só, os relatórios escolhidos
+ * filtrados para o órgão escolhido.
  */
 export default function RelatoriosPage() {
   const lista = useQuery({ queryKey: ["relatorios"], queryFn: relatoriosApi.lista });
@@ -33,6 +35,8 @@ export default function RelatoriosPage() {
           </div>
         </div>
       )}
+
+      {lista.data && lista.data.length > 0 && <RelatorioOrgaoPainel relatorios={lista.data} />}
 
       {lista.data && lista.data.length > 0 && (
         <div className="reports-grid">

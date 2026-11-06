@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Organizacao } from "./api";
-import { NAO_CONFIRMADO } from "./OrganizacoesPage";
+import type { CriterioAtencao, Organizacao } from "./api";
+import { IndiceAtencao, NAO_CONFIRMADO, explicarIndice } from "./OrganizacoesPage";
+import { GerarRelatorioOrgaoModal } from "@/modules/relatorios/RelatorioOrgao";
+import { HistoricoRecente } from "@/modules/rastreabilidade/HistoricoRecente";
 import { Modal } from "@/shared/ui/Modal";
 import { useAuth } from "@/app/auth/AuthContext";
 
@@ -18,11 +21,13 @@ function Stat({ n, rotulo, nota }: { n: ReactNode; rotulo: string; nota?: string
 const PENDENTE = <span style={{ color: "var(--gray-500)" }}>—</span>;
 
 /** Resumo de governança do órgão (showOrganizationDetails() do protótipo V1). */
-export function OrganizacaoDetalheModal({ org, formatosAbertos, onFechar }: {
-  org: Organizacao | null; formatosAbertos: string[]; onFechar: () => void;
+export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, criterio, onFechar }: {
+  org: Organizacao | null; formatosAbertos: string[]; lgpdVisivel: boolean; criterio: CriterioAtencao;
+  onFechar: () => void;
 }) {
   const navigate = useNavigate();
   const { pode } = useAuth();
+  const [relatorio, setRelatorio] = useState(false);
   if (!org) return null;
   const o = org;
   const vinculado = o.bases_vinculadas > 0;
@@ -40,6 +45,12 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, onFechar }: {
       onFechar={onFechar}
       rodape={<>
         <button type="button" className="btn btn-outline btn-sm" onClick={onFechar}>Fechar</button>
+        {/* Relatório só com os dados deste órgão (mesmo gerador da tela Relatórios) */}
+        {pode("relatorios.acessar") && o.organizacao_id != null && (
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setRelatorio(true)}>
+            <i className="fa-solid fa-file-lines" />Gerar relatório
+          </button>
+        )}
         {pode("pda.acessar") && o.bases_previstas > 0 && (
           <button type="button" className="btn btn-primary btn-sm" onClick={verNoPda}>Ver bases no PDA</button>
         )}
@@ -56,7 +67,10 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, onFechar }: {
             : vinculado ? "sem base com prazo definido" : "aguardando vínculo"} />
         <Stat n={o.recursos_formato_fechado} rotulo="Recursos sem formato aberto"
           nota={`de ${o.recursos_validos} recurso(s) em ${o.datasets_no_portal} dataset(s)`} />
-        <Stat n={PENDENTE} rotulo="Possíveis dados pessoais" nota="módulo de dados pessoais a definir" />
+        <Stat n={o.riscos_lgpd ?? PENDENTE} rotulo="Recursos com possíveis dados pessoais"
+          nota={!lgpdVisivel ? "sem acesso ao módulo de dados pessoais"
+            : o.riscos_lgpd == null ? "nenhum recurso varrido"
+            : `de ${o.lgpd_recursos_analisados} varrido(s): ${o.lgpd_aguardando_revisao} achado(s) a revisar, ${o.lgpd_confirmados} confirmado(s)`} />
       </div>
       <div className="def-grid" style={{ marginTop: 14 }}>
         <div className="def-item">
@@ -71,6 +85,15 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, onFechar }: {
         <div className="def-item">
           <label>Bases próximas do prazo</label>
           <div className="val">{o.bases_proximas_do_prazo}</div>
+        </div>
+        <div className="def-item full">
+          <label>Índice de atenção</label>
+          <div className="val"><IndiceAtencao o={o} criterio={criterio} /></div>
+          <p className="help-texto" style={{ marginTop: 4 }}>
+            {o.indice_atencao
+              ? explicarIndice(o, criterio)
+              : "Sem risco LGPD (nenhum recurso varrido) e sem atualização avaliada (nenhuma base vinculada com prazo)."}
+          </p>
         </div>
       </div>
       {fechados.length > 0 && (
@@ -88,10 +111,11 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, onFechar }: {
           </p>
         </div>
       )}
-      <div className="mini-history">
-        <h4>Últimas alterações</h4>
-        <div className="hist-row"><span>Disponível quando a rastreabilidade for implementada.</span></div>
-      </div>
+      <HistoricoRecente titulo="Últimas alterações" orgao={o.organizacao_id} onSair={onFechar} />
+      {relatorio && o.organizacao_id != null && (
+        <GerarRelatorioOrgaoModal orgao={o.organizacao_id} nome={o.nome}
+          onFechar={() => setRelatorio(false)} />
+      )}
     </Modal>
   );
 }

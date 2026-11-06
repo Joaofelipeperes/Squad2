@@ -67,6 +67,7 @@ a fonte.
 | 05/11/2026 | Tabelas ordenadas e paginadas no navegador (50 por página, até 999, total no rodapé); rastreabilidade e log de acesso paginados no banco | Técnica | Proposta | [ADR-0028](0028-ordenacao-e-paginacao-das-tabelas.md) |
 | 05/11/2026 | API com `Cache-Control: no-store`, telas recarregadas ao fim da coleta e rastreabilidade acompanhando a sincronização; `index.html` sem cache no nginx | Técnica | Proposta | [ADR-0029](0029-api-sem-cache-e-telas-recarregadas-apos-a-coleta.md) |
 | 05/11/2026 | Tela Datasets mostra e filtra o tipo de base (prevista × espontânea) | Negócio | Revisão da ADR-0026 | [ADR-0026](0026-base-espontanea-dataset-sem-vinculo-no-pda-vigente.md) |
+| 05/11/2026 | Índice de atenção por órgão = média ponderada do risco LGPD (% dos recursos varridos com achado em aberto) e do atraso de atualização, pesos 70/30 e faixas 25/50 em Parâmetros | Negócio | Aceita (validar com a GEDA) | [ADR-0030](0030-indice-de-atencao-por-media-ponderada.md) |
 
 ## Decisões em aberto
 

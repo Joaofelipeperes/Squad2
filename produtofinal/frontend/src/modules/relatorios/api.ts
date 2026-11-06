@@ -20,10 +20,24 @@ export interface Previa {
 
 export type Formato = "xlsx" | "csv" | "pdf";
 
-/** Baixa o arquivo do relatório (a exportação leva todas as linhas, não só as da prévia). */
-async function exportar(id: string, formato: Formato) {
+/** Órgão que pode ser escolhido no relatório de um órgão. */
+export interface OrgaoOpcao { id: number; nome: string }
+
+/** Prévia do relatório de um órgão: uma seção por relatório escolhido, já filtrada. */
+export interface RelatorioOrgao {
+  orgao: OrgaoOpcao;
+  hoje: string;
+  secoes: Previa[];
+}
+
+const consultaOrgao = (relatorios: string[], extra: Record<string, string> = {}) =>
+  new URLSearchParams([...relatorios.map((r): [string, string] => ["relatorios", r]),
+    ...Object.entries(extra)]).toString();
+
+/** Baixa um arquivo de relatório (a exportação leva todas as linhas, não só as da prévia). */
+async function baixar(caminho: string, nomePadrao: string) {
   const token = tokenStore.get();
-  const resp = await fetch(`/api/v1/relatorios/${id}/exportar?formato=${formato}`,
+  const resp = await fetch(`/api/v1/relatorios/${caminho}`,
     { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!resp.ok) {
     let msg = `Erro ${resp.status} ao exportar o relatório`;
@@ -36,7 +50,7 @@ async function exportar(id: string, formato: Formato) {
     throw new ApiError(resp.status, msg);
   }
   const nome = /filename="([^"]+)"/.exec(resp.headers.get("Content-Disposition") ?? "")?.[1]
-    ?? `relatorio-${id}.${formato}`;
+    ?? nomePadrao;
   const url = URL.createObjectURL(await resp.blob());
   const a = Object.assign(document.createElement("a"), { href: url, download: nome });
   a.click();
@@ -46,5 +60,13 @@ async function exportar(id: string, formato: Formato) {
 export const relatoriosApi = {
   lista: () => api.get<Relatorio[]>("/relatorios"),
   previa: (id: string) => api.get<Previa>(`/relatorios/${id}/previa`),
-  exportar,
+  exportar: (id: string, formato: Formato) =>
+    baixar(`${id}/exportar?formato=${formato}`, `relatorio-${id}.${formato}`),
+  // Relatório de um órgão: escolhe o órgão e quantos relatórios quiser
+  orgaos: () => api.get<OrgaoOpcao[]>("/relatorios/por-orgao/orgaos"),
+  previaOrgao: (orgao: number, relatorios: string[]) =>
+    api.get<RelatorioOrgao>(`/relatorios/por-orgao/${orgao}/previa?${consultaOrgao(relatorios)}`),
+  exportarOrgao: (orgao: number, relatorios: string[], formato: Formato) =>
+    baixar(`por-orgao/${orgao}/exportar?${consultaOrgao(relatorios, { formato })}`,
+      `relatorio-orgao-${orgao}.${formato}`),
 };
