@@ -78,3 +78,4 @@ validar com a Paloma (LGPD), junto da inclusão no escopo.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 05/11/2026 | Deploy atrás do proxy reverso da UFG (`gestao-dadosabertos.inf.ufg.br`): o nginx do container passa a usar `real_ip` e só aceita `X-Forwarded-For` do proxy configurado em `GDA_PROXY_CONFIAVEL` (template com envsubst); a porta da API no host fica configurável (`GDA_API_PORTA`, `127.0.0.1:8000` em produção). Config do proxy em `deploy/nginx-proxy.conf`. | Victor Hugo Benatti |

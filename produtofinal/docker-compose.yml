@@ -12,7 +12,9 @@ services:
     build: ./backend
     env_file: .env
     depends_on: { db: { condition: service_healthy } }
-    ports: ["8000:8000"]
+    # Em produção use GDA_API_PORTA=127.0.0.1:8000 no .env: só o nginx alcança a API, e ninguém
+    # forja X-Forwarded-For chamando a porta 8000 direto (ADR-0016)
+    ports: ["${GDA_API_PORTA:-8000}:8000"]
     # Anonimização LGPD (US26): cópia do original e prévia ficam fora do banco, neste volume
     # (contém dado pessoal; retenção definida pela GEDA — ADR-0008)
     volumes: [lgpd_arquivos:/app/dados_lgpd]
@@ -27,6 +29,8 @@ services:
     build: ./frontend
     depends_on: [api]
     ports: ["8080:80"]
+    # IP (ou faixa CIDR) do proxy reverso, de quem o X-Forwarded-For é aceito (ADR-0016)
+    environment: { GDA_PROXY_CONFIAVEL: "${GDA_PROXY_CONFIAVEL:-127.0.0.1}" }
 
   ollama:
     image: ollama/ollama:latest
