@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | Parcial: Dashboard (Visão Geral) e Organizações implementados, com indicadores pendentes (atualização por periodicidade, LGPD, índice de atenção) |
+| **Status** | Parcial: Dashboard (Visão Geral) e Organizações implementados, com indicadores que dependem do vínculo PDA × portal e da cobertura da varredura LGPD |
 | **Responsável** | João (Dashboard) · Humberto (Organizações, PBI-84) |
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 06/11/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -17,7 +17,7 @@ Superintendência (inclusive para o Prêmio de Transparência).
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
 | Dashboard (Visão Geral) | `/` | `painel.acessar` | Cartões, gráficos e alertas prioritários; **Ver monitoramento completo** e **Ver** de cada alerta levam ao PDA (`/pda?orgao=<chave>`) ou a Datasets; "Atualizar dados" (`inventario.coletar`) |
-| Organizações | `/organizacoes` | `painel.acessar` | Ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe do órgão (clique ou Enter na linha); **Ver bases no PDA** abre `/pda?orgao=<chave>` (`pda.acessar`) |
+| Organizações | `/organizacoes` | `painel.acessar` | Ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe do órgão (clique ou Enter na linha); **Ver bases no PDA** abre `/pda?orgao=<chave>` (`pda.acessar`); **Gerar relatório** do órgão (`relatorios.acessar`; exportar com `relatorios.exportar`); **Excel** e **PDF** da tabela como está na tela — filtros, ordem e todas as páginas (`relatorios.exportar`, ADR-0031) |
 
 Referência visual: `#screen-dashboard` e `#screen-organizations`. Ressalvas de 17/09: gráficos de
 evolução temporal abaixo dos cards (PBI-75).
@@ -63,19 +63,25 @@ evolução temporal abaixo dos cards (PBI-75).
   **Atualização** (% das bases vinculadas com prazo definido que estão dentro da periodicidade do PDA
   — Atualizado ou Próximo do vencimento, ADR-0023; badge verde sem atrasadas, âmbar ≥ 50%, vermelho
   abaixo; "aguardando vínculo" sem base vinculada; "sem prazo definido" quando só há Eventual,
-  Estática ou bases sem data) | Riscos LGPD e Índice de atenção (**a definir**). Os pendentes
-  aparecem como badge cinza, nunca 0.
+  Estática ou bases sem data) | **Riscos LGPD** (recursos com possível dado pessoal aguardando
+  revisão ou confirmado, "N de M varridos"; badge âmbar com risco, verde sem; "não varrido" sem
+  recurso varrido; "sem acesso" sem `lgpd.acessar`) | **Índice de atenção** (ADR-0030: faixa e
+  valor 0–100, vermelho Alto, âmbar Médio, verde Baixo; dica com a conta; "sem dados" sem nenhum
+  componente). Os pendentes aparecem como badge cinza, nunca 0. O rodapé explica as regras com os
+  pesos e faixas em vigor.
 - **Filtros** (na própria tela, sobre a lista já carregada): busca por nome ou sigla (sem
   diferenciar maiúsculas e acentos); **Em atraso** (com bases em atraso, sem atraso entre as
-  vinculadas, com bases próximas do prazo, aguardando vínculo); **Bases no PDA** (com/sem bases
+  vinculadas, com bases próximas do prazo, aguardando vínculo); **Índice de atenção** (Alto,
+  Médio, Baixo, Sem dados); **Bases no PDA** (com/sem bases
   previstas); **Organização no portal** (com/sem). "Limpar filtros" volta a mostrar todos; o
   contador passa a "N de M órgão(s)".
 - **Detalhe**: cartões do protótipo (previstas; publicadas e não publicadas, aguardando vínculo;
   **atualizações atrasadas** (de N bases com prazo, com o % em dia); possíveis dados pessoais, a
   definir; **recursos sem formato aberto** com
   o total de recursos e datasets), bases em atraso (mesma regra da tabela) e próximas do prazo,
-  formatos fechados por tipo e a lista de formatos abertos em vigor; "Últimas alterações" pendente
-  da rastreabilidade.
+  formatos fechados por tipo e a lista de formatos abertos em vigor; **Últimas alterações**: os 5
+  eventos mais recentes do órgão na rastreabilidade (`HistoricoRecente`, com
+  `rastreabilidade.acessar`) e o atalho para a tela Rastreabilidade filtrada pelo órgão.
 
 ## API
 | Método | Rota (`/api/v1/painel`) | Permissão | Descrição |
@@ -88,7 +94,11 @@ datasets_no_portal, recursos_validos, recursos_formato_fechado, formatos_fechado
 ("" = sem formato), bases_previstas, bases_vinculadas, bases_publicadas, `bases_em_atraso` (só
 entre as vinculadas; null sem nenhuma vinculada), bases_proximas_do_prazo, `atualizacao_pct` (% em
 dia entre as vinculadas com prazo; null sem nenhuma), `atualizacoes_atrasadas` (null idem),
-`atualizacoes_avaliadas` e os pendentes `riscos_lgpd`, `indice_atencao` (null).
+`atualizacoes_avaliadas`, `riscos_lgpd` (recursos com achado em aberto; null sem `lgpd.acessar` ou
+sem recurso varrido), `lgpd_recursos_analisados`, `lgpd_aguardando_revisao`, `lgpd_confirmados`,
+`risco_lgpd_pct`, `atraso_atualizacao_pct`, `indice_atencao` (Alto | Médio | Baixo; null sem
+componente), `indice_atencao_valor` (0–100) e `indice_atencao_componentes`. `OrganizacoesOut` traz
+também `lgpd_visivel` e `criterio_atencao` (pesos e faixas em vigor).
 
 `KpisOut`: orgaos_monitorados, orgaos_no_pda, bases_previstas, bases_vinculadas, bases_publicadas,
 `bases_em_atraso` (só entre as vinculadas; null sem nenhuma vinculada), bases_prazo_vencido,
@@ -108,7 +118,10 @@ no_pda, espontaneas, por_orgao (`[{rotulo, total}]`).
   `situacao_atualizacao(base, hoje)` (sem vínculo → Aguardando vínculo; dataset fora do portal →
   Sem informação; senão `atualizacoes.regras.situacao_periodicidade`) e `inventario.ultima_coleta`.
   Testes em `tests/test_painel_visao_geral.py`.
-- `indice_atencao_por_orgao(db)` — PBI-76/84, critério documentado e auditável (PBI-59).
+- `criterio_atencao(db) -> regras.CriterioAtencao` — pesos e faixas do índice, dos Parâmetros.
+- `regras.indice_atencao(risco_lgpd_pct, atraso_pct, criterio)` (pura, ADR-0004) — média ponderada
+  dos componentes com dado e peso > 0 (pesos redistribuídos), faixa pelos limites (inclusivos);
+  `regras.pct`. ADR-0030.
 - `organizacoes(db, user) -> OrganizacoesOut` — US19: inventário (datasets ativos, recursos atuais
   sem dicionário, formatos fechados via `metadados.recursos_formato_fechado` e o parâmetro
   `formatos_abertos`) + `pda.bases_do_plano` do PDA vigente, agrupado por `orgao_chave`. Testes em
@@ -128,10 +141,13 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 | consome | inventario | contagens e última coleta; `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` (Organizações) |
 | consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)`: bases previstas, vinculadas, publicadas e metas por órgão, **sempre do PDA vigente** (Organizações); `regras` (situações, `chave_sigla`); `hoje_local()` |
 | consome | atualizacoes | `regras.situacao_periodicidade` e `vencimento_atualizacao` (status das atualizações, cartão e alertas do Dashboard; coluna Atualização e cartão do detalhe em Organizações) |
-| consome | lgpd | `service.resumo_dados_pessoais(db, user)` — cartão e gráfico "Possíveis dados pessoais" do Dashboard (só com `lgpd.acessar`); ranking de exposição (US27) a implementar |
+| consome | lgpd | `service.resumo_dados_pessoais(db, user)` — cartão e gráfico "Possíveis dados pessoais" do Dashboard (só com `lgpd.acessar`); `service.riscos_por_orgao(db, user)` — coluna Riscos LGPD, cartão do detalhe e componente LGPD do índice de atenção em Organizações (só com `lgpd.acessar`); ranking de exposição (US27) a implementar |
 | consome | metadados | completude média; `recursos_formato_fechado(db, formatos_abertos)` e `regras.normalizar_formato` (Organizações); `datasets_sem_recurso(db)` (Dashboard) |
-| consome | parametros | `formatos_abertos` |
+| consome | parametros | `formatos_abertos`; `peso_lgpd_indice_atencao`, `peso_atualizacao_indice_atencao`, `indice_atencao_limite_medio`, `indice_atencao_limite_alto` (ADR-0030) |
 | é consumido por | relatorios | `organizacoes(db, user)` (relatório por órgão) e `situacao_atualizacao(base, hoje)` (relatório de atualizações) |
+| consome | rastreabilidade | tela: `HistoricoRecente` (`GET /rastreabilidade/eventos?orgao=<id>`) — "Últimas alterações" no detalhe do órgão em Organizações |
+| consome | relatorios | tela: `GerarRelatorioOrgaoModal` (`relatorios/RelatorioOrgao.tsx`) no detalhe do órgão em Organizações — marca os relatórios e gera o documento do órgão (`/relatorios/por-orgao/{organizacao_id}/…`) |
+| consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
 ## Jobs agendados
 Nenhum.
@@ -141,14 +157,19 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 
 - Indicadores calculados somente a partir da última coleta, com data visível (PBI-58).
 - Bloco de alertas LGPD só aparece se o usuário também tiver `lgpd.acessar` (usar `<Pode>`).
+- Índice de atenção por órgão: média ponderada do risco LGPD e do atraso de atualização, pesos e
+  faixas em Parâmetros ([ADR-0030](../adr/0030-indice-de-atencao-por-media-ponderada.md)). Sem
+  `lgpd.acessar`, nem a coluna Riscos LGPD nem o componente LGPD do índice (o painel não amplia o
+  acesso).
 
 ## Pendências
-- Fórmula do índice de atenção (validar com a GEDA).
+- Validar com a GEDA o critério do índice de atenção (ADR-0030): o que conta como risco LGPD e os
+  pesos 70/30 e faixas 25/50 provisórios.
 - Dashboard: gráficos de evolução temporal (PBI-75) exigem guardar os indicadores por coleta.
   Bases espontâneas: reclassificação manual (PBI-18) e filtro "espontânea" na tela Datasets.
 - Organizações: "Bases publicadas" depende do vínculo base × dataset (hoje 0 de 409 no PDA vigente);
-  "Atualização" da regra por periodicidade (`atualizacoes`, PBI-27/28); "Riscos LGPD" do módulo
-  `lgpd`; "Últimas alterações" da `rastreabilidade`. Validar com a GEDA se ZIP (605 recursos no
+  "Atualização" da regra por periodicidade (`atualizacoes`, PBI-27/28); "Riscos LGPD" da
+  cobertura da varredura (por demanda). Validar com a GEDA se ZIP (605 recursos no
   portal) e XLSX (105) devem contar como formato aberto — hoje contam como fechados.
 
 ## Histórico de alterações
@@ -168,3 +189,7 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 30/10/2026 | Interações: `organizacoes` e `situacao_atualizacao` consumidos pelo módulo `relatorios` (sem mudança no código do painel) | Victor |
 | 30/10/2026 | Dashboard: gráficos **Possíveis dados pessoais** (resumo do lgpd, só com `lgpd.acessar`; cartão com os achados aguardando revisão) e **Bases espontâneas** (ADR-0026: datasets ativos sem vínculo com o PDA vigente, por órgão); `espontaneas()`, `PainelDao.datasets_ativos`, `EspontaneasOut`, `dados_pessoais` | Humberto |
 | 05/11/2026 | Tela Organizações: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador de órgãos movido para o rodapé. Sem mudança na API | Victor |
+| 05/11/2026 | Organizações: botão **Gerar relatório** no detalhe do órgão (com `relatorios.acessar` e organização no portal) — marca os relatórios, como na tela Relatórios, e gera o documento só daquele órgão (`GerarRelatorioOrgaoModal`). Sem mudança na API | Humberto |
+| 05/11/2026 | Organizações: **Últimas alterações** no detalhe do órgão com os últimos eventos da rastreabilidade (`HistoricoRecente`), no lugar do texto pendente. Sem mudança na API | Humberto |
+| 05/11/2026 | Organizações: colunas **Riscos LGPD** e **Índice de atenção** (ADR-0030) — `regras.py` novo (`indice_atencao`, média ponderada com pesos e faixas dos Parâmetros), `criterio_atencao`, campos novos em `OrganizacaoOut`/`OrganizacoesOut`; filtro por faixa, ordenação pelo valor, cartão de dados pessoais e índice explicado no detalhe; `indice_atencao_por_orgao` (stub) removido | Humberto |
+| 06/11/2026 | Organizações: botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031); Riscos LGPD só entra no arquivo com `lgpd.acessar` | Humberto |

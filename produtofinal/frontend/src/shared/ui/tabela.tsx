@@ -97,7 +97,8 @@ export function useTabela<T, C extends string>(linhas: T[] | undefined, ordenado
     total, pagina: atual, porPagina, onPagina: setPagina,
     onPorPagina: (n) => { setPorPagina(n); setPagina(1); },
   };
-  return { itens, total, ordem, ordenarPor, paginacao };
+  // `todas`: a lista inteira já ordenada (todas as páginas), para exportar o que a tela mostra
+  return { itens, todas: ordenadas, total, ordem, ordenarPor, paginacao };
 }
 
 /** Cabeçalho clicável. `primeira` = direção do primeiro clique (datas e números: "desc"). */

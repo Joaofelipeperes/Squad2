@@ -80,8 +80,7 @@ export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props)
         <Item rotulo="Dataset no portal">
           {b.vinculo === "resolvido" && (
             <>
-              <span className="mono" style={{ fontWeight: 500, wordBreak: "break-all" }}>{b.dataset_name ?? "—"}</span>
-              {b.dataset_titulo && <Nota>{b.dataset_titulo}</Nota>}
+              <span style={{ fontWeight: 500 }}>{b.dataset_titulo ?? b.dataset_name ?? "—"}</span>
             </>
           )}
           {b.vinculo === "pendente" && (

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BasePda, BasesPda, FiltrosPda, ImportacaoResumo, Opcao, PlanoPda } from "./api";
@@ -13,6 +13,8 @@ import { ImportarPdaModal } from "./ImportarPdaModal";
 import { PlanoFormModal } from "./PlanoFormModal";
 import { SituacaoBadge } from "./SituacaoBadge";
 import { Pode } from "@/shared/acesso/Pode";
+import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
+import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
 import { PageLede } from "@/shared/ui/PageLede";
 import { useToast } from "@/shared/ui/Toast";
 import type { Ordenadores } from "@/shared/ui/tabela";
@@ -23,7 +25,7 @@ type ColunaBase = "orgao" | "nome" | "dataset" | "id_ckan" | "prazo" | "periodic
 const ORDENADORES_BASE: Ordenadores<BasePda, ColunaBase> = {
   orgao: (b) => b.orgao_sigla,
   nome: (b) => b.nome_previsto,
-  dataset: (b) => b.dataset_name ?? b.dataset_name_planilha ?? b.dataset_id_ckan_planilha,
+  dataset: (b) => b.dataset_titulo ?? b.dataset_name ?? b.dataset_name_planilha ?? b.dataset_id_ckan_planilha,
   id_ckan: (b) => b.dataset_id_ckan,
   prazo: (b) => b.prazo_abertura,
   periodicidade: (b) => b.periodicidade,
@@ -174,7 +176,15 @@ export default function PdaPage() {
             onImportarIds={() => setIdsAberto(true)} />
 
           <div className="panel">
-            <Filtros filtros={filtros} onMudar={setFiltros} dados={bases.data} />
+            <Filtros filtros={filtros} onMudar={setFiltros} dados={bases.data}
+              exportar={
+                <ExportarTabela titulo="Monitoramento do PDA" colunas={EXPORTACAO_BASES} linhas={tabela.todas}
+                  filtros={descreverFiltros([
+                    ["PDA", plano.nome], ["Órgão", rotuloDe(bases.data?.opcoes.orgaos, filtros.orgao)],
+                    ["Situação", filtros.situacao], ["Periodicidade", filtros.periodicidade],
+                    ["Ano", filtros.ano], ["Prazo", filtros.prazo === "vencido" ? "Vencido"
+                      : filtros.prazo === "proximo" ? "Próximo do prazo" : filtros.prazo]])} />
+              } />
             <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
               <div className="sub" style={{ fontSize: 12.5 }}>Bases previstas no {plano.nome}</div>
               <Pode permissao="pda.gerenciar_planos">
@@ -421,8 +431,8 @@ function Filtro({ id, rotulo, todos, valor, opcoes, onMudar, classe }: {
 
 const simples = (v: string): Opcao => ({ valor: v, rotulo: v });
 
-function Filtros({ filtros, onMudar, dados }: {
-  filtros: FiltrosPda; onMudar: (f: FiltrosPda) => void; dados: BasesPda | undefined;
+function Filtros({ filtros, onMudar, dados, exportar }: {
+  filtros: FiltrosPda; onMudar: (f: FiltrosPda) => void; dados: BasesPda | undefined; exportar?: ReactNode;
 }) {
   const set = (campo: keyof FiltrosPda) => (valor: string) => onMudar({ ...filtros, [campo]: valor });
   const janela = dados?.janela_alerta_dias;
@@ -446,6 +456,7 @@ function Filtros({ filtros, onMudar, dados }: {
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => onMudar(FILTROS_VAZIOS)}>
           Limpar filtros
         </button>
+        {exportar}
       </div>
     </div>
   );
@@ -453,11 +464,35 @@ function Filtros({ filtros, onMudar, dados }: {
 
 /* ------------------------------------------------------------------ Tabela */
 
+/** Dataset do CKAN na exportação: título do vinculado, ou o informado na planilha (vínculo pendente). */
+function datasetExportado(b: BasePda): string {
+  if (b.vinculo === "resolvido") {
+    return (b.dataset_titulo ?? b.dataset_name ?? "—") + (b.dataset_ativo === false ? " (fora do portal)" : "");
+  }
+  if (b.vinculo === "pendente") {
+    return `${b.dataset_name_planilha ?? b.dataset_id_ckan_planilha ?? "—"} (vínculo pendente)`;
+  }
+  return "—";
+}
+
+/** Colunas do Excel/PDF: as mesmas da tabela (ID do CKAN completo), com os valores como a tela mostra. */
+const EXPORTACAO_BASES: ColunaExportacao<BasePda>[] = [
+  { titulo: "Órgão", valor: (b) => b.orgao_sigla },
+  { titulo: "Base prevista (PDA)", valor: (b) => b.nome_previsto },
+  { titulo: "Dataset CKAN", valor: datasetExportado },
+  { titulo: "ID CKAN", valor: (b) => b.dataset_id_ckan },
+  { titulo: "Prazo", valor: (b) => fmtData(b.prazo_abertura) },
+  { titulo: "Periodicidade", valor: (b) => b.periodicidade },
+  { titulo: "Última atualização",
+    valor: (b) => fmtDataHora(b.ultima_atualizacao) + (b.ultima_atualizacao && b.ultima_atualizacao_estimada ? " (est.)" : "") },
+  { titulo: "Situação", valor: (b) => b.situacao },
+];
+
 function CelulaDataset({ b }: { b: BasePda }) {
   if (b.vinculo === "resolvido") {
     return (
       <>
-        <span title={b.dataset_titulo ?? undefined}>{b.dataset_name ?? "—"}</span>
+        <span>{b.dataset_titulo ?? b.dataset_name ?? "—"}</span>
         {b.dataset_ativo === false && (
           <>{" "}<span className="badge badge-red" title="Dataset vinculado não está mais visível no portal">fora do portal</span></>
         )}

@@ -248,6 +248,14 @@ def test_eventos_filtros_e_escopo_de_orgao(client, analista, orgao):
     assert [e["tipo"] for e in r.json()["eventos"]] == ["inclusao"]
     r = client.get(f"/api/v1/rastreabilidade/eventos?orgao={ses}", headers=analista)
     assert r.json()["total"] == 1
+    # Histórico recente dos detalhes de dataset e de órgão: só os eventos daquele dataset (ID do
+    # CKAN) ou órgão, os mais recentes primeiro, na quantidade pedida
+    r = client.get("/api/v1/rastreabilidade/eventos?dataset=d2&por_pagina=5", headers=analista)
+    assert [e["dataset_id_ckan"] for e in r.json()["eventos"]] == ["d2"]
+    r = client.get(f"/api/v1/rastreabilidade/eventos?orgao={seduc}&por_pagina=2", headers=analista)
+    corpo = r.json()
+    assert corpo["total"] == 3 and len(corpo["eventos"]) == 2
+    assert {e["organizacao_id_ckan"] for e in corpo["eventos"]} == {"org-seduc"}
 
     # órgão publicador não tem a permissão (papel padrão)
     assert client.get("/api/v1/rastreabilidade/eventos", headers=orgao).status_code == 403
