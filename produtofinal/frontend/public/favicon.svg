@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Mesma marca da barra lateral (.brand-mark): degradê azul #1d6fa5 para verde #2f7a4f e ícone de camadas -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d6fa5"/>
+      <stop offset="1" stop-color="#2f7a4f"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#g)"/>
+  <g fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 13 50 22 32 31 14 22Z" fill="#fff"/>
+    <path d="M14 32 32 41 50 32"/>
+    <path d="M14 42 32 51 50 42"/>
+  </g>
+</svg>
