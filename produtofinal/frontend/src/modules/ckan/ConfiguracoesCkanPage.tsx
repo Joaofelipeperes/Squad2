@@ -5,8 +5,19 @@ import { ckanApi } from "./api";
 import { PerfilCkanForm } from "./PerfilCkanForm";
 import { PageLede } from "@/shared/ui/PageLede";
 import { useToast } from "@/shared/ui/Toast";
+import type { Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, useTabela } from "@/shared/ui/tabela";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+type Coluna = "nome" | "leitura" | "auditoria" | "token" | "uso";
+const ORDENADORES: Ordenadores<PerfilCkan, Coluna> = {
+  nome: (p) => p.nome,
+  leitura: (p) => p.base_url,
+  auditoria: (p) => p.auditoria_base_url,
+  token: (p) => p.tem_token,
+  uso: (p) => p.selecionado,
+};
 
 export default function ConfiguracoesCkanPage() {
   const qc = useQueryClient();
@@ -29,30 +40,19 @@ export default function ConfiguracoesCkanPage() {
   });
 
   const lista = perfis.data ?? [];
+  const tabela = useTabela(perfis.data, ORDENADORES);
+  const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
 
   return (
     <section className="screen">
       <PageLede titulo="Configurações CKAN">
-        Cadastre perfis de conexão com o CKAN e escolha qual deles o sistema usa. A troca vale na
-        hora, para toda a solução (coleta do inventário, varredura LGPD e auditoria/diff da
-        rastreabilidade).
+        Cadastre perfis de conexão com o CKAN e escolha qual deles o sistema usa.
       </PageLede>
-
-      <div className="alert-callout">
-        <i className="fa-solid fa-triangle-exclamation" />
-        <div>
-          Trocar o CKAN em uso passa a valer <strong>na hora e para todo o sistema</strong>,
-          sobrepondo o que está no <code>.env</code>/<code>GDA_ENVIRONMENT</code>. <strong>Não apaga</strong> os
-          dados já coletados (inventário, eventos, achados) — apenas muda de qual CKAN as próximas
-          leituras virão.
-        </div>
-      </div>
 
       <div className="panel">
         <div className="panel-head">
           <div>
             <h3>Perfis de conexão</h3>
-            <div className="sub">O perfil em uso rege toda a solução</div>
           </div>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setForm({ aberto: true, perfil: null })}>
             <i className="fa-solid fa-plus" style={{ marginRight: 4 }} /> Novo perfil
@@ -71,12 +71,16 @@ export default function ConfiguracoesCkanPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Nome</th><th>Leitura pública</th><th>Auditoria (dsaudit)</th>
-                  <th>Token</th><th>Em uso</th><th />
+                  <ColunaOrdenavel coluna="nome" {...col}>Nome</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="leitura" {...col}>Leitura pública</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="auditoria" {...col}>Auditoria (dsaudit)</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="token" primeira="desc" {...col}>Token</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="uso" primeira="desc" {...col}>Em uso</ColunaOrdenavel>
+                  <th />
                 </tr>
               </thead>
               <tbody>
-                {lista.map((p) => (
+                {tabela.itens.map((p) => (
                   <tr key={p.id}>
                     <td><b>{p.nome}</b><div className="tl-meta" style={{ color: "var(--gray-500)" }}>Atualizado em {fmt(p.atualizado_em)}</div></td>
                     <td className="mono" style={{ wordBreak: "break-all" }}>{p.base_url}</td>
@@ -105,6 +109,10 @@ export default function ConfiguracoesCkanPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {lista.length > 0 && (
+          <Paginacao id="perfis-ckan" {...tabela.paginacao}
+            resumo={<><strong>{lista.length}</strong> perfil(is) cadastrado(s)</>} />
         )}
       </div>
 
