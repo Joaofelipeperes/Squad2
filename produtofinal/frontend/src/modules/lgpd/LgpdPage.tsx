@@ -11,6 +11,8 @@ import { CorrecoesPainel } from "./CorrecoesPainel";
 import { NovaCorrecaoModal } from "./NovaCorrecaoModal";
 import { PrioridadeTag, StatusAchadoBadge, classeStatusAchado } from "./formato";
 import { VarreduraPainel } from "./VarreduraPainel";
+import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
+import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
 import { PageLede } from "@/shared/ui/PageLede";
 import type { Direcao, Ordem, Ordenadores } from "@/shared/ui/tabela";
 import { ColunaOrdenavel, Paginacao, alternarOrdem, ordenar, useTabela } from "@/shared/ui/tabela";
@@ -118,6 +120,11 @@ export default function LgpdPage() {
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFiltros(FILTROS_VAZIOS)}>
               Limpar filtros
             </button>
+            <ExportarTabela titulo="Riscos de Dados Pessoais" colunas={EXPORTACAO} linhas={tabela.todas}
+              filtros={descreverFiltros([
+                ["Prioridade", filtros.prioridade], ["Tipo de dado", rotuloDe(dados?.opcoes.tipos, filtros.tipo)],
+                ["Órgão", rotuloDe(dados?.opcoes.orgaos, filtros.orgao)],
+                ["Status", rotuloDe(dados?.opcoes.status, filtros.status)]])} />
           </div>
         </div>
         <div className="table-scroll">
@@ -192,6 +199,21 @@ function Filtro({ id, rotulo, valor, opcoes, onMudar }: {
 const COLUNAS = 8;
 
 /** Linha do arquivo (resumo) e, aberta, a tabela com o detalhe de cada achado. */
+/** Colunas do Excel/PDF: um arquivo (recurso) por linha, como na tabela. Só tipo, localização e
+ *  contagens — nunca o valor encontrado (a tela também não o recebe). */
+const EXPORTACAO: ColunaExportacao<GrupoRecurso>[] = [
+  { titulo: "Prioridade", valor: (g) => g.prioridade },
+  { titulo: "Órgão", valor: (g) => g.orgao },
+  { titulo: "Dataset", valor: (g) => g.dataset_titulo },
+  { titulo: "Arquivo", valor: (g) => g.recurso_nome },
+  { titulo: "Dados pessoais encontrados (células)",
+    valor: (g) => g.tipos.map((t) => `${t.rotulo} (${t.celulas})`).join(", ") },
+  { titulo: "Achados", valor: (g) => `${g.achados.length} ${g.achados.length === 1 ? "coluna" : "colunas"}` },
+  { titulo: "Situação",
+    valor: (g) => (Object.entries(g.status) as [keyof typeof ROTULO_STATUS, number][])
+      .map(([st, n]) => `${n} ${ROTULO_STATUS[st]}`).join(", ") },
+];
+
 function Grupo({ g, aberto, onAlternar, onAbrir }: {
   g: GrupoRecurso; aberto: boolean; onAlternar: () => void; onAbrir: (id: number) => void;
 }) {

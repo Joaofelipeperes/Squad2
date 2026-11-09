@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -16,7 +16,7 @@ humana e, após aprovação, publica no CKAN a versão anonimizada do recurso.
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Riscos de Dados Pessoais | `/lgpd` | `lgpd.acessar` | Ordenação por coluna e paginação da tabela de arquivos (ADR-0028); Varrer recursos novos/alterados ou um dataset (`lgpd.varrer`; a busca de dataset usa `inventario.acessar`); marcar falso positivo / confirmado / tratado / voltar para revisão, com justificativa (`lgpd.triar`); anonimizar recurso com achados confirmados — prévia, baixar prévia, aprovar e publicar, descartar, reverter (`lgpd.aprovar_correcao`); painel Anonimizações (`lgpd.acessar`) |
+| Riscos de Dados Pessoais | `/lgpd` | `lgpd.acessar` | Ordenação por coluna e paginação da tabela de arquivos (ADR-0028); Varrer recursos novos/alterados ou um dataset (`lgpd.varrer`; a busca de dataset usa `inventario.acessar`); marcar falso positivo / confirmado / tratado / voltar para revisão, com justificativa (`lgpd.triar`); anonimizar recurso com achados confirmados — prévia, baixar prévia, aprovar e publicar, descartar, reverter (`lgpd.aprovar_correcao`); painel Anonimizações (`lgpd.acessar`); **Excel** e **PDF** da tabela de arquivos como está na tela — filtros, ordem e todas as páginas; só tipo, localização e contagens, nunca o valor (`relatorios.exportar`, ADR-0031) |
 
 Referência visual: `#screen-lgpd` e `#modal-lgpd` do Protótipo V1 (4 KPIs, filtros de
 prioridade/tipo/órgão/status, tabela e modal com barra de confiança; o callout do topo foi retirado). A tabela
@@ -133,6 +133,7 @@ Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`
 | é consumido por | atualizacoes | correções publicadas não contam como atualização (PBI-79) |
 | é consumido por | relatorios | relatório priorizado (PBI-38) |
 | é consumido por | assistente | `Achado`: **apenas contagens** por dataset, tipo e status — nunca coluna, linha ou valor |
+| consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela de arquivos com achados (ADR-0031) |
 
 ## Jobs agendados
 | Job | Quando | O quê |
@@ -206,3 +207,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 04/11/2026 | Tela: achados agrupados por arquivo, com resumo (tipos, células, situação) e detalhe ao clicar; lista de varreduras com rolagem, até 200 (fila inteira) | Luiza |
 | 05/11/2026 | Tela Riscos de Dados Pessoais: tabela de arquivos com ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); a tabela de achados de cada arquivo também ordena por coluna. Sem mudança na API | Victor |
 | 05/11/2026 | `riscos_por_orgao` (contagens por órgão para a tela Organizações e o índice de atenção, ADR-0030), `RiscoLgpdOrgaoOut`, `regras.EM_ABERTO`, `LgpdDao.recursos_analisados_por_orgao` | Humberto |
+| 09/11/2026 | Tela: botões **Excel** e **PDF** da tabela de arquivos com achados (`ExportarTabela`, ADR-0031) — prioridade, órgão, dataset, arquivo, tipos com células, colunas e situação; nenhum valor de dado pessoal | Humberto |
