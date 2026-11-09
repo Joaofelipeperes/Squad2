@@ -43,10 +43,11 @@ export default function PdaPage() {
   const toast = useToast();
   const planos = useQuery({ queryKey: ["pda", "planos"], queryFn: pdaApi.planos });
   const [planoSel, setPlanoSel] = useState<number | null>(null);
-  // "?orgao=<chave>" vem do botão "Ver bases no PDA" da tela Organizações
+  // "?orgao=<chave>" vem do botão "Ver bases no PDA" da tela Organizações;
+  // "?situacao=<situação>" vem dos indicadores da Visão Geral
   const [params] = useSearchParams();
   const [filtros, setFiltros] = useState<FiltrosPda>(
-    () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "" }));
+    () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "", situacao: params.get("situacao") ?? "" }));
   const [importarAberto, setImportarAberto] = useState(false);
   const [idsAberto, setIdsAberto] = useState(false);
   const [confirmacao, setConfirmacao] = useState<"vigente" | "excluir" | null>(null);

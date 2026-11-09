@@ -9,7 +9,9 @@ interface Coleta { id: number; status: string; iniciada_em: string; finalizada_e
 const fmt = (iso: string) =>
   new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
-export function Topbar({ crumb, titulo }: { crumb: string; titulo: string }) {
+export function Topbar({ crumb, titulo, menuAberto, onMenu }: {
+  crumb: string; titulo: string; menuAberto: boolean; onMenu: () => void;
+}) {
   const toast = useToast();
   const qc = useQueryClient();
   const ultima = useQuery({
@@ -45,9 +47,14 @@ export function Topbar({ crumb, titulo }: { crumb: string; titulo: string }) {
 
   return (
     <header className="topbar">
+      <button type="button" className="btn btn-ghost menu-toggle" onClick={onMenu}
+        aria-expanded={menuAberto} aria-controls="menu-lateral">
+        <i className={`fa-solid ${menuAberto ? "fa-xmark" : "fa-bars"}`} aria-hidden="true" />
+        <span className="sr-only">{menuAberto ? "Fechar menu" : "Abrir menu"}</span>
+      </button>
       <div className="topbar-title">
         <span className="crumb">{crumb}</span>
-        <h2>{titulo}</h2>
+        <h1>{titulo}</h1>
       </div>
       <div className="topbar-actions">
         <span className="topbar-meta">{meta}</span>

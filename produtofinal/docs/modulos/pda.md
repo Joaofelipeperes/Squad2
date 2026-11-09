@@ -438,3 +438,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 06/11/2026 | Monitoramento do PDA: botões **Excel** e **PDF** da tabela de bases (`ExportarTabela`, ADR-0031); o arquivo traz o título do dataset do CKAN e o ID completo | Humberto |
 | 06/11/2026 | Legibilidade: a coluna "Dataset CKAN" e o "Dataset no portal" do detalhe da base mostram o **título** do dataset no CKAN (ex.: "Acordos sem Transferência de Recursos - ABC") em vez do `name` técnico; a busca de dataset do formulário de base deixa de exibir o `name`. Sem mudança na API | Humberto |
 | 09/11/2026 | Tela: "Incluir base" sobe para a barra de ações do PDA; retirados o resumo do PDA (bases previstas, importação, vigência, arquivo) e o rótulo "Bases previstas no PDA" acima da tabela | Victor |
+| 09/11/2026 | Tela: filtro de situação também pela URL (`/pda?situacao=Em atraso`), usado pelo indicador "Bases atrasadas" da Visão Geral | Victor |
