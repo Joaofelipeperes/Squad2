@@ -20,15 +20,15 @@ def _erro(exc: Exception):
     raise HTTPException(422, str(exc))
 
 
-def _usuario_ou_404(db, usuario_id: int):
-    u = service.usuario_por_id(db, usuario_id)
+def _usuario_ou_404(db, usuario_id: int, quem: UsuarioAtual):
+    u = service.usuario_por_id(db, usuario_id, quem)
     if u is None:
         raise HTTPException(404, "Usuário não encontrado.")
     return u
 
 
-def _papel_ou_404(db, papel_id: int):
-    p = service.papel_por_id(db, papel_id)
+def _papel_ou_404(db, papel_id: int, quem: UsuarioAtual):
+    p = service.papel_por_id(db, papel_id, quem)
     if p is None:
         raise HTTPException(404, "Papel não encontrado.")
     return p
@@ -63,10 +63,10 @@ def orgaos(db: DbSession):
 
 
 # ------------------------------------------------------------------ usuários
-@router.get("/usuarios", response_model=list[UsuarioOut],
-            dependencies=[Depends(require(P.ACESSO_GERENCIAR_USUARIOS))])
-def listar_usuarios(db: DbSession):
-    return service.listar_usuarios(db)
+@router.get("/usuarios", response_model=list[UsuarioOut])
+def listar_usuarios(db: DbSession,
+                    user: UsuarioAtual = Depends(require(P.ACESSO_GERENCIAR_USUARIOS))):
+    return service.listar_usuarios(db, user)
 
 
 @router.post("/usuarios", response_model=UsuarioOut, status_code=201)
@@ -81,25 +81,24 @@ def criar_usuario(body: UsuarioIn, db: DbSession,
 @router.put("/usuarios/{usuario_id}", response_model=UsuarioOut)
 def atualizar_usuario(usuario_id: int, body: UsuarioIn, db: DbSession,
                       editor: UsuarioAtual = Depends(require(P.ACESSO_GERENCIAR_USUARIOS))):
-    u = _usuario_ou_404(db, usuario_id)
+    u = _usuario_ou_404(db, usuario_id, editor)
     try:
         return service.usuario_out(db, service.salvar_usuario(db, body, u, editor=editor))
     except service.ErroAcesso as exc:
         _erro(exc)
 
 
-
 # ------------------------------------------------------------------ papéis
-@router.get("/papeis", response_model=list[PapelOut], dependencies=[Depends(GERENCIA)])
-def listar_papeis(db: DbSession):
-    return service.listar_papeis(db)
+@router.get("/papeis", response_model=list[PapelOut])
+def listar_papeis(db: DbSession, user: UsuarioAtual = Depends(GERENCIA)):
+    return service.listar_papeis(db, user)
 
 
 @router.post("/papeis", response_model=PapelOut, status_code=201)
 def criar_papel(body: PapelIn, db: DbSession,
                 editor: UsuarioAtual = Depends(require(P.ACESSO_GERENCIAR_PAPEIS))):
     try:
-        return service.papel_out(db, service.salvar_papel(db, body, editor=editor))
+        return service.papel_out(db, service.salvar_papel(db, body, editor=editor), editor)
     except service.ErroAcesso as exc:
         _erro(exc)
 
@@ -107,9 +106,9 @@ def criar_papel(body: PapelIn, db: DbSession,
 @router.put("/papeis/{papel_id}", response_model=PapelOut)
 def atualizar_papel(papel_id: int, body: PapelIn, db: DbSession,
                     editor: UsuarioAtual = Depends(require(P.ACESSO_GERENCIAR_PAPEIS))):
-    p = _papel_ou_404(db, papel_id)
+    p = _papel_ou_404(db, papel_id, editor)
     try:
-        return service.papel_out(db, service.salvar_papel(db, body, p, editor=editor))
+        return service.papel_out(db, service.salvar_papel(db, body, p, editor=editor), editor)
     except service.ErroAcesso as exc:
         _erro(exc)
 
@@ -117,7 +116,7 @@ def atualizar_papel(papel_id: int, body: PapelIn, db: DbSession,
 @router.delete("/papeis/{papel_id}", status_code=204)
 def excluir_papel(papel_id: int, db: DbSession,
                   editor: UsuarioAtual = Depends(require(P.ACESSO_GERENCIAR_PAPEIS))):
-    p = _papel_ou_404(db, papel_id)
+    p = _papel_ou_404(db, papel_id, editor)
     try:
         service.excluir_papel(db, p, editor=editor)
     except service.ErroAcesso as exc:
