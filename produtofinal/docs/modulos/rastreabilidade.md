@@ -21,7 +21,8 @@ organização, `package_patch`), as atividades nativas do CKAN sem registro da e
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Rastreabilidade | `/rastreabilidade` | `rastreabilidade.acessar` | Busca por dataset ou órgão; filtros por tipo de alteração, órgão e período (de/até); ordenação por data; paginação com total no rodapé (50 por página, até 999); "Ver detalhes" de cada evento; "Ver diff do arquivo" quando houver comparação linha a linha |
+| Rastreabilidade | `/rastreabilidade` | `rastreabilidade.acessar` | Busca por dataset ou órgão; filtros por tipo de alteração, órgão e período (de/até); ordenação por data; paginação com total no rodapé (50 por página, até 999); "Ver detalhes" de cada evento; "Ver diff do arquivo" quando houver comparação linha a linha. Aceita `?busca=` e `?orgao=` na URL (vindos do histórico recente) |
+| Histórico recente (componente `HistoricoRecente.tsx`) | detalhe do dataset (Datasets, Atualizações) e do órgão (Organizações) | `rastreabilidade.acessar` (sem ela, um aviso no lugar da lista) | Os 5 eventos mais recentes do dataset (`?dataset=<ID do CKAN>`) ou do órgão (`?orgao=<id>`): data, tipo e resumo (no órgão, também o dataset ou "Cadastro do órgão"); "Ver todos os N eventos na Rastreabilidade" fecha o modal e abre a tela já filtrada |
 
 Referência visual: `#screen-traceability` do Protótipo V1 (linha do tempo em linguagem humana,
 PBI-85). Cada cartão mostra tipo, data e hora (Brasília), órgão · dataset · recurso, uma frase com
@@ -228,6 +229,8 @@ local). Para testar com permissão mínima, gere o token de um editor e defina
 | é acionado por | inventario | `sincronizar(orgaos=...)` ao fim de cada coleta concluída, com a lista de órgãos que a coleta acabou de baixar (`organization_list` com campos extras) |
 | consome | pda | destacar mudança em base do PDA já cumprida (PBI-45) — pendente |
 | é consumido por | relatorios | mudanças do período por órgão (PBI-44) — pendente |
+| é consumido por | inventario | tela: `HistoricoRecente` no detalhe do dataset ("Histórico recente"), via `GET /rastreabilidade/eventos?dataset=` |
+| é consumido por | painel | tela: `HistoricoRecente` no detalhe do órgão em Organizações ("Últimas alterações"), via `GET /rastreabilidade/eventos?orgao=` |
 
 ## Jobs agendados
 Sem job próprio: a sincronização roda ao fim de cada coleta (agendada pelo `inventario.coleta_diaria`
@@ -274,3 +277,4 @@ Decisões registradas: [ADR-0009](../adr/0009-fonte-da-rastreabilidade.md) (Acei
 | 23/10/2026 | Correção: Make private em lote aparecia como "tornado público" (e vice-versa). Na ação em lote o CKAN 2.9 guarda a versão de antes da ação (cache do Solr); identificada por `metadata_modified` anterior à atividade (`regras.versao_anterior_a_acao`), o estado depois vem da atividade seguinte ou da visibilidade atual; exclusão em lote reconhecida pelo tipo da atividade. Sem schema novo | João |
 | 29/10/2026 | Merge de `desenvolvimento`: banco só pelo `RastreabilidadeDao` (ADR-0019); `id` próprio, exclusão lógica e auditoria nas três tabelas; IDs do CKAN em `dataset_id_ckan`, `organizacao_id_ckan` e `recurso_id_ckan` (ADR-0018); `?orgao=` e escopo pelo `id` do órgão; migração `e7a4c2f9b315` (une as duas linhas do Alembic) | Victor |
 | 05/11/2026 | Linha do tempo paginada no banco (ADR-0028): `GET /eventos` troca `limite` por `pagina` e `por_pagina` (50 por padrão, até 999) e devolve `pagina`/`por_pagina`; rodapé com o total e itens por página. A tela consulta de novo sozinha enquanto a sincronização pós-coleta não termina e a API não fica em cache do navegador — dados novos sem limpar o cache (ADR-0029) | Victor |
+| 05/11/2026 | **Histórico recente** nos detalhes de dataset (Datasets, Atualizações) e de órgão (Organizações): componente `HistoricoRecente.tsx` com os 5 eventos mais recentes (`rastreabilidadeApi.recentes`, rota existente `GET /eventos?dataset=`/`?orgao=`) e atalho para a tela filtrada; a tela aceita `?busca=` e `?orgao=` na URL; teste dos filtros `dataset` e `orgao` com `por_pagina` | Humberto |

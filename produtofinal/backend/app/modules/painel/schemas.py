@@ -38,14 +38,36 @@ class OrganizacaoOut(BaseModel):
     atualizacao_pct: float | None = None  # % dentro do prazo (Atualizado + Próximo do vencimento)
     atualizacoes_atrasadas: int | None = None
     atualizacoes_avaliadas: int = 0
-    riscos_lgpd: int | None = None  # módulo lgpd
-    indice_atencao: str | None = None  # critério documentado (PBI-76/84)
+    # Riscos LGPD (módulo lgpd, só com `lgpd.acessar`): recursos com possível dado pessoal
+    # aguardando revisão ou confirmado. None = sem acesso ao lgpd ou nenhum recurso do órgão varrido
+    riscos_lgpd: int | None = None
+    lgpd_recursos_analisados: int = 0  # recursos do órgão com varredura concluída
+    lgpd_aguardando_revisao: int = 0  # achados
+    lgpd_confirmados: int = 0  # achados confirmados e ainda não tratados
+    risco_lgpd_pct: int | None = None  # riscos_lgpd / recursos analisados (0 a 100)
+    # Índice de atenção (ADR-0030, PBI-76/84): média ponderada do risco LGPD e do atraso de
+    # atualização, com pesos e faixas dos Parâmetros. None = sem nenhum dos dois componentes
+    indice_atencao: str | None = None  # Alto | Médio | Baixo
+    indice_atencao_valor: int | None = None  # 0 a 100
+    atraso_atualizacao_pct: int | None = None  # componente do índice: atrasadas / avaliadas
+    indice_atencao_componentes: list[str] = []  # o que entrou na média
+
+
+class CriterioAtencaoOut(BaseModel):
+    """Pesos e faixas do índice de atenção em vigor (parâmetros), para a tela explicar o cálculo."""
+
+    peso_lgpd: int
+    peso_atualizacao: int
+    limite_medio: int
+    limite_alto: int
 
 
 class OrganizacoesOut(BaseModel):
     plano: PlanoResumoOut | None  # PDA vigente usado nas colunas de bases
     hoje: date
     formatos_abertos: list[str]
+    lgpd_visivel: bool  # o usuário vê o módulo lgpd (sem isso, riscos_lgpd vem None)
+    criterio_atencao: CriterioAtencaoOut
     organizacoes: list[OrganizacaoOut]
 
 

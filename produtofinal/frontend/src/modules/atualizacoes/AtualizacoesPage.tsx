@@ -5,6 +5,8 @@ import type { AtualizacaoLinha, AtualizacoesLista, FiltrosAtualizacoes } from ".
 import { FILTROS_VAZIOS, atualizacoesApi } from "./api";
 import { DatasetDetalheModal } from "@/modules/datasets/DatasetDetalheModal";
 import { fmtData, fmtDataHora } from "@/modules/pda/formato";
+import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
+import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
 import { PageLede } from "@/shared/ui/PageLede";
 import type { Ordenadores } from "@/shared/ui/tabela";
 import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
@@ -55,15 +57,6 @@ export default function AtualizacoesPage() {
         Avaliação da atualização real do conteúdo dos recursos publicados.
       </PageLede>
 
-      <div className="layer-banner">
-        <i className="fa-solid fa-circle-info" />
-        <span>
-          O sistema utiliza a data de atualização do recurso <code>last_modified</code> para avaliar a atualização
-          real do conteúdo. O campo <code>metadata_modified</code> não é utilizado como indicador, pois reflete
-          apenas alterações de metadados no CKAN.
-        </span>
-      </div>
-
       {dados && dados.plano_nome === null && (
         <div className="inline-msg err" role="status" style={{ marginBottom: 18 }}>
           Não há PDA vigente: a periodicidade de cada dataset vem do PDA. Importe ou defina um PDA vigente
@@ -97,6 +90,11 @@ export default function AtualizacoesPage() {
             opcoes={(dados?.opcoes.situacoes ?? []).map((s) => ({ valor: s, rotulo: s }))} />
           <div className="filter-actions">
             <button type="button" className="btn btn-ghost btn-sm" onClick={limpar}>Limpar filtros</button>
+            <ExportarTabela titulo="Monitoramento de Atualizações" colunas={EXPORTACAO} linhas={tabela.todas}
+              filtros={descreverFiltros([
+                ["PDA", dados?.plano_nome], ["Dataset", filtros.dataset],
+                ["Órgão", rotuloDe(dados?.opcoes.orgaos, filtros.orgao)],
+                ["Periodicidade", filtros.periodicidade], ["Situação", filtros.situacao]])} />
           </div>
         </div>
         <div className="table-scroll">
@@ -143,6 +141,18 @@ export default function AtualizacoesPage() {
     </section>
   );
 }
+
+/** Colunas do Excel/PDF: as mesmas da tabela, com os valores como a tela mostra. */
+const EXPORTACAO: ColunaExportacao<AtualizacaoLinha>[] = [
+  { titulo: "Dataset", valor: (d) => d.dataset_titulo },
+  { titulo: "Órgão", valor: (d) => d.orgao_sigla },
+  { titulo: "Periodicidade", valor: (d) => d.periodicidade },
+  { titulo: "Último recurso atualizado",
+    valor: (d) => fmtDataHora(d.ultima_atualizacao) + (d.ultima_atualizacao && d.ultima_atualizacao_estimada ? " (est.)" : "") },
+  { titulo: "Dias desde atualização", valor: (d) => d.dias_desde_atualizacao },
+  { titulo: "Prazo esperado", valor: (d) => fmtData(d.prazo_esperado) },
+  { titulo: "Situação", valor: (d) => d.situacao },
+];
 
 function Cartao({ cor, icone, valor, rotulo }: { cor: string; icone: string; valor?: number; rotulo: string }) {
   return (

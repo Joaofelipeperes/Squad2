@@ -62,3 +62,4 @@ Com o João (responsável pelo módulo) e, quanto ao layout, com a Paloma na pr�
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 05/11/2026 | Relatório de um órgão: o mesmo gerador monta vários relatórios num documento — PDF com uma seção por relatório (título, referência e total antes de cada tabela), XLSX com uma aba por relatório e CSV com as seções em sequência; sem dependência nova | Humberto |

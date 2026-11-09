@@ -9,13 +9,15 @@ from app.core.permissoes import P
 from app.modules.atualizacoes import regras as regras_atualizacao
 from app.modules.inventario.models import Organizacao
 from app.modules.inventario.service import ultima_coleta
-from app.modules.lgpd.service import resumo_dados_pessoais
+from app.modules.lgpd.service import resumo_dados_pessoais, riscos_por_orgao
 from app.modules.metadados import regras as regras_metadados
 from app.modules.metadados.service import datasets_sem_recurso, recursos_formato_fechado
+from app.modules.painel import regras
 from app.modules.painel.dao import PainelDao
 from app.modules.painel.schemas import (
     AlertaOut,
     ContagemOut,
+    CriterioAtencaoOut,
     EspontaneasOut,
     KpisOut,
     OrganizacaoOut,
@@ -167,18 +169,22 @@ def visao_geral(db: Session, user: UsuarioAtual) -> VisaoGeralOut:
         espontaneas=espontaneas(dao.datasets_ativos(user), bases, orgs), dados_pessoais=lgpd)
 
 
-def indice_atencao_por_orgao(db):
-    """PBI-76/84 — critério documentado e auditável (PBI-59)."""
-    raise NotImplementedError
+def criterio_atencao(db: Session) -> regras.CriterioAtencao:
+    """Pesos e faixas do índice de atenção, dos Parâmetros (ADR-0030)."""
+    return regras.CriterioAtencao(
+        peso_lgpd=int(obter_parametro(db, "peso_lgpd_indice_atencao")),
+        peso_atualizacao=int(obter_parametro(db, "peso_atualizacao_indice_atencao")),
+        limite_medio=int(obter_parametro(db, "indice_atencao_limite_medio")),
+        limite_alto=int(obter_parametro(db, "indice_atencao_limite_alto")))
 
 
 def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     """US19 — tela Organizações: por órgão, o inventário do portal (datasets ativos, recursos e
     recursos em formato fechado) e as bases do PDA VIGENTE (previstas, vinculadas, publicadas,
     em atraso entre as vinculadas, próximas do prazo e atualização pela periodicidade do PDA —
-    ADR-0023). Respeita o escopo de órgão do usuário.
-    Indicadores que dependem de vínculo, de regra ainda não definida ou de outro módulo vêm como
-    None."""
+    ADR-0023), riscos LGPD (só com `lgpd.acessar`: o painel não amplia o acesso) e o índice de
+    atenção (ADR-0030). Respeita o escopo de órgão do usuário.
+    Indicadores que dependem de vínculo ou de dado ainda inexistente vêm como None."""
     dao = PainelDao.de(db, user)
     orgs = dao.organizacoes_visiveis(user)
     datasets = dao.datasets_ativos_por_orgao(orgs)
@@ -198,6 +204,9 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     por_chave: dict[str, list] = defaultdict(list)
     for b in bases:
         por_chave[b.orgao_chave].append(b)
+    lgpd_visivel = user.pode(P.LGPD_ACESSAR)
+    riscos = riscos_por_orgao(db, user) if lgpd_visivel else {}
+    criterio = criterio_atencao(db)
 
     def linha(chave: str, organizacao: Organizacao | None) -> OrganizacaoOut:
         bs = por_chave.get(chave, [])
@@ -208,6 +217,10 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
         siglas = Counter(chave_sigla(b.orgao_sigla) for b in bs)
         nome = organizacao.titulo.strip() if organizacao else chave.removeprefix("sigla:")
         org_id = organizacao.id if organizacao else None
+        risco = riscos.get(org_id) if org_id else None
+        risco_pct = regras.pct(risco.recursos_em_aberto, risco.recursos_analisados) if risco else None
+        atraso_pct = regras.pct(atrasadas, len(avaliadas))
+        indice = regras.indice_atencao(risco_pct, atraso_pct, criterio)
         return OrganizacaoOut(
             chave=chave, organizacao_id=org_id, nome=nome,
             siglas=[s for s, _ in siglas.most_common()],
@@ -223,11 +236,21 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
             atualizacao_pct=(round(100 * (len(avaliadas) - atrasadas) / len(avaliadas))
                              if avaliadas else None),
             atualizacoes_atrasadas=atrasadas if avaliadas else None,
-            atualizacoes_avaliadas=len(avaliadas))
+            atualizacoes_avaliadas=len(avaliadas),
+            riscos_lgpd=risco.recursos_em_aberto if risco else None,
+            lgpd_recursos_analisados=risco.recursos_analisados if risco else 0,
+            lgpd_aguardando_revisao=risco.aguardando_revisao if risco else 0,
+            lgpd_confirmados=risco.confirmados if risco else 0,
+            risco_lgpd_pct=risco_pct,
+            indice_atencao=indice.faixa if indice else None,
+            indice_atencao_valor=indice.valor if indice else None,
+            atraso_atualizacao_pct=atraso_pct,
+            indice_atencao_componentes=indice.componentes if indice else [])
 
     linhas = [linha(pda.orgao_chave(org_id, ""), o) for org_id, o in orgs.items()]
     linhas += [linha(chave, None) for chave in por_chave if chave.startswith("sigla:")]
     linhas.sort(key=lambda o: (normalizar_texto(o.nome), o.chave))
     return OrganizacoesOut(
         plano=PlanoResumoOut(id=plano.id, nome=plano.nome) if plano else None,
-        hoje=hoje, formatos_abertos=abertos, organizacoes=linhas)
+        hoje=hoje, formatos_abertos=abertos, lgpd_visivel=lgpd_visivel,
+        criterio_atencao=CriterioAtencaoOut(**vars(criterio)), organizacoes=linhas)

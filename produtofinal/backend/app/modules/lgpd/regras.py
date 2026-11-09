@@ -23,6 +23,9 @@ ALTA, MEDIA, BAIXA = "Alta", "Média", "Baixa"
 PRIORIDADES = (ALTA, MEDIA, BAIXA)
 STATUS = {"revisar": "Revisar", "confirmado": "Confirmado",
           "falso_positivo": "Falso positivo", "tratado": "Tratado"}
+# Achado que ainda representa risco: aguardando revisão ou confirmado e não tratado (anonimizado).
+# Falso positivo e tratado deixam de contar (risco LGPD do órgão, índice de atenção — ADR-0030)
+EM_ABERTO = ("revisar", "confirmado")
 # tipos que identificam pessoa jurídica ou só parte de um endereço: no máximo prioridade Média
 _TETO_MEDIA = {"cnpj", "cep"}
 

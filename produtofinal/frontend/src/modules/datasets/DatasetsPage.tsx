@@ -5,6 +5,8 @@ import type { DatasetLinha, DatasetsLista, FiltrosDatasets } from "./api";
 import { FILTROS_VAZIOS, datasetsApi } from "./api";
 import { DatasetDetalheModal } from "./DatasetDetalheModal";
 import { SituacaoPortalBadge, abreviarId, fmtDataHora } from "./formato";
+import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
+import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
 import { PageLede } from "@/shared/ui/PageLede";
 import type { Ordenadores } from "@/shared/ui/tabela";
 import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
@@ -77,6 +79,10 @@ export default function DatasetsPage() {
             dica="Prevista no PDA: vinculada pelo ID a uma base do PDA vigente. Espontânea: publicada no portal sem estar no PDA vigente." />
           <div className="filter-actions">
             <button type="button" className="btn btn-ghost btn-sm" onClick={limpar}>Limpar filtros</button>
+            <ExportarTabela titulo="Datasets" colunas={EXPORTACAO} linhas={tabela.todas}
+              filtros={descreverFiltros([
+                ["Busca", filtros.busca], ["Órgão", rotuloDe(dados?.opcoes.orgaos, filtros.orgao)],
+                ["Formato", filtros.formato], ["Status", filtros.situacao], ["Tipo de base", filtros.tipo_base]])} />
           </div>
         </div>
         <div className="table-scroll">
@@ -127,6 +133,20 @@ export default function DatasetsPage() {
 }
 
 const COLUNAS = 9;
+
+/** Colunas do Excel/PDF: as mesmas da tabela (ID do CKAN completo), com os valores como a tela mostra. */
+const EXPORTACAO: ColunaExportacao<DatasetLinha>[] = [
+  { titulo: "Dataset", valor: (d) => d.titulo },
+  { titulo: "Órgão", valor: (d) => d.orgao_nome },
+  { titulo: "ID CKAN", valor: (d) => d.id_ckan },
+  { titulo: "Qtd. recursos", valor: (d) => d.recursos_validos },
+  { titulo: "Criado no CKAN", valor: (d) => fmtDataHora(d.metadata_created) },
+  { titulo: "Última atualização",
+    valor: (d) => fmtDataHora(d.ultima_atualizacao) + (d.ultima_atualizacao && d.ultima_atualizacao_estimada ? " (est.)" : "") },
+  { titulo: "Formato", valor: (d) => d.formatos.join(", ") || "—" },
+  { titulo: "Tipo de base", valor: (d) => d.tipo_base ?? "—" },
+  { titulo: "Status", valor: (d) => d.situacao },
+];
 
 function Filtro({ id, rotulo, valor, opcoes, onMudar, classe, dica }: {
   id: string; rotulo: string; valor: string; opcoes: { valor: string; rotulo: string }[];

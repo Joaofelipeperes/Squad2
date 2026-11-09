@@ -92,6 +92,13 @@ e 2 últimos dígitos), `substituir` (`<CPF>`), `mascarar`, `hash` (com sal), `r
 achados alterados viram "tratado"), `descartar` (apaga os arquivos), `reverter` (reenvia o original;
 achados voltam a "confirmado").
 
+Contagens para o painel:
+- `resumo_dados_pessoais(db, user)` — Dashboard.
+- `riscos_por_orgao(db, user) -> dict[organizacao.id, RiscoLgpdOrgaoOut]` — por órgão com recurso
+  varrido: `recursos_analisados` (`LgpdDao.recursos_analisados_por_orgao`), `recursos_em_aberto`
+  (com achado em `regras.EM_ABERTO` = revisar ou confirmado), `aguardando_revisao` e `confirmados`
+  (achados). Escopo de órgão do usuário. ADR-0030.
+
 ## Modelo de dados
 Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
 
@@ -122,7 +129,7 @@ Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`
 | consome | ia | `AIGateway.chat(TarefaIA.CLASSIFICACAO_DADO_PESSOAL)` e `AIGateway.embed(TarefaIA.EMBEDDINGS_DADO_PESSOAL)` — sensíveis, só modelo local |
 | consome | parametros | `tipos_dado_pessoal`, `confianca_minima_lgpd`, `margem_embeddings_lgpd`, `tamanho_maximo_recurso_lgpd_mb` |
 | consome | CKAN (integração) | `CkanClient.url_download` + `baixar` (leitura dos arquivos, com intervalo mínimo por host e espera no HTTP 429 — ADR-0025); `CkanWriter.replace_resource_file` (publicação e reversão da anonimização) — única escrita do sistema |
-| é consumido por | painel | `service.resumo_dados_pessoais(db, user)` — **apenas contagens** por tipo e status (cartão e gráfico "Possíveis dados pessoais" do Dashboard, só com `lgpd.acessar`); ranking de exposição por órgão (US27) a implementar |
+| é consumido por | painel | `service.resumo_dados_pessoais(db, user)` — **apenas contagens** por tipo e status (cartão e gráfico "Possíveis dados pessoais" do Dashboard, só com `lgpd.acessar`); `service.riscos_por_orgao(db, user)` — **apenas contagens** por órgão (Riscos LGPD e índice de atenção em Organizações, ADR-0030); ranking de exposição por órgão (US27) a implementar |
 | é consumido por | atualizacoes | correções publicadas não contam como atualização (PBI-79) |
 | é consumido por | relatorios | relatório priorizado (PBI-38) |
 | é consumido por | assistente | `Achado`: **apenas contagens** por dataset, tipo e status — nunca coluna, linha ou valor |
@@ -198,3 +205,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 30/10/2026 | Resumo agregado para o Dashboard: `service.resumo_dados_pessoais` e `ResumoDadosPessoaisOut` (recursos analisados e com achados, aguardando revisão, críticos, por tipo sem falso positivo e por status) — só contagens, no escopo do usuário | Humberto |
 | 04/11/2026 | Tela: achados agrupados por arquivo, com resumo (tipos, células, situação) e detalhe ao clicar; lista de varreduras com rolagem, até 200 (fila inteira) | Luiza |
 | 05/11/2026 | Tela Riscos de Dados Pessoais: tabela de arquivos com ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); a tabela de achados de cada arquivo também ordena por coluna. Sem mudança na API | Victor |
+| 05/11/2026 | `riscos_por_orgao` (contagens por órgão para a tela Organizações e o índice de atenção, ADR-0030), `RiscoLgpdOrgaoOut`, `regras.EM_ABERTO`, `LgpdDao.recursos_analisados_por_orgao` | Humberto |

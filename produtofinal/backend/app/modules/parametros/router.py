@@ -47,6 +47,10 @@ def alterar(chave: str, body: ParametroIn, db: DbSession,
     if type(body.valor) is not type(d.padrao):
         raise HTTPException(422,
                             f"Tipo esperado: {type(d.padrao).__name__}.")
+    if d.minimo is not None and body.valor < d.minimo:
+        raise HTTPException(422, f"Valor abaixo do mínimo ({d.minimo:g}).")
+    if d.maximo is not None and body.valor > d.maximo:
+        raise HTTPException(422, f"Valor acima do máximo ({d.maximo:g}).")
     p = ParametrosDao.de(db, user).gravar(chave, body.valor, user.email)
     return ParametroOut(chave=d.chave, rotulo=d.rotulo, descricao=d.descricao, valor=p.valor,
                         padrao=d.padrao, pbi=d.pbi)

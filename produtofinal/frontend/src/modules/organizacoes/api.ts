@@ -19,14 +19,34 @@ export interface Organizacao {
   atualizacao_pct: number | null; // % das bases vinculadas com prazo que estão em dia (ADR-0023)
   atualizacoes_atrasadas: number | null;
   atualizacoes_avaliadas: number; // bases vinculadas com periodicidade de prazo definido
+  // Riscos LGPD (só com lgpd.acessar): recursos com possível dado pessoal aguardando revisão ou
+  // confirmado; null = sem acesso ao módulo ou nenhum recurso do órgão varrido
   riscos_lgpd: number | null;
-  indice_atencao: string | null;
+  lgpd_recursos_analisados: number;
+  lgpd_aguardando_revisao: number; // achados
+  lgpd_confirmados: number; // achados
+  risco_lgpd_pct: number | null; // riscos_lgpd / recursos varridos
+  // Índice de atenção (ADR-0030): média ponderada do risco LGPD e do atraso de atualização
+  indice_atencao: "Alto" | "Médio" | "Baixo" | null;
+  indice_atencao_valor: number | null; // 0 a 100
+  atraso_atualizacao_pct: number | null; // componente do índice: atualizações atrasadas / avaliadas
+  indice_atencao_componentes: string[]; // "Risco LGPD", "Atraso de atualização"
+}
+
+/** Pesos e faixas do índice de atenção em vigor (tela Parâmetros). */
+export interface CriterioAtencao {
+  peso_lgpd: number;
+  peso_atualizacao: number;
+  limite_medio: number;
+  limite_alto: number;
 }
 
 export interface Organizacoes {
   plano: { id: number; nome: string } | null;
   hoje: string;
   formatos_abertos: string[];
+  lgpd_visivel: boolean; // o usuário vê o módulo LGPD
+  criterio_atencao: CriterioAtencao;
   organizacoes: Organizacao[];
 }
 

@@ -48,12 +48,17 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   return executar<T>(method, path, body === undefined ? undefined : JSON.stringify(body), "application/json");
 }
 
-/** Baixa um arquivo da API (com token). Devolve o blob e o nome sugerido pelo servidor. */
-async function baixar(path: string): Promise<{ blob: Blob; filename: string }> {
+/** Baixa um arquivo da API (com token). Devolve o blob e o nome sugerido pelo servidor.
+ *  Com `body`, é um POST com JSON (ex.: a tabela da tela para virar PDF/Excel — ADR-0031). */
+async function baixar(path: string, body?: unknown): Promise<{ blob: Blob; filename: string }> {
   const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const resp = await fetch(`${BASE}${path}`, { method: "GET", headers, cache: "no-store" });
+  const resp = await fetch(`${BASE}${path}`, {
+    method: body === undefined ? "GET" : "POST", headers, cache: "no-store",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
   if (resp.status === 401) {
     tokenStore.clear();
     window.dispatchEvent(new Event("gda:sessao-expirada"));
@@ -82,4 +87,6 @@ export const api = {
   upload: <T>(p: string, form: FormData) => executar<T>("POST", p, form),
   /** GET de um arquivo para download (com token). Devolve o blob e o nome do servidor. */
   download: (p: string) => baixar(p),
+  /** POST com JSON que devolve um arquivo para download. */
+  downloadPost: (p: string, b: unknown) => baixar(p, b),
 };

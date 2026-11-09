@@ -47,6 +47,7 @@ from app.modules.lgpd.schemas import (
     OpcoesAchadosOut,
     PedidoVarreduraOut,
     ResumoDadosPessoaisOut,
+    RiscoLgpdOrgaoOut,
     VarreduraOut,
     VarredurasOut,
 )
@@ -109,6 +110,27 @@ def resumo_dados_pessoais(db: Session, user: UsuarioAtual) -> ResumoDadosPessoai
                   for t, n in sorted(por_tipo.items(), key=lambda x: (-x[1], regras.rotulo_tipo(x[0])))],
         por_status=[ContagemOut(rotulo=rotulo, total=sum(1 for a in achados if a.status == codigo))
                     for codigo, rotulo in regras.STATUS.items()])
+
+
+def riscos_por_orgao(db: Session, user: UsuarioAtual) -> dict[int, RiscoLgpdOrgaoOut]:
+    """Painel (tela Organizações): risco LGPD por órgão (`organizacao.id`), no escopo do usuário —
+    recursos varridos, recursos com achado em aberto (`regras.EM_ABERTO`), achados aguardando
+    revisão e confirmados. Só órgãos com ao menos um recurso varrido. Só contagens (PBI-35)."""
+    dao = LgpdDao.de(db, user)
+    analisados = dao.recursos_analisados_por_orgao(user)
+    em_aberto: dict[int, set[int]] = {}
+    revisar: dict[int, int] = {}
+    confirmados: dict[int, int] = {}
+    for a, _r, ds in dao.achados_visiveis(user):
+        if a.status not in regras.EM_ABERTO or ds.organizacao_id is None:
+            continue
+        em_aberto.setdefault(ds.organizacao_id, set()).add(a.recurso_id)
+        contagem = revisar if a.status == "revisar" else confirmados
+        contagem[ds.organizacao_id] = contagem.get(ds.organizacao_id, 0) + 1
+    return {org: RiscoLgpdOrgaoOut(
+        recursos_analisados=n, recursos_em_aberto=len(em_aberto.get(org, ())),
+        aguardando_revisao=revisar.get(org, 0), confirmados=confirmados.get(org, 0))
+        for org, n in analisados.items() if org is not None and n}
 
 
 def listar_achados(db: Session, user: UsuarioAtual, *, prioridade: str | None = None,
