@@ -143,3 +143,139 @@ def test_exportar_exige_permissao(client, admin, gerente):
     ver = _usuario(client, "ver@cge.go.gov.br", ["so_ver"])
     assert client.get(f"{API}/orgaos/previa", headers=ver).status_code == 200
     assert client.get(f"{API}/orgaos/exportar", headers=ver).status_code == 403
+
+
+# ---------------------------------------------------------- relatório de um órgão
+ORG = f"{API}/por-orgao"
+
+
+def _orgao(client, headers, orgao, *nomes, rota="previa", **extra):
+    params = [("relatorios", n) for n in nomes] + list(extra.items())
+    return client.get(f"{ORG}/{orgao}/{rota}", headers=headers, params=params)
+
+
+def _secao(corpo, nome):
+    s = next(x for x in corpo["secoes"] if x["id"] == nome)
+    return s, [dict(zip(s["colunas"], linha, strict=True)) for linha in s["linhas"]]
+
+
+def test_orgaos_para_escolher(client, gerente):
+    assert [o["nome"] for o in client.get(f"{ORG}/orgaos", headers=gerente).json()] == [
+        "Secretaria da Educação", "Secretaria da Saúde"]
+
+
+def test_previa_so_do_orgao_e_na_ordem_do_catalogo(client, gerente, com_pda):
+    from tests.conftest import SES
+    # repetido e fora de ordem; o resumo do órgão, quando escolhido, abre o documento
+    r = _orgao(client, gerente, SES, "atualizacoes", "pda", "orgaos", "pda")
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["orgao"] == {"id": SES, "nome": "Secretaria da Saúde"}
+    assert [s["id"] for s in corpo["secoes"]] == ["orgaos", "pda", "atualizacoes"]
+    assert corpo["secoes"][0]["titulo"] == "Resumo do órgão"
+    pda_, linhas = _secao(corpo, "pda")
+    # Só as bases da SES, sem as colunas de órgão (o órgão está no título)
+    assert "Sigla" not in pda_["colunas"] and "Órgão" not in pda_["colunas"]
+    assert sorted(x["Base prevista"] for x in linhas) == ["Antiga", "Indicadores", "Leitos",
+                                                          "Vacinas"]
+    _, linhas = _secao(corpo, "atualizacoes")
+    assert [x["Base prevista"] for x in linhas] == ["Indicadores"]
+
+
+def test_so_o_resumo_do_orgao(client, gerente, com_pda):
+    from tests.conftest import SES
+    corpo = _orgao(client, gerente, SES, "orgaos").json()
+    assert [s["id"] for s in corpo["secoes"]] == ["orgaos"]
+    s, linhas = _secao(corpo, "orgaos")
+    assert s["colunas"] == ["Indicador", "Valor"]
+    valores = {x["Indicador"]: x["Valor"] for x in linhas}
+    assert valores["Bases previstas"] == "4" and valores["Datasets no portal"] == "2"
+
+
+def test_inventario_e_lgpd_do_orgao(client, gerente, so_dicionario, achados):  # noqa: F811
+    from tests.conftest import SEDUC, SES
+    corpo = _orgao(client, gerente, SEDUC, "sem-recurso", "lgpd").json()
+    assert [x["Dataset"] for x in _secao(corpo, "sem-recurso")[1]] == ["Escolas"]
+    assert _secao(corpo, "lgpd")[1] == []  # o achado é de um recurso da SES
+    corpo = _orgao(client, gerente, SES, "sem-recurso", "lgpd").json()
+    assert _secao(corpo, "sem-recurso")[1] == []
+    assert [x["Tipo"] for x in _secao(corpo, "lgpd")[1]] == ["CPF"]
+
+
+def test_exportar_relatorio_do_orgao(client, gerente, com_pda):
+    from tests.conftest import SES
+    r = _orgao(client, gerente, SES, "orgaos", "pda", "atualizacoes", rota="exportar",
+               formato="xlsx")
+    assert r.status_code == 200, r.text
+    assert re.search(r'filename="relatorio-secretaria-da-saude-\d{4}-\d{2}-\d{2}\.xlsx"',
+                     r.headers["content-disposition"])
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames == ["Resumo do órgão", "Cumprimento do PDA", "Atualizações"]
+    assert wb["Cumprimento do PDA"].max_row == 5  # cabeçalho + 4 bases da SES
+    r = _orgao(client, gerente, SES, "pda", "atualizacoes", rota="exportar", formato="pdf")
+    assert r.content.startswith(b"%PDF") and r.headers["content-type"] == "application/pdf"
+    r = _orgao(client, gerente, SES, "orgaos", "pda", "atualizacoes", rota="exportar",
+               formato="csv")
+    texto = r.content.decode("utf-8-sig")
+    assert texto.startswith("Relatório do órgão — Secretaria da Saúde")
+    assert texto.index("Resumo do órgão") < texto.index("Relatório de Cumprimento do PDA")
+    assert "Relatório de Cumprimento do PDA;PDA teste" in texto
+    assert "Relatório de Atualizações;PDA teste" in texto
+
+
+def test_relatorio_do_orgao_erros(client, gerente, orgao):
+    from tests.conftest import SES
+    assert _orgao(client, gerente, 999, "pda").status_code == 404  # órgão inexistente
+    assert _orgao(client, gerente, SES, "inexistente").status_code == 404
+    assert _orgao(client, gerente, SES, "pda", rota="exportar",
+                  formato="doc").status_code == 422
+    assert _orgao(client, gerente, SES).status_code == 422  # nada escolhido
+    # Sem o resumo: só os relatórios marcados
+    corpo = _orgao(client, gerente, SES, "pda").json()
+    assert [s["id"] for s in corpo["secoes"]] == ["pda"]
+    sup = _usuario(client, "sup2@cge.go.gov.br", ["superintendencia"])
+    assert [s["id"] for s in _orgao(client, sup, SES, "orgaos").json()["secoes"]] == ["orgaos"]
+    assert _orgao(client, sup, SES, "orgaos", "pda").status_code == 403  # sem pda.acessar
+    assert client.get(f"{ORG}/orgaos", headers=orgao).status_code == 403
+
+
+def test_regras_secoes_e_slug():
+    secoes = [regras.Secao("Relatório de Atualizações", ["A"], [[1]]),
+              regras.Secao("Relatório de Atualizações", ["A"], [])]
+    wb = load_workbook(io.BytesIO(regras.gerar_xlsx_secoes(secoes)))
+    assert wb.sheetnames == ["Atualizações", "Atualizações (2)"]
+    assert regras.slug("Secretaria da Administração") == "secretaria-da-administracao"
+    assert regras.transpor(["X", "Y"], [1, None]) == (["Indicador", "Valor"], [["X", 1], ["Y", None]])
+
+
+# ---------------------------------------------------------- exportação das tabelas das telas
+TABELA = f"{API}/tabela/exportar"
+
+
+def _tabela(formato="xlsx", **extra):
+    return {"titulo": "Monitoramento do PDA", "filtros": "Órgão: SES · Situação: Em atraso",
+            "colunas": ["Órgão", "Base prevista", "Bases"],
+            "linhas": [["SES", "Leitos", 3], ["SES", "Vacinas", None]], "formato": formato,
+            **extra}
+
+
+def test_exportar_tabela_da_tela(client, gerente):
+    r = client.post(TABELA, headers=gerente, json=_tabela())
+    assert r.status_code == 200, r.text
+    assert re.search(r'filename="monitoramento-do-pda-\d{4}-\d{2}-\d{2}\.xlsx"',
+                     r.headers["content-disposition"])
+    ws = load_workbook(io.BytesIO(r.content)).active
+    assert [c.value for c in ws[1]] == ["Órgão", "Base prevista", "Bases"]
+    assert ws.max_row == 3
+    r = client.post(TABELA, headers=gerente, json=_tabela("pdf"))
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+    assert r.headers["content-type"] == "application/pdf"
+
+
+def test_exportar_tabela_valida(client, gerente, orgao):
+    assert client.post(TABELA, headers=gerente, json=_tabela("csv")).status_code == 422
+    corpo = _tabela(linhas=[["SES", "Leitos"]])  # linha com menos colunas que o cabeçalho
+    assert client.post(TABELA, headers=gerente, json=corpo).status_code == 422
+    assert client.post(TABELA, headers=gerente, json=_tabela(colunas=[])).status_code == 422
+    # órgão publicador não tem relatorios.exportar
+    assert client.post(TABELA, headers=orgao, json=_tabela()).status_code == 403

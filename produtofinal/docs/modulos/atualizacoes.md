@@ -7,7 +7,7 @@
 | **User stories** | US9 (PBI-23 a PBI-26, PBI-78, PBI-79, PBI-81), US10 (PBI-27 a PBI-30) |
 | **Backend** | `backend/app/modules/atualizacoes/` |
 | **Frontend** | `frontend/src/modules/atualizacoes/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 06/11/2026 |
 
 ## Propósito
 Indica se cada dataset está de fato sendo atualizado conforme a periodicidade declarada, usando a
@@ -16,9 +16,9 @@ data do recurso e não a do metadado — eliminando as "falsas atualizações".
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento de Atualizações | `/atualizacoes` | `atualizacoes.acessar` | Filtros por dataset (busca), órgão, periodicidade e situação (PBI-81); ordenação por coluna e paginação com total no rodapé (ADR-0028); clicar na linha abre o detalhe do dataset (modal da tela Datasets) |
+| Monitoramento de Atualizações | `/atualizacoes` | `atualizacoes.acessar` | Filtros por dataset (busca), órgão, periodicidade e situação (PBI-81); ordenação por coluna e paginação com total no rodapé (ADR-0028); clicar na linha abre o detalhe do dataset (modal da tela Datasets); **Excel** e **PDF** da tabela como está na tela — filtros, ordem e todas as páginas (`relatorios.exportar`, ADR-0031) |
 
-Referência visual: `#screen-updates` do Protótipo V1, incluindo o aviso sobre `last_modified`. Os filtros **dataset** e **órgão** são adicionais ao protótipo. A lista traz os datasets vinculados às bases do **PDA vigente** (a periodicidade vem do PDA, ADR-0023); base sem vínculo não aparece. Os cartões contam todas as linhas do escopo, sem os filtros.
+Referência visual: `#screen-updates` do Protótipo V1. O aviso do protótipo sobre `last_modified` saiu da tela (06/11, termo técnico para o usuário da GEDA); a regra continua a mesma. Os filtros **dataset** e **órgão** são adicionais ao protótipo. A lista traz os datasets vinculados às bases do **PDA vigente** (a periodicidade vem do PDA, ADR-0023); base sem vínculo não aparece. Os cartões contam todas as linhas do escopo, sem os filtros.
 
 ## API
 - `GET /api/v1/atualizacoes/datasets` (`atualizacoes.acessar`) — query `orgao` (chave do órgão), `periodicidade`, `situacao`, `dataset` (trecho do título/name, sem acento nem caixa). Devolve `plano_nome`, `hoje`, `total`, `resumo` (cartões), `opcoes` e `datasets` (linhas: dataset, órgão, periodicidade, última atualização, dias, prazo esperado, situação). Escopo de órgão do usuário aplicado por `pda.bases_do_plano`.
@@ -71,6 +71,7 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 | é consumido por | painel, relatorios | situação de atualização por dataset e órgão |
 | é consumido por | assistente | `regras.ultima_atualizacao_real` (já); situação por periodicidade quando implementada |
 | é consumido por | painel | `regras.situacao_periodicidade` e `vencimento_atualizacao` — gráfico "Status das atualizações", cartão "Atualizações em atraso" e alertas do Dashboard; coluna "Atualização" e cartão "Atualizações atrasadas" da tela Organizações |
+| consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
 ## Jobs agendados
 Nenhum.
@@ -102,3 +103,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 28/10/2026 | Situação por periodicidade (PBI-27/28, ADR-0023): `regras.situacao_periodicidade`, `prazo_em_dias`, `vencimento_atualizacao`; contrato `service.situacao_periodicidade` implementado; usado pelo Dashboard | Humberto |
 | 30/10/2026 | Tela Monitoramento de Atualizações (US9/US10, PBI-81): `GET /atualizacoes/datasets`, `listagem.py`, `schemas.py`, `AtualizacoesPage` com cartões e filtros dataset, órgão, periodicidade e situação; teste `test_atualizacoes_api.py` | Squad 2 |
 | 05/11/2026 | Tela Monitoramento de Atualizações: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador movido para o rodapé. Sem mudança na API | Victor |
+| 06/11/2026 | Tela: aviso sobre `last_modified`/`metadata_modified` retirado; botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031) | Humberto |

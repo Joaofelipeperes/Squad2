@@ -105,6 +105,13 @@ export const rastreabilidadeApi = {
   /** Página da linha do tempo (ADR-0028): paginada no banco, 50 por padrão, até 999. */
   eventos: (f: FiltrosEventos, pagina: number, porPagina: number) =>
     api.get<EventosLista>(consulta(f, pagina, porPagina)),
+  /** Últimos eventos de um dataset (ID do CKAN) ou de um órgão (`id` no inventário): históricos
+   *  dos detalhes de dataset e de órgão. */
+  recentes: (alvo: { dataset: string } | { orgao: number }, quantidade: number) =>
+    api.get<EventosLista>(`/rastreabilidade/eventos?${new URLSearchParams({
+      ...("dataset" in alvo ? { dataset: alvo.dataset } : { orgao: String(alvo.orgao) }),
+      por_pagina: String(quantidade),
+    })}`),
   diff: (eventoId: number) => api.get<Diff>(`/rastreabilidade/eventos/${eventoId}/diff`),
   /** CSV com TODAS as linhas da comparação do evento (sem o corte de 500 da tela). */
   baixarDiffCsv: (eventoId: number) => api.download(`/rastreabilidade/eventos/${eventoId}/diff.csv`),

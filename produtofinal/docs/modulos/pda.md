@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 06/11/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -17,7 +17,7 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes, e **Importar IDs do CKAN** (`pda.editar_vinculos`) |
+| Monitoramento do PDA | `/pda` | `pda.acessar` | Escolher o PDA exibido (padrão = vigente); filtros e "Limpar filtros"; ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe da base (clique ou Enter na linha); **Importar PDA**, **Novo PDA** (criação manual), **Editar PDA**, **Incluir base** e, no detalhe, **Editar** e **Excluir base** (`pda.gerenciar_planos`); **Definir como vigente** só para PDA não vigente e **Excluir PDA** para não vigente ou vigente único, com confirmação em modal (`pda.gerenciar_planos`); **Atualizar vínculos (N pendentes)**, só se houver pendentes, e **Importar IDs do CKAN** (`pda.editar_vinculos`); **Excel** e **PDF** da tabela como está na tela — filtros, ordem e todas as páginas (`relatorios.exportar`, ADR-0031) |
 
 - **Painel "PDA"** (acima dos filtros): select com os PDAs ("Nome (vigente)"), badge Vigente /
   Não vigente e a linha "N bases previstas · importado (ou criado manualmente) em dd/mm/aaaa por
@@ -258,6 +258,7 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
 | é consumido por | atualizacoes | `plano_vigente` + `bases_do_plano` — periodicidade, dataset vinculado e última atualização na tela Monitoramento de Atualizações; sempre o PDA vigente e no escopo de órgão |
 | é consumido por | inventario (tela Datasets) | `GET /datasets/{id}/bases` — prazo, periodicidade e situação PDA no detalhe do dataset |
+| consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
 ## Jobs agendados
 Nenhum. A situação é calculada na consulta, sobre o inventário da última coleta. Vínculos
@@ -434,3 +435,5 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 30/10/2026 | Interações: a tela Monitoramento de Atualizações (atualizacoes) consome `plano_vigente` + `bases_do_plano`; sem mudança de código neste módulo | Squad 2 |
 | 30/10/2026 | Interações e regras: bases espontâneas definidas pela ADR-0026 (dataset ativo sem vínculo com o PDA vigente), calculadas no painel; sem mudança de código neste módulo | Humberto |
 | 05/11/2026 | Tela Monitoramento do PDA: tabela de bases com ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador movido para o rodapé. Novo `service.datasets_vinculados_ao_vigente` / `PdaDao.ids_datasets_vinculados`, consumido pelo inventário (tipo de base na tela Datasets) | Victor |
+| 06/11/2026 | Monitoramento do PDA: botões **Excel** e **PDF** da tabela de bases (`ExportarTabela`, ADR-0031); o arquivo traz o título do dataset do CKAN e o ID completo | Humberto |
+| 06/11/2026 | Legibilidade: a coluna "Dataset CKAN" e o "Dataset no portal" do detalhe da base mostram o **título** do dataset no CKAN (ex.: "Acordos sem Transferência de Recursos - ABC") em vez do `name` técnico; a busca de dataset do formulário de base deixa de exibir o `name`. Sem mudança na API | Humberto |

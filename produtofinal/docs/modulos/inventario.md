@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 06/11/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -16,7 +16,7 @@ local, para que nenhum indicador dependa de consulta ao CKAN em tempo de tela.
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Datasets | `/datasets` | `inventario.acessar` | Busca e filtros (Órgão, Formato, Status, Tipo de base), "Limpar filtros"; ordenação por coluna e paginação; detalhe do dataset com a lista de recursos (clique ou Enter na linha); prazo, periodicidade e situação do PDA no detalhe só com `pda.acessar` (PBI-83) |
+| Datasets | `/datasets` | `inventario.acessar` | Busca e filtros (Órgão, Formato, Status, Tipo de base), "Limpar filtros"; ordenação por coluna e paginação; detalhe do dataset com a lista de recursos (clique ou Enter na linha); prazo, periodicidade e situação do PDA no detalhe só com `pda.acessar` (PBI-83); **Excel** e **PDF** da tabela como está na tela — filtros, ordem e todas as páginas (`relatorios.exportar`, ADR-0031) |
 | Topbar (todas as telas) | — | autenticado | "Última coleta" (todos); botão **Atualizar dados** (`inventario.coletar`) |
 
 Referência visual: `#screen-datasets` do Protótipo V1.
@@ -37,8 +37,10 @@ Referência visual: `#screen-datasets` do Protótipo V1.
   recursos válidos, status no portal, licença, descrição (`notes`) e a tabela dos recursos atuais
   (nome, formato, `last_modified` ou criação "(est.)", dicionário marcado, link). Com `pda.acessar`:
   prazo previsto, periodicidade e situação PDA da base vinculada **pelo ID** (PDA vigente primeiro;
-  sem vínculo, "Nenhuma base do PDA vinculada"). "Situação de atualização" e "Histórico recente"
-  aparecem como pendentes (módulos `atualizacoes` e `rastreabilidade`).
+  sem vínculo, "Nenhuma base do PDA vinculada"). "Situação de atualização" aparece como pendente
+  (módulo `atualizacoes`). **Histórico recente**: os 5 eventos mais recentes do dataset na
+  rastreabilidade (`HistoricoRecente`, com `rastreabilidade.acessar`) e o atalho para a tela
+  Rastreabilidade filtrada pelo ID do dataset.
 
 ## API
 | Método | Rota (`/api/v1/inventario`) | Permissão | Descrição |
@@ -120,12 +122,14 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | é consumido por | atualizacoes, metadados | `Dataset`, `Recurso` |
 | é consumido por | lgpd | `Recurso` (varredura, url_type para anonimização) |
 | é consumido por | rastreabilidade | `Dataset` (lista de datasets cuja auditoria é lida, inclusive os que saíram do portal), `Recurso` (nome do recurso nos eventos); `Coleta`, `DatasetSnapshot` (diff entre coletas, complemento futuro) |
+| consome | rastreabilidade | tela: `HistoricoRecente` (`GET /rastreabilidade/eventos?dataset=<ID do CKAN>`) — "Histórico recente" no detalhe do dataset |
 | aciona | rastreabilidade | `sincronizar(orgaos=...)` ao fim de cada coleta concluída, com a lista de órgãos baixada (comparação do cadastro dos órgãos) |
 | é consumido por | painel | `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` — telas Organizações e Dashboard; `ultima_coleta(db)` — data da coleta no Dashboard (PBI-58) |
 | é consumido por | metadados | `Dataset`, `Recurso` e `condicao_recurso_atual()` — `recursos_formato_fechado` (PBI-53) |
 | é consumido por | relatorios | contagens e última coleta |
 | é consumido por | assistente | `ultima_coleta`, `recursos_atuais`, `regras.situacao_no_portal`; `Dataset` (sem `autor`/`autor_email`), `Recurso`, `Organizacao` — ficha do dataset citado na pergunta |
 | é consumido por | acesso, envio | `Organizacao` (escopo de órgão) |
+| consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
 ## Jobs agendados
 | Job | Cron | Função |
@@ -156,7 +160,7 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 
 ## Pendências
 - Tela Datasets: "Situação de atualização" depende da regra por periodicidade do módulo
-  `atualizacoes` (PBI-27/28) e "Histórico recente" da `rastreabilidade` (US14/US29). Descrição e
+  `atualizacoes` (PBI-27/28). Descrição e
   periodicidade declarada só aparecem depois de uma coleta nova (a de 08/10/2026 é anterior).
 - Confirmar com a GEDA o critério de dicionário de dados (PBI-11), inclusive o novo "nome começa com
   dicionário" (ex.: "DICIONARIO CONVENIOS CONCEDIDOS DGPP"); "DICIONARI0" (com zero) não é detectado.
@@ -184,3 +188,6 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 28/10/2026 | Merge de `desenvolvimento` na rastreabilidade: sincronização pós-coleta mantida sobre o `InventarioDao` | Victor |
 | 29/10/2026 | Ambiente de testes: o CKAN coletado vem do `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local), `GDA_CKAN_BASE_URL` opcional (ADR-0024); `docker-compose.ckan-local.yml` só liga a rede | Victor |
 | 05/11/2026 | Tela Datasets: filtro e coluna **Tipo de base** (Prevista no PDA × Espontânea, ADR-0026; `DatasetOut.tipo_base`, `regras.tipo_de_base`, `?tipo_base=`); coluna **Criado no CKAN** (`DatasetOut.metadata_created`) e ordem padrão pela criação no CKAN, mais recente primeiro; ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); total no rodapé. Coleta: `package_search` com `sort=metadata_created desc, id asc` e dataset repetido entre páginas ignorado. Topbar recarrega as telas ao fim da coleta (ADR-0029) | Victor |
+| 05/11/2026 | Detalhe do dataset (Datasets e Atualizações): **Histórico recente** com os últimos eventos da rastreabilidade (`HistoricoRecente`), no lugar do texto pendente. Sem mudança na API do inventário | Humberto |
+| 06/11/2026 | Datasets: botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031), com o ID do CKAN completo | Humberto |
+| 06/11/2026 | Detalhe do dataset: sai o item "Name no portal" (`name` técnico; o título já aparece em "Nome da base"). Sem mudança na API | Humberto |

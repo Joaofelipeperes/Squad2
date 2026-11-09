@@ -35,6 +35,15 @@ class ResumoDadosPessoaisOut(BaseModel):
     por_status: list[ContagemOut]  # achados por status da triagem (ordem de regras.STATUS)
 
 
+class RiscoLgpdOrgaoOut(BaseModel):
+    """Risco LGPD de um órgão (tela Organizações, índice de atenção — ADR-0030): só contagens."""
+
+    recursos_analisados: int  # recursos com varredura concluída
+    recursos_em_aberto: int  # recursos com achado aguardando revisão ou confirmado
+    aguardando_revisao: int  # achados com status "revisar"
+    confirmados: int  # achados confirmados e ainda não tratados
+
+
 class AchadoOut(BaseModel):
     id: int
     prioridade: str

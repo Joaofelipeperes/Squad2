@@ -7,7 +7,7 @@
 | **User stories** | US8 (PBI-22), US11 (PBI-31, PBI-86), US16 (PBI-48), US17 (PBI-52) |
 | **Backend** | `backend/app/modules/parametros/` |
 | **Frontend** | `frontend/src/modules/parametros/` |
-| **Última atualização** | 27/10/2026 |
+| **Última atualização** | 05/11/2026 |
 
 ## Propósito
 Concentra os valores de negócio que a GEDA precisa ajustar sem depender do time (janelas, listas,
@@ -22,7 +22,7 @@ limites), com valor padrão no código.
 | Método | Rota (`/api/v1/parametros`) | Permissão | Descrição |
 |---|---|---|---|
 | GET | `` | `parametros.acessar` | Lista parâmetros com valor atual e padrão |
-| PUT | `/{chave}` | `parametros.editar` | Altera o valor (tipo deve ser igual ao do padrão) |
+| PUT | `/{chave}` | `parametros.editar` | Altera o valor (tipo deve ser igual ao do padrão; números com `minimo`/`maximo` no catálogo fora da faixa → 422) |
 
 ## Serviços e métodos
 - `obter(db, chave)` em `router.py` — **uso pelos outros módulos**; devolve o valor salvo ou o padrão.
@@ -38,6 +38,10 @@ limites), com valor padrão no código.
 | `confianca_minima_lgpd` | 60 (limiar da varredura = valor/100) | lgpd |
 | `margem_embeddings_lgpd` | 0.0 (margem do filtro semântico do detector3) | lgpd |
 | `tamanho_maximo_recurso_lgpd_mb` | 50 | lgpd |
+| `peso_lgpd_indice_atencao` | 70 (0 a 100, provisório) | painel — índice de atenção (ADR-0030) |
+| `peso_atualizacao_indice_atencao` | 30 (0 a 100, provisório) | painel — índice de atenção |
+| `indice_atencao_limite_medio` | 25 (0 a 100) | painel — início da faixa Média |
+| `indice_atencao_limite_alto` | 50 (0 a 100) | painel — início da faixa Alta |
 
 ## Modelo de dados
 Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [convenções do banco](../banco/convencoes.md).
@@ -58,7 +62,7 @@ Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`
 | Direção | Módulo | O quê |
 |---|---|---|
 | é consumido por | pda, lgpd, metadados | `obter(db, chave)` |
-| é consumido por | painel | `obter(db, "formatos_abertos")` — tela Organizações |
+| é consumido por | painel | `obter(db, "formatos_abertos")` e os pesos e faixas do índice de atenção — tela Organizações |
 
 ## Jobs agendados
 Nenhum.
@@ -66,7 +70,8 @@ Nenhum.
 ## Regras de negócio e decisões
 Decisões registradas: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 
-- Parâmetro novo = entrada em `catalogo.py`; aparece sozinho na tela.
+- Parâmetro novo = entrada em `catalogo.py`; aparece sozinho na tela. Número com faixa aceita:
+  `minimo`/`maximo` no `DefParametro` (validado no PUT).
 
 ## Pendências
 - Valores oficiais da GEDA para os parâmetros provisórios.
@@ -81,3 +86,4 @@ Decisões registradas: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md).
 | 18/10/2026 | Interações: o painel (tela Organizações) passa a ler `formatos_abertos`; sem mudança de código neste módulo | Humberto |
 | 22/10/2026 | `parametro` com `id` próprio (chave vira única entre ativos) e banco só pelo `ParametrosDao` (ADR-0019); auditoria com quem alterou | Victor |
 | 26/10/2026 | Parâmetros `margem_embeddings_lgpd` e `tamanho_maximo_recurso_lgpd_mb` para a varredura LGPD | Squad 2 |
+| 05/11/2026 | Pesos e faixas do índice de atenção (ADR-0030); `DefParametro.minimo`/`maximo` com validação da faixa no PUT | Humberto |
