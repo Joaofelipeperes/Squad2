@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 06/11/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -437,3 +437,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 05/11/2026 | Tela Monitoramento do PDA: tabela de bases com ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador movido para o rodapé. Novo `service.datasets_vinculados_ao_vigente` / `PdaDao.ids_datasets_vinculados`, consumido pelo inventário (tipo de base na tela Datasets) | Victor |
 | 06/11/2026 | Monitoramento do PDA: botões **Excel** e **PDF** da tabela de bases (`ExportarTabela`, ADR-0031); o arquivo traz o título do dataset do CKAN e o ID completo | Humberto |
 | 06/11/2026 | Legibilidade: a coluna "Dataset CKAN" e o "Dataset no portal" do detalhe da base mostram o **título** do dataset no CKAN (ex.: "Acordos sem Transferência de Recursos - ABC") em vez do `name` técnico; a busca de dataset do formulário de base deixa de exibir o `name`. Sem mudança na API | Humberto |
+| 09/11/2026 | Tela: "Incluir base" sobe para a barra de ações do PDA; retirados o resumo do PDA (bases previstas, importação, vigência, arquivo) e o rótulo "Bases previstas no PDA" acima da tabela | Victor |
