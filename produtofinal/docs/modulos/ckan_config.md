@@ -2,6 +2,7 @@
 
 Perfis de conexão com o CKAN e troca do CKAN em uso (ADR-0024). Tela em **Administração ·
 Configurações CKAN** (`/admin/ckan`), permissão `ckan_config.gerenciar` (só administrador).
+"Novo perfil" e "Editar" abrem o formulário em modal (`frontend/src/modules/ckan/PerfilCkanForm.tsx`).
 
 ## Para que serve
 A solução lê de um CKAN (inventário/LGPD) e lê a auditoria do dsaudit (rastreabilidade/diff). Em vez
@@ -38,5 +39,6 @@ perfis já gravados.
 ## Histórico de alterações
 | Data | Alteração | Autor |
 |---|---|---|
+| 09/11/2026 | Criação e edição de perfil passam a abrir em modal (`PerfilCkanForm.tsx`, componente `Modal`), no mesmo padrão do cadastro de perfil de Modelos de IA; antes o formulário aparecia como painel abaixo da tabela | Victor |
 | 06/11/2026 | `semear_perfil_docker` não grava o perfil "CKAN Docker" com `GDA_ENVIRONMENT=producao`: no servidor (UFG/CGE, ADR-0032) a coleta tentava o CKAN local inexistente e falhava. Teste `test_seed_nao_grava_perfil_docker_em_producao` | Victor |
 | 09/11/2026 | `semear_perfil_docker` vira `semear_perfil_inicial` e, em produção, grava o perfil "Portal de Dados Abertos GO" (portal oficial) em uso, para a tela mostrar o CKAN lido no servidor (ADR-0032, revisão da ADR-0024). Chamado por `app/instalacao.py`. Teste `test_seed_em_producao_grava_o_portal_oficial` | Victor |
