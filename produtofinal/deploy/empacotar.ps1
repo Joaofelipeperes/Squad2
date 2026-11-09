@@ -45,9 +45,12 @@ try {
             }
         }
     } else {
-        # git archive aplica o .gitattributes (fim de linha LF nos scripts e configurações)
+        # Arquivos exatamente como estão no repositório (fim de linha LF, normalizado pelo
+        # .gitattributes). Sem o core.autocrlf=false, o Git do Windows converteria tudo para CRLF:
+        # arquivando a subpasta, o .gitattributes da raiz não é lido, e o docker-entrypoint.sh com
+        # CRLF não executa no Linux ("exec ...: no such file or directory").
         $tar = Join-Path $tmp "codigo.tar"
-        git archive --format=tar -o $tar "HEAD:produtofinal"
+        git -c core.autocrlf=false -c core.eol=lf archive --format=tar -o $tar "HEAD:produtofinal"
         if ($LASTEXITCODE -ne 0) { throw "git archive falhou." }
         tar -xf $tar -C $gda
         if ($LASTEXITCODE -ne 0) { throw "tar falhou ao extrair." }
