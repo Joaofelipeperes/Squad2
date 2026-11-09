@@ -19,8 +19,18 @@ class AcessoDao(Dao):
     def usuario_por_email(self, email: str) -> Usuario | None:
         return self.buscar_um(select(Usuario).where(Usuario.email == email.lower()))
 
-    def usuarios(self) -> list[Usuario]:
-        return self.buscar_lista(select(Usuario).order_by(Usuario.nome))
+    def usuarios(self, *, incluir_admins: bool = True) -> list[Usuario]:
+        stmt = select(Usuario).order_by(Usuario.nome)
+        if not incluir_admins:
+            stmt = stmt.where(Usuario.id.not_in(self._ids_admins()))
+        return self.buscar_lista(stmt)
+
+    @staticmethod
+    def _ids_admins():
+        """Subconsulta: ids dos usuários com o papel Administrador (`Papel.todas`), ativos ou não.
+        O filtro de excluídos do `Dao` vale também aqui dentro."""
+        return (select(UsuarioPapel.usuario_id)
+                .join(Papel, Papel.id == UsuarioPapel.papel_id).where(Papel.todas))
 
     def existe_usuario(self) -> bool:
         """Há ao menos um usuário não excluído (ativo ou inativo)?"""
@@ -56,20 +66,30 @@ class AcessoDao(Dao):
     def papel_por_codigo(self, codigo: str) -> Papel | None:
         return self.buscar_um(select(Papel).where(Papel.codigo == codigo))
 
-    def papeis(self) -> list[Papel]:
-        return self.buscar_lista(select(Papel).order_by(Papel.id))
+    def papeis(self, *, incluir_admin: bool = True) -> list[Papel]:
+        stmt = select(Papel).order_by(Papel.id)
+        if not incluir_admin:
+            stmt = stmt.where(Papel.todas.is_(False))
+        return self.buscar_lista(stmt)
 
-    def papeis_por_ids(self, ids: list[int]) -> list[Papel]:
-        return self.buscar_lista(select(Papel).where(Papel.id.in_(ids))) if ids else []
+    def papeis_por_ids(self, ids: list[int], *, incluir_admin: bool = True) -> list[Papel]:
+        if not ids:
+            return []
+        stmt = select(Papel).where(Papel.id.in_(ids))
+        if not incluir_admin:
+            stmt = stmt.where(Papel.todas.is_(False))
+        return self.buscar_lista(stmt)
 
     def ids_de_papeis(self, codigos: list[str]) -> list[int]:
         return self.buscar_lista(select(Papel.id).where(Papel.codigo.in_(codigos)))
 
-    def total_usuarios_do_papel(self, papel_id: int) -> int:
-        return self.buscar_valor(
-            select(func.count()).select_from(UsuarioPapel)
-            .join(Usuario, Usuario.id == UsuarioPapel.usuario_id)
-            .where(UsuarioPapel.papel_id == papel_id)) or 0
+    def total_usuarios_do_papel(self, papel_id: int, *, incluir_admins: bool = True) -> int:
+        stmt = (select(func.count()).select_from(UsuarioPapel)
+                .join(Usuario, Usuario.id == UsuarioPapel.usuario_id)
+                .where(UsuarioPapel.papel_id == papel_id))
+        if not incluir_admins:
+            stmt = stmt.where(Usuario.id.not_in(self._ids_admins()))
+        return self.buscar_valor(stmt) or 0
 
     def definir_permissoes(self, papel: Papel, codigos: list[str]) -> None:
         """Permissões do papel: exclui (logicamente) as que saíram e cria as novas."""

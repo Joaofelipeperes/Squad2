@@ -37,6 +37,10 @@ class UsuarioAtual:
     orgao_id: int | None
     papeis: list[str]
     permissoes: frozenset[str] = field(default_factory=frozenset)
+    # Tem o papel Administrador (`Papel.todas`). Só quem é administrador enxerga os outros
+    # administradores e o próprio papel nas telas de acesso. Não use para liberar ações: para
+    # isso, sempre `pode(P.X)`.
+    administrador: bool = False
 
     def pode(self, permissao: P | str) -> bool:
         return str(permissao) in self.permissoes

@@ -39,7 +39,20 @@ def carregar_usuario_atual(db: Session, user_id: int) -> UsuarioAtual | None:
     if u is None or not u.ativo:
         return None
     return UsuarioAtual(id=u.id, email=u.email, nome=u.nome, orgao_id=u.orgao_id,
-                        papeis=[p.codigo for p in u.papeis], permissoes=permissoes_de(u))
+                        papeis=[p.codigo for p in u.papeis], permissoes=permissoes_de(u),
+                        administrador=_e_admin(u))
+
+
+# ------------------------------------------------------------------ administradores ocultos
+# O papel Administrador (`Papel.todas`) e os usuários que o têm só aparecem para quem também é
+# administrador: nas listas, na edição por id e na escolha de papéis do usuário. `quem` = None é o
+# sistema (CLI, instalação, testes), que enxerga tudo.
+def _e_admin(u: Usuario) -> bool:
+    return any(p.todas for p in u.papeis)
+
+
+def ve_administradores(quem: UsuarioAtual | None) -> bool:
+    return quem is None or quem.administrador
 
 
 def autenticar(db: Session, email: str, senha: str) -> Usuario | None:
@@ -54,8 +67,13 @@ def autenticar(db: Session, email: str, senha: str) -> Usuario | None:
 
 
 # ------------------------------------------------------------------ saída
-def usuario_por_id(db: Session, usuario_id: int) -> Usuario | None:
-    return AcessoDao(db).usuario(usuario_id)
+def usuario_por_id(db: Session, usuario_id: int,
+                   quem: UsuarioAtual | None = None) -> Usuario | None:
+    """Usuário pelo id; administrador visto por quem não é administrador → None (404)."""
+    u = AcessoDao(db).usuario(usuario_id)
+    if u is not None and not ve_administradores(quem) and _e_admin(u):
+        return None
+    return u
 
 
 def usuario_out(db: Session, u: Usuario) -> UsuarioOut:
@@ -67,8 +85,9 @@ def usuario_out(db: Session, u: Usuario) -> UsuarioOut:
     )
 
 
-def listar_usuarios(db: Session) -> list[UsuarioOut]:
-    return [usuario_out(db, u) for u in AcessoDao(db).usuarios()]
+def listar_usuarios(db: Session, quem: UsuarioAtual | None = None) -> list[UsuarioOut]:
+    usuarios = AcessoDao(db).usuarios(incluir_admins=ve_administradores(quem))
+    return [usuario_out(db, u) for u in usuarios]
 
 
 def sessao_out(db: Session, u: Usuario) -> SessaoOut:
@@ -86,8 +105,10 @@ def orgao_por_referencia(db: Session, referencia: str) -> int | None:
     return org.id if org else None
 
 
-def papel_out(db: Session, p: Papel) -> PapelOut:
-    total = AcessoDao(db).total_usuarios_do_papel(p.id)
+def papel_out(db: Session, p: Papel, quem: UsuarioAtual | None = None) -> PapelOut:
+    """`total_usuarios` não conta os administradores para quem não os enxerga."""
+    total = AcessoDao(db).total_usuarios_do_papel(p.id,
+                                                  incluir_admins=ve_administradores(quem))
     perms = sorted(CODIGOS_VALIDOS) if p.todas else sorted(x.permissao for x in p.permissoes)
     return PapelOut(id=p.id, codigo=p.codigo, nome=p.nome, descricao=p.descricao,
                     sistema=p.sistema, exige_orgao=p.exige_orgao, todas=p.todas,
@@ -122,12 +143,17 @@ def _validar_permissoes(codigos: list[str]) -> list[str]:
     return sorted(set(codigos))
 
 
-def papel_por_id(db: Session, papel_id: int) -> Papel | None:
-    return AcessoDao(db).papel(papel_id)
+def papel_por_id(db: Session, papel_id: int, quem: UsuarioAtual | None = None) -> Papel | None:
+    """Papel pelo id; o Administrador, para quem não é administrador → None (404)."""
+    p = AcessoDao(db).papel(papel_id)
+    if p is not None and p.todas and not ve_administradores(quem):
+        return None
+    return p
 
 
-def listar_papeis(db: Session) -> list[PapelOut]:
-    return [papel_out(db, p) for p in AcessoDao(db).papeis()]
+def listar_papeis(db: Session, quem: UsuarioAtual | None = None) -> list[PapelOut]:
+    papeis = AcessoDao(db).papeis(incluir_admin=ve_administradores(quem))
+    return [papel_out(db, p, quem) for p in papeis]
 
 
 def salvar_papel(db: Session, dados: PapelIn, papel: Papel | None = None,
@@ -166,16 +192,14 @@ def excluir_papel(db: Session, papel: Papel, editor: UsuarioAtual | None = None)
 def salvar_usuario(db: Session, dados: UsuarioIn, usuario: Usuario | None = None,
                    editor: UsuarioAtual | None = None) -> Usuario:
     dao = AcessoDao.de(db, editor)
-    papeis = dao.papeis_por_ids(list(dados.papel_ids))
+    # Só administrador concede o papel Administrador: para os demais ele nem existe
+    papeis = dao.papeis_por_ids(list(dados.papel_ids),
+                                incluir_admin=ve_administradores(editor))
     if len(papeis) != len(set(dados.papel_ids)):
         raise ErroAcesso("Um ou mais papéis informados não existem.")
     if any(p.exige_orgao for p in papeis) and not dados.orgao_id:
         nomes = ", ".join(p.nome for p in papeis if p.exige_orgao)
         raise ErroAcesso(f"O papel {nomes} exige vincular o usuário a um órgão.")
-    # Só quem gerencia papéis pode conceder o papel Administrador
-    if editor and any(p.todas for p in papeis) and not editor.pode(P.ACESSO_GERENCIAR_PAPEIS):
-        if usuario is None or not any(p.todas for p in usuario.papeis):
-            raise ErroAcesso("Apenas administradores podem conceder o papel Administrador.")
 
     era_admin_ativo = bool(usuario and usuario.ativo and any(p.todas for p in usuario.papeis))
     if usuario is None:
