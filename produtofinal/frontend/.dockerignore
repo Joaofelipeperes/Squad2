@@ -1,0 +1,6 @@
+# Fora do contexto do build (ADR-0032): o npm ci instala as dependências do Linux na imagem;
+# as do Windows (node_modules local) e o build local não devem sobrescrevê-las
+node_modules/
+dist/
+.env
+.env.*

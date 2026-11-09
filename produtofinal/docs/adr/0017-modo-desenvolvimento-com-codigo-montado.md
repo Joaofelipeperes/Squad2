@@ -66,3 +66,4 @@ API e do worker ao alterar um `.py`. Validar com o time no próximo checkpoint.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 2026-11-09 | api e worker com `restart: unless-stopped` no `docker-compose.dev.yml`: o polling sobre a pasta do Windows (9p do WSL2) às vezes recebe "Cannot allocate memory" (os error 12), o watchfiles morre e o container ficava parado até alguém subir de novo. | Victor |

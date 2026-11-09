@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
 from app.integrations.ckan.client import CkanClient
@@ -174,6 +175,22 @@ def job_coleta_diaria() -> None:
     finally:
         db.close()
     executar(c.id)
+
+
+def job_coleta_inicial() -> None:
+    """Primeira subida no servidor (ADR-0032): com `GDA_COLETA_INICIAL=true`, o worker coleta o
+    CKAN ao iniciar se nunca houve nenhuma coleta, para as telas não ficarem vazias até as 03:00.
+    Depois disso a coleta segue só pelo cron."""
+    if not get_settings().coleta_inicial:
+        return
+    db = SessionLocal()
+    try:
+        if InventarioDao(db).ultima_coleta() is not None:
+            return
+    finally:
+        db.close()
+    log.info("Nenhuma coleta registrada: iniciando a primeira coleta do CKAN.")
+    job_coleta_diaria()
 
 
 # ------------------------------------------------------------------ tela Datasets (PBI-83)

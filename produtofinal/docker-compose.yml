@@ -1,6 +1,9 @@
-# Ambiente completo de desenvolvimento/homologação.
+# Ambiente completo de DESENVOLVIMENTO (no seu computador).
 #   docker compose up -d                     → db + api + worker + web (http://localhost:8080)
 #   docker compose --profile ia-local up -d  → inclui o Ollama (modelo local)
+# Servidor (UFG, SECTI/CGE): NÃO use este arquivo. O pacote do deploy/empacotar.ps1 leva o
+# docker-compose.prod.yml como docker-compose.yml, que sobe e se prepara sozinho
+# (ADR-0032): senha do banco gerada, API sem porta publicada, containers sem root.
 services:
   db:
     image: postgres:16-alpine
@@ -12,7 +15,11 @@ services:
     build: ./backend
     env_file: .env
     depends_on: { db: { condition: service_healthy } }
-    ports: ["8000:8000"]
+    # Porta da API só no próprio computador (docs em http://localhost:8000/api/v1/docs). Como só
+    # você alcança a porta, aceitar X-Forwarded-For de qualquer origem aqui não abre brecha; no
+    # servidor o docker-compose.prod.yml aceita só do nginx (ADR-0016, ADR-0032)
+    ports: ["${GDA_API_PORTA:-127.0.0.1:8000}:8000"]
+    environment: { FORWARDED_ALLOW_IPS: "*" }
     # Anonimização LGPD (US26): cópia do original e prévia ficam fora do banco, neste volume
     # (contém dado pessoal; retenção definida pela GEDA — ADR-0008)
     volumes: [lgpd_arquivos:/app/dados_lgpd]
@@ -27,11 +34,13 @@ services:
     build: ./frontend
     depends_on: [api]
     ports: ["8080:80"]
+    # IP (ou faixa CIDR) do proxy reverso, de quem o X-Forwarded-For é aceito (ADR-0016)
+    environment: { GDA_PROXY_CONFIAVEL: "${GDA_PROXY_CONFIAVEL:-127.0.0.1}" }
 
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.14
     profiles: ["ia-local"]
-    ports: ["11434:11434"]
+    ports: ["127.0.0.1:11434:11434"]
     volumes: [ollama:/root/.ollama]
     # depois de subir: docker compose exec ollama ollama pull qwen2.5:7b
 

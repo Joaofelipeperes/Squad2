@@ -78,3 +78,5 @@ validar com a Paloma (LGPD), junto da inclusão no escopo.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 05/11/2026 | Deploy atrás do proxy reverso da UFG (`gestao-dadosabertos.rsi.inf.ufg.br`): o nginx do container passa a usar `real_ip` e só aceita `X-Forwarded-For` do proxy configurado em `GDA_PROXY_CONFIAVEL` (template com envsubst); a porta da API no host fica configurável (`GDA_API_PORTA`, `127.0.0.1:8000` em produção). Config do proxy em `deploy/nginx-proxy.conf`. | Victor Hugo Benatti |
+| 05/11/2026 | Revisão de segurança: o uvicorn aceitava `X-Forwarded-For` de qualquer origem (`--forwarded-allow-ips '*'`) e a porta 8000 ficava aberta em todas as interfaces, então quem chamasse a API direto gravava o IP que quisesse no log. Agora a imagem confia só em `127.0.0.1`, o compose de produção informa só o IP fixo do container `web` (ADR-0032) e o de desenvolvimento publica a API só em `127.0.0.1`. O nginx do container monta o `real_ip` a partir de `GDA_PROXY_CONFIAVEL` (um ou mais IPs, vazio = nenhum) e sobrescreve o `X-Forwarded-For` para a API. Retenção do log continua em aberto. | Victor Hugo Benatti |

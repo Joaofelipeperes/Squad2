@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
 from app.core.permissoes import PAPEIS_PADRAO, P
@@ -96,9 +97,15 @@ def papel_out(db: Session, p: Papel) -> PapelOut:
 # ------------------------------------------------------------------ papéis
 def sincronizar_papeis_padrao(db: Session) -> None:
     """Cria os papéis do catálogo que ainda não existem. Não sobrescreve ajustes feitos na tela,
-    e exclui (logicamente) as permissões que saíram do catálogo. Ação do sistema."""
+    e exclui (logicamente) as permissões que saíram do catálogo. Ação do sistema.
+
+    Com `GDA_PAPEIS_INICIAIS` preenchido (servidor, ADR-0032), cria só os papéis listados; os
+    demais a GEDA cria na tela Usuários e papéis, conforme a necessidade."""
     dao = AcessoDao(db)
+    iniciais = set(get_settings().papeis_iniciais)
     for pp in PAPEIS_PADRAO:
+        if iniciais and pp.codigo not in iniciais:
+            continue
         if dao.papel_por_codigo(pp.codigo) is None:
             papel = dao.save_generic(Papel(
                 codigo=pp.codigo, nome=pp.nome, descricao=pp.descricao, sistema=True,
@@ -212,6 +219,36 @@ def criar_usuario(db: Session, email: str, nome: str, senha: str, papel_codigos:
     ids = AcessoDao(db).ids_de_papeis(papel_codigos)
     return salvar_usuario(db, UsuarioIn(email=email, nome=nome, senha=senha, papel_ids=ids,
                                         orgao_id=orgao_id))
+
+
+def semear_admin_inicial(db: Session) -> Usuario | None:
+    """Primeira subida no servidor (ADR-0032): com `GDA_ADMIN_INICIAL_EMAIL` preenchido e o banco
+    sem nenhum usuário, cria o administrador com a senha inicial (`GDA_ADMIN_INICIAL_SENHA`).
+    A senha inicial não passa pela regra de 8 caracteres da tela: é provisória, e o administrador
+    a troca no primeiro acesso. Enquanto não trocar, cada subida da API registra um aviso no log.
+    Ação do sistema. Devolve o usuário criado, ou None."""
+    s = get_settings()
+    if not s.admin_inicial_email:
+        return None
+    dao = AcessoDao(db)
+    senha = s.admin_inicial_senha.get_secret_value()
+    if dao.existe_usuario():
+        u = dao.usuario_por_email(s.admin_inicial_email)
+        if u and u.ativo and verify_password(senha, u.senha_hash):
+            logging.getLogger(__name__).warning(
+                "O administrador %s ainda usa a senha inicial: troque-a na tela Usuários e papéis.",
+                u.email)
+        return None
+    sincronizar_papeis_padrao(db)
+    admin = dao.papel_por_codigo("administrador")
+    usuario = dao.save_generic(Usuario(email=s.admin_inicial_email.strip().lower(),
+                                       nome=s.admin_inicial_nome, senha_hash=hash_password(senha)))
+    dao.definir_papeis(usuario, [admin])
+    dao.commit()
+    logging.getLogger(__name__).warning(
+        "Administrador inicial %s criado com a senha padrão: troque-a no primeiro acesso.",
+        usuario.email)
+    return usuario
 
 
 # ------------------------------------------------------------------ log de acesso (ADR-0016)

@@ -66,3 +66,4 @@ Time do produto (João, coleta; Luiza, LGPD) ao subir o ambiente local.
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 09/11/2026 | Em produção (`GDA_ENVIRONMENT=producao`), a primeira subida grava o perfil "Portal de Dados Abertos GO" com o `GDA_CKAN_BASE_URL` (vazio = portal oficial) como perfil em uso, para a tela Configurações CKAN mostrar o CKAN lido no servidor; em dev e homologação continua o "CKAN Docker" (`semear_perfil_inicial`, ADR-0032). | Victor Hugo Benatti |

@@ -7,6 +7,7 @@
     python -m app.cli papeis                  # lista papéis e permissões
     python -m app.cli coletar                 # roda uma coleta agora, em primeiro plano
     python -m app.cli semear-ia               # cria perfis de IA de exemplo (mock + ollama)
+    python -m app.cli configurar-ia-local     # perfis do Ollama do pacote de produção (ADR-0032)
 """
 import argparse
 import getpass
@@ -33,6 +34,11 @@ def main() -> None:
     sub.add_parser("papeis")
     sub.add_parser("coletar")
     sub.add_parser("semear-ia")
+    ia = sub.add_parser("configurar-ia-local",
+                        help="perfis do Ollama do servidor e vínculo das tarefas da varredura LGPD")
+    ia.add_argument("--url", default="http://ollama:11434")
+    ia.add_argument("--modelo-chat", default="qwen2.5:7b-instruct")
+    ia.add_argument("--modelo-embeddings", default="bge-m3")
     args = p.parse_args()
 
     if args.cmd == "gerar-chave":
@@ -70,6 +76,15 @@ def main() -> None:
             for t in TarefaIA:
                 service.vincular(db, t, VinculoIn(perfil_id=mock.id), "cli")
             print("Perfis de exemplo criados; tarefas vinculadas ao provedor simulado.")
+    elif args.cmd == "configurar-ia-local":
+        configurar_ia_local(args.url, args.modelo_chat, args.modelo_embeddings)
+
+
+def configurar_ia_local(url: str, modelo_chat: str, modelo_embeddings: str) -> None:
+    from app.modules.ia import service
+    with SessionLocal() as db:
+        for linha in service.configurar_ia_local(db, url, modelo_chat, modelo_embeddings, "cli"):
+            print(linha)
 
 
 if __name__ == "__main__":

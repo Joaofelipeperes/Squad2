@@ -22,6 +22,10 @@ class AcessoDao(Dao):
     def usuarios(self) -> list[Usuario]:
         return self.buscar_lista(select(Usuario).order_by(Usuario.nome))
 
+    def existe_usuario(self) -> bool:
+        """Há ao menos um usuário não excluído (ativo ou inativo)?"""
+        return bool(self.buscar_valor(select(func.count(Usuario.id))))
+
     def admins_ativos(self) -> int:
         """Usuários ativos com o papel Administrador (`Papel.todas`)."""
         return self.buscar_valor(

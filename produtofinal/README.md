@@ -33,6 +33,12 @@ docker compose exec api python -m app.cli semear-ia     # perfis de IA de exempl
 
 Web em http://localhost:8080 · API em http://localhost:8000/api/v1/docs
 
+**Em servidor** (VM da UFG, SECTI/CGE-GO): não use o `docker-compose.yml`. Gere o pacote com
+`deploy/empacotar.ps1` e, no servidor, `tar -xzf gda-*.tar.gz && cd gda && docker compose up -d`:
+o compose de produção gera os segredos, cria o administrador inicial, aponta para o portal oficial,
+configura a IA local e faz a primeira coleta sozinho — ver [deploy/README.md](deploy/README.md) e
+a ADR-0032.
+
 **Modo desenvolvimento** (alteração salva já vale, sem rebuild — ADR-0017):
 
 ```bash
