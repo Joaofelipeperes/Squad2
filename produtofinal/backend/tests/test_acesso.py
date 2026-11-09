@@ -110,10 +110,59 @@ def test_papel_que_exige_orgao(client, gerente):
     assert r.status_code == 201 and r.json()["orgao"]["titulo"] == "Secretaria da Saúde"
 
 
-def test_gerente_nao_concede_administrador(client, gerente):
-    pid = _papel_id(client, gerente, "administrador")
+def test_gerente_nao_concede_administrador(client, admin, gerente):
+    pid = _papel_id(client, admin, "administrador")
     r = client.post(f"{API}/usuarios", headers=gerente, json={
-        "email": "x@cge.go.gov.br", "nome": "X", "senha": SENHA, "papel_ids": [pid]})
+        "email": "x@cge.go.gov.br", "nome": "Fulano", "senha": SENHA, "papel_ids": [pid]})
+    assert r.status_code == 422 and "não existem" in r.json()["detail"]
+
+
+def test_administrador_e_seu_papel_so_aparecem_para_administrador(client, admin, gerente):
+    me_admin = client.get(f"{API}/me", headers=admin).json()["usuario"]
+    # o administrador vê a si mesmo e o papel Administrador
+    assert any(u["id"] == me_admin["id"] for u in client.get(f"{API}/usuarios",
+                                                              headers=admin).json())
+    # o gerente (gerencia usuários, mas não é administrador) não vê nem um nem outro
+    usuarios = client.get(f"{API}/usuarios", headers=gerente).json()
+    assert usuarios and all(p["codigo"] != "administrador"
+                            for u in usuarios for p in u["papeis"])
+    assert all(u["id"] != me_admin["id"] for u in usuarios)
+    assert all(not p["todas"] for p in client.get(f"{API}/papeis", headers=gerente).json())
+    # nem pelo id: editar o administrador ou o papel dá 404, como se não existissem
+    r = client.put(f"{API}/usuarios/{me_admin['id']}", headers=gerente, json={
+        "email": me_admin["email"], "nome": "Trocado", "papel_ids": []})
+    assert r.status_code == 404
+    assert client.get(f"{API}/me", headers=admin).json()["usuario"]["nome"] == me_admin["nome"]
+
+
+def test_papel_criado_por_nao_admin_nao_revela_administrador(client, admin):
+    """Papel personalizado com gerenciar papéis/usuários (sem ser Administrador): não vê o papel
+    Administrador, não o edita e a contagem de usuários de um papel ignora os administradores."""
+    r = client.post(f"{API}/papeis", headers=admin, json={
+        "codigo": "gestor_acesso", "nome": "Gestor de acesso",
+        "permissoes": ["acesso.gerenciar_papeis", "acesso.gerenciar_usuarios"]})
+    papel = r.json()
+    me_admin = client.get(f"{API}/me", headers=admin).json()["usuario"]
+    pid_admin = _papel_id(client, admin, "administrador")
+    # o administrador também passa a ter o papel novo; o gestor não deve contá-lo
+    client.put(f"{API}/usuarios/{me_admin['id']}", headers=admin, json={
+        "email": me_admin["email"], "nome": me_admin["nome"],
+        "papel_ids": [pid_admin, papel["id"]]})
+    client.post(f"{API}/usuarios", headers=admin, json={
+        "email": "gestor@cge.go.gov.br", "nome": "Gestor", "senha": SENHA,
+        "papel_ids": [papel["id"]]})
+    h = login(client, "gestor@cge.go.gov.br")
+    papeis = {p["codigo"]: p for p in client.get(f"{API}/papeis", headers=h).json()}
+    assert "administrador" not in papeis
+    assert papeis["gestor_acesso"]["total_usuarios"] == 1
+    assert _papel_id(client, admin, "gestor_acesso") == papel["id"]
+    assert next(p for p in client.get(f"{API}/papeis", headers=admin).json()
+                if p["codigo"] == "gestor_acesso")["total_usuarios"] == 2
+    assert client.put(f"{API}/papeis/{pid_admin}", headers=h, json={
+        "codigo": "administrador", "nome": "Outro nome", "permissoes": []}).status_code == 404
+    assert client.delete(f"{API}/papeis/{pid_admin}", headers=h).status_code == 404
+    r = client.post(f"{API}/usuarios", headers=h, json={
+        "email": "y@cge.go.gov.br", "nome": "Ciclano", "senha": SENHA, "papel_ids": [pid_admin]})
     assert r.status_code == 422
 
 
