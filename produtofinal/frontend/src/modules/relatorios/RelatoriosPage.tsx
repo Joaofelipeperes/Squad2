@@ -36,7 +36,7 @@ export default function RelatoriosPage() {
         </div>
       )}
 
-      {lista.data && lista.data.length > 0 && <RelatorioOrgaoPainel relatorios={lista.data} />}
+      {lista.data && lista.data.length > 0 && <RelatorioOrgaoPainel />}
 
       {lista.data && lista.data.length > 0 && (
         <div className="reports-grid">

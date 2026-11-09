@@ -23,16 +23,12 @@ export type Formato = "xlsx" | "csv" | "pdf";
 /** Órgão que pode ser escolhido no relatório de um órgão. */
 export interface OrgaoOpcao { id: number; nome: string }
 
-/** Prévia do relatório de um órgão: uma seção por relatório escolhido, já filtrada. */
+/** Prévia do relatório detalhado de um órgão: o resumo e a lista do que cada número conta. */
 export interface RelatorioOrgao {
   orgao: OrgaoOpcao;
   hoje: string;
   secoes: Previa[];
 }
-
-const consultaOrgao = (relatorios: string[], extra: Record<string, string> = {}) =>
-  new URLSearchParams([...relatorios.map((r): [string, string] => ["relatorios", r]),
-    ...Object.entries(extra)]).toString();
 
 /** Baixa um arquivo de relatório (a exportação leva todas as linhas, não só as da prévia). */
 async function baixar(caminho: string, nomePadrao: string) {
@@ -62,11 +58,9 @@ export const relatoriosApi = {
   previa: (id: string) => api.get<Previa>(`/relatorios/${id}/previa`),
   exportar: (id: string, formato: Formato) =>
     baixar(`${id}/exportar?formato=${formato}`, `relatorio-${id}.${formato}`),
-  // Relatório de um órgão: escolhe o órgão e quantos relatórios quiser
+  // Relatório detalhado de um órgão
   orgaos: () => api.get<OrgaoOpcao[]>("/relatorios/por-orgao/orgaos"),
-  previaOrgao: (orgao: number, relatorios: string[]) =>
-    api.get<RelatorioOrgao>(`/relatorios/por-orgao/${orgao}/previa?${consultaOrgao(relatorios)}`),
-  exportarOrgao: (orgao: number, relatorios: string[], formato: Formato) =>
-    baixar(`por-orgao/${orgao}/exportar?${consultaOrgao(relatorios, { formato })}`,
-      `relatorio-orgao-${orgao}.${formato}`),
+  previaOrgao: (orgao: number) => api.get<RelatorioOrgao>(`/relatorios/por-orgao/${orgao}/previa`),
+  exportarOrgao: (orgao: number, formato: Formato) =>
+    baixar(`por-orgao/${orgao}/exportar?formato=${formato}`, `relatorio-orgao-${orgao}.${formato}`),
 };

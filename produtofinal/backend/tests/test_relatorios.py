@@ -149,8 +149,7 @@ def test_exportar_exige_permissao(client, admin, gerente):
 ORG = f"{API}/por-orgao"
 
 
-def _orgao(client, headers, orgao, *nomes, rota="previa", **extra):
-    params = [("relatorios", n) for n in nomes] + list(extra.items())
+def _orgao(client, headers, orgao, rota="previa", **params):
     return client.get(f"{ORG}/{orgao}/{rota}", headers=headers, params=params)
 
 
@@ -159,83 +158,82 @@ def _secao(corpo, nome):
     return s, [dict(zip(s["colunas"], linha, strict=True)) for linha in s["linhas"]]
 
 
+def _coluna(corpo, secao, coluna):
+    return [x[coluna] for x in _secao(corpo, secao)[1]]
+
+
 def test_orgaos_para_escolher(client, gerente):
     assert [o["nome"] for o in client.get(f"{ORG}/orgaos", headers=gerente).json()] == [
         "Secretaria da Educação", "Secretaria da Saúde"]
 
 
-def test_previa_so_do_orgao_e_na_ordem_do_catalogo(client, gerente, com_pda):
+SECOES = ["resumo", "bases", "bases-em-atraso", "bases-proximas", "atualizacao", "datasets",
+          "sem-recurso", "recursos", "formatos", "dados-pessoais"]
+
+
+def test_relatorio_detalhado_do_orgao(client, gerente, com_pda, achados):
+    """Cada número do resumo vira a lista do que ele conta, só do órgão escolhido."""
     from tests.conftest import SES
-    # repetido e fora de ordem; o resumo do órgão, quando escolhido, abre o documento
-    r = _orgao(client, gerente, SES, "atualizacoes", "pda", "orgaos", "pda")
+    r = _orgao(client, gerente, SES)
     assert r.status_code == 200, r.text
     corpo = r.json()
     assert corpo["orgao"] == {"id": SES, "nome": "Secretaria da Saúde"}
-    assert [s["id"] for s in corpo["secoes"]] == ["orgaos", "pda", "atualizacoes"]
-    assert corpo["secoes"][0]["titulo"] == "Resumo do órgão"
-    pda_, linhas = _secao(corpo, "pda")
-    # Só as bases da SES, sem as colunas de órgão (o órgão está no título)
-    assert "Sigla" not in pda_["colunas"] and "Órgão" not in pda_["colunas"]
-    assert sorted(x["Base prevista"] for x in linhas) == ["Antiga", "Indicadores", "Leitos",
-                                                          "Vacinas"]
-    _, linhas = _secao(corpo, "atualizacoes")
-    assert [x["Base prevista"] for x in linhas] == ["Indicadores"]
+    assert [s["id"] for s in corpo["secoes"]] == SECOES
+    resumo, linhas = _secao(corpo, "resumo")
+    assert resumo["titulo"] == "Resumo do órgão" and resumo["colunas"] == ["Indicador", "Valor"]
+    assert {x["Indicador"]: x["Valor"] for x in linhas}["Bases previstas"] == "4"
+    # Bases: as que pedem ação primeiro (em atraso, próximas do prazo, prazo vencido...)
+    assert _coluna(corpo, "bases", "Base prevista") == ["Antiga", "Leitos", "Vacinas",
+                                                         "Indicadores"]
+    assert _coluna(corpo, "bases", "Dataset no portal") == [
+        "Antigo (fora do portal)", "", "", "Indicadores"]
+    assert _coluna(corpo, "bases-em-atraso", "Base prevista") == ["Antiga"]
+    assert _coluna(corpo, "bases-proximas", "Base prevista") == ["Leitos"]
+    # Atualização: só as vinculadas, atrasadas primeiro
+    assert _coluna(corpo, "atualizacao", "Base prevista") == ["Indicadores", "Antiga"]
+    assert _coluna(corpo, "atualizacao", "Situação") == ["Atrasado", "Sem informação"]
+    # Portal: datasets ativos e recursos válidos (sem dicionário, sem recurso apagado)
+    assert _coluna(corpo, "datasets", "Dataset") == ["Indicadores", "Leitos"]
+    assert _coluna(corpo, "sem-recurso", "Dataset") == []
+    assert sorted(_coluna(corpo, "recursos", "Formato")) == ["CSV", "PDF", "ZIP", "sem formato"]
+    assert sorted(_coluna(corpo, "formatos", "Formato")) == ["PDF", "ZIP", "sem formato"]
+    # Dados pessoais: só o achado em aberto (o falso positivo sai); nunca o valor
+    _, achados_ = _secao(corpo, "dados-pessoais")
+    assert [(x["Tipo"], x["Coluna"], x["Situação"]) for x in achados_] == [
+        ("CPF", "cpf_paciente", "Revisar")]
 
 
-def test_so_o_resumo_do_orgao(client, gerente, com_pda):
-    from tests.conftest import SES
-    corpo = _orgao(client, gerente, SES, "orgaos").json()
-    assert [s["id"] for s in corpo["secoes"]] == ["orgaos"]
-    s, linhas = _secao(corpo, "orgaos")
-    assert s["colunas"] == ["Indicador", "Valor"]
-    valores = {x["Indicador"]: x["Valor"] for x in linhas}
-    assert valores["Bases previstas"] == "4" and valores["Datasets no portal"] == "2"
-
-
-def test_inventario_e_lgpd_do_orgao(client, gerente, so_dicionario, achados):  # noqa: F811
-    from tests.conftest import SEDUC, SES
-    corpo = _orgao(client, gerente, SEDUC, "sem-recurso", "lgpd").json()
-    assert [x["Dataset"] for x in _secao(corpo, "sem-recurso")[1]] == ["Escolas"]
-    assert _secao(corpo, "lgpd")[1] == []  # o achado é de um recurso da SES
-    corpo = _orgao(client, gerente, SES, "sem-recurso", "lgpd").json()
-    assert _secao(corpo, "sem-recurso")[1] == []
-    assert [x["Tipo"] for x in _secao(corpo, "lgpd")[1]] == ["CPF"]
+def test_relatorio_detalhado_de_outro_orgao(client, gerente, com_pda):
+    from tests.conftest import SEDUC
+    corpo = _orgao(client, gerente, SEDUC).json()
+    assert _coluna(corpo, "bases", "Base prevista") == ["Matrículas"]
+    assert _coluna(corpo, "sem-recurso", "Dataset") == ["Escolas"]
+    assert _coluna(corpo, "recursos", "Recurso") == []  # só o dicionário de dados
 
 
 def test_exportar_relatorio_do_orgao(client, gerente, com_pda):
     from tests.conftest import SES
-    r = _orgao(client, gerente, SES, "orgaos", "pda", "atualizacoes", rota="exportar",
-               formato="xlsx")
+    r = _orgao(client, gerente, SES, rota="exportar", formato="xlsx")
     assert r.status_code == 200, r.text
     assert re.search(r'filename="relatorio-secretaria-da-saude-\d{4}-\d{2}-\d{2}\.xlsx"',
                      r.headers["content-disposition"])
     wb = load_workbook(io.BytesIO(r.content))
-    assert wb.sheetnames == ["Resumo do órgão", "Cumprimento do PDA", "Atualizações"]
-    assert wb["Cumprimento do PDA"].max_row == 5  # cabeçalho + 4 bases da SES
-    r = _orgao(client, gerente, SES, "pda", "atualizacoes", rota="exportar", formato="pdf")
+    assert wb.sheetnames[:3] == ["Resumo do órgão", "Bases previstas no PDA", "Bases em atraso"]
+    assert wb["Bases previstas no PDA"].max_row == 5  # cabeçalho + 4 bases da SES
+    r = _orgao(client, gerente, SES, rota="exportar", formato="pdf")
     assert r.content.startswith(b"%PDF") and r.headers["content-type"] == "application/pdf"
-    r = _orgao(client, gerente, SES, "orgaos", "pda", "atualizacoes", rota="exportar",
-               formato="csv")
-    texto = r.content.decode("utf-8-sig")
+    texto = _orgao(client, gerente, SES, rota="exportar", formato="csv").content.decode("utf-8-sig")
     assert texto.startswith("Relatório do órgão — Secretaria da Saúde")
-    assert texto.index("Resumo do órgão") < texto.index("Relatório de Cumprimento do PDA")
-    assert "Relatório de Cumprimento do PDA;PDA teste" in texto
-    assert "Relatório de Atualizações;PDA teste" in texto
+    assert texto.index("Resumo do órgão") < texto.index("Bases previstas no PDA;PDA teste")
 
 
-def test_relatorio_do_orgao_erros(client, gerente, orgao):
+def test_relatorio_do_orgao_erros_e_permissoes(client, gerente, orgao, com_pda):
     from tests.conftest import SES
-    assert _orgao(client, gerente, 999, "pda").status_code == 404  # órgão inexistente
-    assert _orgao(client, gerente, SES, "inexistente").status_code == 404
-    assert _orgao(client, gerente, SES, "pda", rota="exportar",
-                  formato="doc").status_code == 422
-    assert _orgao(client, gerente, SES).status_code == 422  # nada escolhido
-    # Sem o resumo: só os relatórios marcados
-    corpo = _orgao(client, gerente, SES, "pda").json()
-    assert [s["id"] for s in corpo["secoes"]] == ["pda"]
+    assert _orgao(client, gerente, 999).status_code == 404  # órgão inexistente
+    assert _orgao(client, gerente, SES, rota="exportar", formato="doc").status_code == 422
+    # Superintendência só vê o painel: o relatório traz só o resumo
     sup = _usuario(client, "sup2@cge.go.gov.br", ["superintendencia"])
-    assert [s["id"] for s in _orgao(client, sup, SES, "orgaos").json()["secoes"]] == ["orgaos"]
-    assert _orgao(client, sup, SES, "orgaos", "pda").status_code == 403  # sem pda.acessar
+    assert [s["id"] for s in _orgao(client, sup, SES).json()["secoes"]] == ["resumo"]
     assert client.get(f"{ORG}/orgaos", headers=orgao).status_code == 403
 
 

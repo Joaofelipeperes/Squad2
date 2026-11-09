@@ -1,72 +1,26 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import type { Formato, Previa, Relatorio } from "./api";
+import type { KeyboardEvent } from "react";
+import { useMemo, useState } from "react";
+import type { Formato, OrgaoOpcao, Previa } from "./api";
 import { relatoriosApi } from "./api";
 import { Pode } from "@/shared/acesso/Pode";
 import { Modal } from "@/shared/ui/Modal";
 import { useToast } from "@/shared/ui/Toast";
 
 const LINHAS_NA_PREVIA = 10; // por seção, na tela (a exportação leva todas)
-// Para um órgão, o relatório comparativo de todos os órgãos vira o "Resumo do órgão": primeira
-// opção da marcação (já marcada) e, quando escolhido, primeira seção do documento
-const RESUMO = "orgaos";
 
-/** Estado da marcação dos relatórios de um órgão (usado aqui e no detalhe do órgão). */
-function useEscolha(catalogo: Relatorio[]) {
-  const resumo = catalogo.find((r) => r.id === RESUMO);
-  const relatorios = [
-    ...(resumo ? [{ ...resumo, titulo: "Resumo do órgão" }] : []),
-    ...catalogo.filter((r) => r.id !== RESUMO),
-  ];
-  // Resumo marcado por padrão (quando o catálogo chega depois, entra na primeira carga)
-  const [marcados, setMarcados] = useState<string[] | null>(null);
-  const atuais = marcados ?? (resumo ? [RESUMO] : []);
-  // Ordem da lista (resumo primeiro, depois o catálogo), qualquer que seja a ordem das marcações
-  const escolhidos = relatorios.map((r) => r.id).filter((id) => atuais.includes(id));
-  const outros = escolhidos.filter((id) => id !== RESUMO).length;
-  const conteudo = [escolhidos.includes(RESUMO) ? "Resumo do órgão" : null,
-    outros ? `${outros} relatório(s)` : null].filter(Boolean).join(" + ");
-  return {
-    relatorios, temResumo: !!resumo, marcados: atuais, setMarcados, escolhidos, conteudo,
-    vazio: escolhidos.length === 0,
-  };
-}
-
-function EscolhaRelatorios({ escolha }: { escolha: ReturnType<typeof useEscolha> }) {
-  const { relatorios, marcados, setMarcados } = escolha;
-  const todos = relatorios.length > 0 && marcados.length === relatorios.length;
-  const alternar = (id: string) =>
-    setMarcados(marcados.includes(id) ? marcados.filter((x) => x !== id) : [...marcados, id]);
-  return (
-    <fieldset className="form-field full relatorio-orgao-lista">
-      <legend>
-        Relatórios *
-        <button type="button" className="btn-link" onClick={() => setMarcados(todos ? [] : relatorios.map((r) => r.id))}>
-          {todos ? "Desmarcar todos" : "Marcar todos"}
-        </button>
-      </legend>
-      {relatorios.map((r) => (
-        <label key={r.id} className="check-line">
-          <input type="checkbox" checked={marcados.includes(r.id)} onChange={() => alternar(r.id)} />
-          <span><i className={`fa-solid ${r.icone}`} style={{ marginRight: 6, color: "var(--gray-500)" }} />{r.titulo}</span>
-        </label>
-      ))}
-    </fieldset>
-  );
-}
+/** Busca sem diferenciar maiúsculas nem acentos ("saude" acha "Saúde"). */
+const normalizar = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
 /**
- * Relatório de um órgão: escolhe o órgão e quantos relatórios quiser; o resumo do órgão, se
- * marcado, abre o documento, que segue com uma seção por relatório, só com as linhas daquele órgão
- * (PDF, Excel ou CSV).
+ * Relatório detalhado de um órgão (pedido da GEDA): escolhe o órgão digitando o nome ou a sigla e
+ * gera um documento só, com o resumo e, para cada número dele, a lista do que ele conta (bases,
+ * atualização, datasets, recursos, dados pessoais). PDF, Excel ou CSV.
  */
-export function RelatorioOrgaoPainel({ relatorios: catalogo }: { relatorios: Relatorio[] }) {
-  const escolha = useEscolha(catalogo);
+export function RelatorioOrgaoPainel() {
   const orgaos = useQuery({ queryKey: ["relatorios", "orgaos"], queryFn: relatoriosApi.orgaos });
-  const [orgao, setOrgao] = useState("");
+  const [orgao, setOrgao] = useState<OrgaoOpcao | null>(null);
   const [aberto, setAberto] = useState(false);
-  const nomeOrgao = orgaos.data?.find((o) => String(o.id) === orgao)?.nome ?? "";
-  const falta = !orgao ? "Escolha o órgão." : escolha.vazio ? "Marque ao menos um relatório." : null;
 
   return (
     <div className="panel">
@@ -74,8 +28,9 @@ export function RelatorioOrgaoPainel({ relatorios: catalogo }: { relatorios: Rel
         <div>
           <h3>Relatório de um órgão</h3>
           <div className="sub">
-            Escolha o órgão e os relatórios: tudo sai num documento só, apenas com os dados dele.
-            {escolha.temResumo && " O resumo do órgão (indicadores gerais), se marcado, abre o documento."}
+            Um documento só com a situação do órgão: o resumo e, para cada número, a lista do que ele
+            conta — quais bases, quais datasets em atraso, quais recursos em formato fechado, onde há
+            possíveis dados pessoais.
           </div>
         </div>
       </div>
@@ -83,80 +38,111 @@ export function RelatorioOrgaoPainel({ relatorios: catalogo }: { relatorios: Rel
         <div className="form-grid">
           <div className="form-field full">
             <label htmlFor="relatorio-orgao">Órgão *</label>
-            <select id="relatorio-orgao" value={orgao} onChange={(e) => setOrgao(e.target.value)}
-              disabled={!orgaos.data}>
-              <option value="">{orgaos.isLoading ? "Carregando órgãos…" : "Selecione o órgão"}</option>
-              {orgaos.data?.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
-            </select>
+            <OrgaoBusca id="relatorio-orgao" orgaos={orgaos.data ?? []} carregando={orgaos.isLoading}
+              valor={orgao} onEscolher={setOrgao} />
             {orgaos.isError && <span className="help">Não foi possível carregar os órgãos: {orgaos.error.message}</span>}
           </div>
-          <EscolhaRelatorios escolha={escolha} />
         </div>
         <div className="relatorio-orgao-acoes">
-          <span className="help-texto">{falta ?? `${escolha.conteudo} · ${nomeOrgao}`}</span>
-          <button type="button" className="btn btn-primary btn-sm" disabled={!!falta} onClick={() => setAberto(true)}>
+          <span className="help-texto">{orgao ? orgao.nome : "Digite o nome ou a sigla do órgão."}</span>
+          <button type="button" className="btn btn-primary btn-sm" disabled={!orgao} onClick={() => setAberto(true)}>
             <i className="fa-solid fa-file-lines" />Gerar relatório
           </button>
         </div>
       </div>
-      {aberto && orgao && (
-        <RelatorioOrgaoModal orgao={Number(orgao)} relatorios={escolha.escolhidos} onFechar={() => setAberto(false)} />
-      )}
+      {aberto && orgao && <RelatorioOrgaoModal orgao={orgao.id} onFechar={() => setAberto(false)} />}
     </div>
   );
 }
 
 /**
- * Relatório de um órgão já escolhido (ex.: detalhe do órgão em Organizações): marca os relatórios
- * e gera o documento do órgão, com a mesma prévia e as mesmas exportações da tela Relatórios.
+ * Escolha do órgão por digitação (combobox WAI-ARIA): a lista filtra por nome ou sigla enquanto a
+ * pessoa digita; setas, Enter e Esc funcionam. Escolhido, mostra o órgão com a opção de trocar.
  */
-export function GerarRelatorioOrgaoModal({ orgao, nome, onFechar }: {
-  orgao: number; nome: string; onFechar: () => void;
+function OrgaoBusca({ id, orgaos, carregando, valor, onEscolher }: {
+  id: string; orgaos: OrgaoOpcao[]; carregando: boolean; valor: OrgaoOpcao | null;
+  onEscolher: (o: OrgaoOpcao | null) => void;
 }) {
-  const lista = useQuery({ queryKey: ["relatorios"], queryFn: relatoriosApi.lista });
-  const escolha = useEscolha(lista.data ?? []);
-  const [gerado, setGerado] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [aberto, setAberto] = useState(false);
+  const [ativo, setAtivo] = useState(-1);
+  const listaId = `${id}-lista`;
+  const opcoes = useMemo(() => {
+    const termo = normalizar(texto);
+    return termo ? orgaos.filter((o) => normalizar(o.nome).includes(termo)) : orgaos;
+  }, [orgaos, texto]);
 
-  if (gerado) {
-    return <RelatorioOrgaoModal orgao={orgao} relatorios={escolha.escolhidos} onFechar={onFechar} />;
+  function escolher(o: OrgaoOpcao) {
+    onEscolher(o);
+    setTexto("");
+    setAberto(false);
+    setAtivo(-1);
   }
-  return (
-    <Modal aberto titulo={`Gerar relatório — ${nome}`}
-      subtitulo={escolha.temResumo
-        ? "Marque o que deve entrar no documento; o resumo do órgão, se marcado, vem primeiro."
-        : "Marque os relatórios que devem entrar no documento."}
-      onFechar={onFechar}
-      rodape={<>
-        <button type="button" className="btn btn-outline btn-sm" onClick={onFechar}>Cancelar</button>
-        <button type="button" className="btn btn-primary btn-sm" disabled={!lista.data || escolha.vazio}
-          onClick={() => setGerado(true)}>
-          <i className="fa-solid fa-file-lines" />Gerar relatório
+
+  function teclado(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setAberto(true);
+      if (!opcoes.length) return;
+      const passo = e.key === "ArrowDown" ? 1 : -1;
+      setAtivo((i) => (i + passo + opcoes.length) % opcoes.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const alvo = ativo >= 0 ? opcoes[ativo] : opcoes.length === 1 ? opcoes[0] : undefined;
+      if (aberto && alvo) escolher(alvo);
+    } else if (e.key === "Escape" && aberto) {
+      e.stopPropagation();
+      setAberto(false);
+    }
+  }
+
+  if (valor) {
+    return (
+      <div className="dataset-escolhido">
+        <strong>{valor.nome}</strong>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEscolher(null)}
+                aria-label={`Trocar o órgão ${valor.nome}`}>
+          <i className="fa-solid fa-rotate" />Trocar
         </button>
-      </>}>
-      {lista.isLoading && <div className="table-empty">Carregando relatórios...</div>}
-      {lista.isError && <div className="table-empty">Não foi possível carregar os relatórios: {lista.error.message}</div>}
-      {lista.data && (
-        <>
-          <div className="form-grid"><EscolhaRelatorios escolha={escolha} /></div>
-          <p className="help-texto" style={{ marginTop: 8 }}>
-            {escolha.vazio ? "Marque ao menos um relatório." : `${escolha.conteudo} · ${nome}`}
-          </p>
-        </>
+      </div>
+    );
+  }
+
+  const mostrarLista = aberto && opcoes.length > 0;
+  return (
+    <>
+      <input id={id} className="text-input" type="search" autoComplete="off" value={texto} maxLength={200}
+             placeholder={carregando ? "Carregando órgãos…" : "Digite o nome ou a sigla (ex.: SEAD, Saúde)"}
+             disabled={carregando} role="combobox" aria-autocomplete="list" aria-controls={listaId}
+             aria-expanded={mostrarLista}
+             aria-activedescendant={mostrarLista && ativo >= 0 ? `${listaId}-${ativo}` : undefined}
+             onChange={(e) => { setTexto(e.target.value); setAberto(true); setAtivo(-1); }}
+             onFocus={() => setAberto(true)} onBlur={() => setAberto(false)} onKeyDown={teclado} />
+      <ul id={listaId} role="listbox" className="busca-lista" aria-label="Órgãos encontrados" hidden={!mostrarLista}>
+        {opcoes.map((o, i) => (
+          <li key={o.id} id={`${listaId}-${i}`} role="option" aria-selected={i === ativo}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(o)}>
+            {o.nome}
+          </li>
+        ))}
+      </ul>
+      {aberto && texto.trim() !== "" && opcoes.length === 0 && (
+        <span className="help" role="status">Nenhum órgão com esse nome ou sigla.</span>
       )}
-    </Modal>
+    </>
   );
 }
 
-function RelatorioOrgaoModal({ orgao, relatorios, onFechar }: {
-  orgao: number; relatorios: string[]; onFechar: () => void;
-}) {
+/** Prévia do relatório detalhado do órgão (10 linhas por seção) e as exportações. Também usado
+ *  no detalhe do órgão em Organizações. */
+export function RelatorioOrgaoModal({ orgao, onFechar }: { orgao: number; onFechar: () => void }) {
   const toast = useToast();
   const previa = useQuery({
-    queryKey: ["relatorios", "por-orgao", orgao, relatorios],
-    queryFn: () => relatoriosApi.previaOrgao(orgao, relatorios),
+    queryKey: ["relatorios", "por-orgao", orgao],
+    queryFn: () => relatoriosApi.previaOrgao(orgao),
   });
   const exportar = useMutation({
-    mutationFn: (formato: Formato) => relatoriosApi.exportarOrgao(orgao, relatorios, formato),
+    mutationFn: (formato: Formato) => relatoriosApi.exportarOrgao(orgao, formato),
     onSuccess: () => toast("Relatório exportado."),
     onError: (e: Error) => toast(e.message, true),
   });
@@ -165,7 +151,7 @@ function RelatorioOrgaoModal({ orgao, relatorios, onFechar }: {
   return (
     <Modal aberto largo onFechar={onFechar}
       titulo={p ? `Relatório do órgão — ${p.orgao.nome}` : "Relatório do órgão"}
-      subtitulo={p ? `${p.secoes.length} seção(ões) · prévia das ${LINHAS_NA_PREVIA} primeiras linhas de cada uma` : "Gerando prévia..."}
+      subtitulo={p ? `${p.secoes.length} seção(ões) · prévia das ${LINHAS_NA_PREVIA} primeiras linhas de cada uma; o arquivo leva tudo` : "Gerando prévia..."}
       rodape={<>
         <button className="btn btn-outline btn-sm" onClick={onFechar}>Fechar</button>
         <Pode permissao="relatorios.exportar">
