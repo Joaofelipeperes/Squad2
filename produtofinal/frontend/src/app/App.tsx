@@ -21,7 +21,7 @@ function RotasProtegidas() {
   if (carregando) return null;
   if (!usuario) return <Navigate to="/login" replace />;
   if (!modulos.length) return <SemAcessoPage />;
-  const inicial = modulos[0]!.caminho; // ex.: órgão publicador cai direto em /envio
+  const inicial = modulos[0]!.caminho; // primeira tela permitida ao usuário
   return (
     <Routes>
       <Route element={<Shell modulos={modulos} widgets={widgets} />}>

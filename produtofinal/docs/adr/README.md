@@ -73,6 +73,7 @@ a fonte.
 | 09/11/2026 | Entrega em servidor (VM da UFG e SECTI/CGE-GO) como código-fonte com `docker-compose.prod.yml` que se prepara sozinho no `docker compose up -d`: segredos gerados num volume, papéis Administrador e Gerência de Dados Abertos, admin inicial com senha padrão, portal oficial, IA local do Ollama e primeira coleta; API só alcançável pelo nginx; HTTPS por proxy ou certificado próprio | Técnica | Aceita | [ADR-0032](0032-entrega-por-codigo-fonte-com-subida-automatica.md) |
 | 09/11/2026 | Em produção, a 1ª subida grava o perfil "Portal de Dados Abertos GO" (portal oficial) em uso na tela Configurações CKAN | Técnica | Revisão da ADR-0024 | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
 | 09/11/2026 | API e worker do modo desenvolvimento com `restart: unless-stopped` (vigia de arquivos cai com erro passageiro da pasta montada do Windows) | Técnica | Revisão da ADR-0017 | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
+| 09/11/2026 | Tela "Envio de dados do órgão" oculta (fora do menu e das rotas): não vai para produção porque a CGE-GO não a pediu; arquivos do módulo `envio` mantidos para implementação futura | Escopo | Aceita | [ADR-0033](0033-tela-de-envio-oculta.md) |
 
 ## Decisões em aberto
 
@@ -85,7 +86,7 @@ a fonte.
 | Modelo do Assistente | Gemini via SECTI/LIGO × Claude Haiku (custo próprio) × modelo local | Paloma, com SECTI/LIGO | ADR-0002, ADR-0020 |
 | Hospedagem do protótipo navegável | Oracle Cloud (camada gratuita, conta do coordenador) × OpenShift da TI Central | Victor, com a Paloma | Sugestão do orientador (01/10) |
 | Distribuição dos papéis padrão | Matriz atual × ajustes da GEDA | Paloma | ADR-0005 |
-| Envio de recursos pelos órgãos | Incluir no escopo × manter fora | Paloma / Júnior, com a SECTI | docs/modulos/envio.md |
+| Envio de recursos pelos órgãos | Incluir no escopo × manter fora (hoje: tela oculta, ADR-0033) | Paloma / Júnior, com a SECTI | docs/modulos/envio.md, ADR-0033 |
 | Retenção do log de acesso | Prazo de guarda (ex.: 6 meses, Marco Civil) e expurgo automático × guarda indefinida | Paloma, com a coordenação | ADR-0016 |
 
 ## Pendências de validação com a CGE-GO
