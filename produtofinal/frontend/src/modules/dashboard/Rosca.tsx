@@ -16,8 +16,9 @@ const CIRC = 2 * Math.PI * R;
 
 /**
  * Rosca (SVG, sem biblioteca) com legenda fixa ao lado: ícone, rótulo, quantidade e %. As fatias têm
- * um vão de 2px; passar o mouse ou focar uma linha da legenda destaca a fatia e mostra o valor no
- * centro. Sem foco, o centro mostra o total.
+ * um vão de 2px; passar o mouse numa fatia ou linha da legenda destaca a fatia e mostra o valor no
+ * centro. Sem destaque, o centro mostra o total. A legenda já traz valor e % em texto, então não
+ * precisa de parada de Tab por linha.
  */
 export function Rosca({ fatias, unidade, rotuloAcessivel }: {
   fatias: Fatia[]; unidade: [string, string]; rotuloAcessivel: string;
@@ -70,9 +71,8 @@ export function Rosca({ fatias, unidade, rotuloAcessivel }: {
       </svg>
       <ul className="rosca-legenda">
         {fatias.map((f, i) => (
-          <li key={f.rotulo} tabIndex={0} className={ativa === i ? "ativa" : undefined}
-            onMouseEnter={() => setAtiva(i)} onMouseLeave={() => setAtiva(null)}
-            onFocus={() => setAtiva(i)} onBlur={() => setAtiva(null)}>
+          <li key={f.rotulo} className={ativa === i ? "ativa" : undefined}
+            onMouseEnter={() => setAtiva(i)} onMouseLeave={() => setAtiva(null)}>
             <span className={`rosca-amostra${f.hachurada ? " hachurada" : ""}`}
               style={f.hachurada ? undefined : { background: f.cor }} />
             <i className={`fa-solid ${f.icone}`} aria-hidden="true" />

@@ -43,10 +43,11 @@ export default function PdaPage() {
   const toast = useToast();
   const planos = useQuery({ queryKey: ["pda", "planos"], queryFn: pdaApi.planos });
   const [planoSel, setPlanoSel] = useState<number | null>(null);
-  // "?orgao=<chave>" vem do botão "Ver bases no PDA" da tela Organizações
+  // "?orgao=<chave>" vem do botão "Ver bases no PDA" da tela Organizações;
+  // "?situacao=<situação>" vem dos indicadores da Visão Geral
   const [params] = useSearchParams();
   const [filtros, setFiltros] = useState<FiltrosPda>(
-    () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "" }));
+    () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "", situacao: params.get("situacao") ?? "" }));
   const [importarAberto, setImportarAberto] = useState(false);
   const [idsAberto, setIdsAberto] = useState(false);
   const [confirmacao, setConfirmacao] = useState<"vigente" | "excluir" | null>(null);
@@ -173,7 +174,8 @@ export default function PdaPage() {
             onDefinirVigente={() => setConfirmacao("vigente")}
             onExcluir={() => setConfirmacao("excluir")}
             onVincular={() => vincular.mutate(plano)} vinculando={vincular.isPending}
-            onImportarIds={() => setIdsAberto(true)} />
+            onImportarIds={() => setIdsAberto(true)}
+            onIncluirBase={() => setBaseForm({ base: null })} />
 
           <div className="panel">
             <Filtros filtros={filtros} onMudar={setFiltros} dados={bases.data}
@@ -185,14 +187,6 @@ export default function PdaPage() {
                     ["Ano", filtros.ano], ["Prazo", filtros.prazo === "vencido" ? "Vencido"
                       : filtros.prazo === "proximo" ? "Próximo do prazo" : filtros.prazo]])} />
               } />
-            <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <div className="sub" style={{ fontSize: 12.5 }}>Bases previstas no {plano.nome}</div>
-              <Pode permissao="pda.gerenciar_planos">
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setBaseForm({ base: null })}>
-                  <i className="fa-solid fa-plus" />Incluir base
-                </button>
-              </Pode>
-            </div>
             <div className="table-scroll">
               <table>
                 <thead><tr>
@@ -328,27 +322,15 @@ interface PainelPlanoProps {
   onVincular: () => void;
   vinculando: boolean;
   onImportarIds: () => void;
-}
-
-function vigencia(p: PlanoPda): string | null {
-  if (p.vigencia_inicio && p.vigencia_fim) return `vigência ${fmtData(p.vigencia_inicio)} a ${fmtData(p.vigencia_fim)}`;
-  if (p.vigencia_inicio) return `vigência a partir de ${fmtData(p.vigencia_inicio)}`;
-  if (p.vigencia_fim) return `vigência até ${fmtData(p.vigencia_fim)}`;
-  return null;
+  onIncluirBase: () => void;
 }
 
 function PainelPlano({
   planos, plano, onTrocar, onImportar, onNovo, onEditar, onDefinirVigente, onExcluir, onVincular, vinculando,
-  onImportarIds,
+  onImportarIds, onIncluirBase,
 }: PainelPlanoProps) {
-  const origem = plano.arquivo_nome ? "importado" : "criado manualmente";
   // O vigente só pode ser excluído quando é o único PDA (regra do backend)
   const podeExcluir = !plano.vigente || planos.length === 1;
-  const info = [
-    plural(plano.total_bases, "base prevista", "bases previstas"),
-    `${origem} em ${fmtDataHora(plano.importado_em)}${plano.importado_por ? ` por ${plano.importado_por}` : ""}`,
-    vigencia(plano),
-  ].filter(Boolean).join(" · ");
 
   return (
     <div className="panel">
@@ -381,6 +363,9 @@ function PainelPlano({
             </button>
           </Pode>
           <Pode permissao="pda.gerenciar_planos">
+            <button type="button" className="btn btn-outline btn-sm" onClick={onIncluirBase}>
+              <i className="fa-solid fa-plus" />Incluir base
+            </button>
             {!plano.vigente && (
               <button type="button" className="btn btn-outline btn-sm" onClick={onDefinirVigente}>
                 <i className="fa-solid fa-star" />Definir como vigente
@@ -401,11 +386,6 @@ function PainelPlano({
               <i className="fa-solid fa-file-import" />Importar PDA
             </button>
           </Pode>
-        </div>
-      </div>
-      <div className="panel-head" style={{ borderBottom: "none" }}>
-        <div className="sub" style={{ fontSize: 12.5 }}>
-          {info}{plano.arquivo_nome && <span title="Arquivo de origem"> · {plano.arquivo_nome}</span>}
         </div>
       </div>
     </div>

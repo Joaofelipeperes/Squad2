@@ -216,3 +216,129 @@ th[aria-sort] { padding: 0; }
 .relatorio-secao + .relatorio-secao { margin-top: 22px; }
 .relatorio-secao h4 { font-size: 14px; margin-bottom: 2px; }
 .relatorio-secao .sub { font-size: 12px; color: var(--gray-500); margin-bottom: 8px; }
+
+/* ==========================================================================
+   Acessibilidade e contraste (crítica do Dashboard, 09/11/2026)
+   ========================================================================== */
+/* Tokens do protótipo escurecidos para passar no WCAG AA em texto pequeno:
+   gray-500 #7c8a99 (3,5:1) → #5f6d7c (5,4:1); amber-600 #a8710f (4,2:1) → #8a5c0a (6,0:1).
+   amber-400 é só preenchimento de gráfico ("próximo do prazo"), nunca texto. */
+:root { --gray-500: #5f6d7c; --amber-600: #8a5c0a; --amber-400: #d39b2e; }
+.kpi-foot { font-size: 12px; }
+
+/* Texto só para leitor de tela */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Texto sr-only (absoluto) dentro de tabela rolável não pode vazar e criar rolagem na página */
+.table-scroll { position: relative; }
+
+/* Título da página é o h1 da barra superior; a marca no menu lateral deixou de ser h1 */
+.topbar-title h1 { font-size: 16.5px; color: var(--ink); margin-top: 1px; }
+.brand-text .brand-nome { font-size: 15.5px; color: #fff; line-height: 1.2; font-weight: 700;
+  letter-spacing: -.01em; margin: 0; }
+.panel-head h2 { font-size: 14.5px; }
+
+/* ==========================================================================
+   Visão Geral (DashboardPage.tsx): problemas → inventário → alertas → gráficos
+   ========================================================================== */
+.painel-lede { color: var(--gray-700); font-size: 14px; line-height: 1.5; max-width: 72ch; margin-bottom: 18px; }
+.painel-coleta { display: none; }
+
+/* Indicadores de problema: uma faixa só, divisórias de 1px, cada célula leva à lista filtrada */
+.painel-problemas ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1px;
+  background: var(--gray-200); border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1); overflow: hidden; }
+.painel-problemas li { background: var(--surface); }
+.problema { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "rotulo seta" "valor valor" "nota nota";
+  row-gap: 6px; height: 100%; padding: 16px 18px 15px; color: var(--ink); text-decoration: none;
+  transition: background .12s ease; }
+.problema:hover { background: var(--gray-50); }
+.problema:focus-visible { outline: 2px solid var(--blue-500); outline-offset: -2px; }
+.problema-rotulo { grid-area: rotulo; display: flex; align-items: center; gap: 7px; font-size: 13px;
+  font-weight: 600; color: var(--gray-700); }
+.problema-rotulo::before { content: ""; width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--gray-300); }
+.problema-valor { grid-area: valor; font-size: 30px; font-weight: 800; line-height: 1.05;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.problema-nota { grid-area: nota; font-size: 12.5px; color: var(--gray-700); line-height: 1.4; }
+.problema-seta { grid-area: seta; align-self: center; font-size: 12px; color: var(--gray-500);
+  transition: transform .15s cubic-bezier(.2, .8, .2, 1), color .12s; }
+.problema:hover .problema-seta { transform: translateX(3px); color: var(--blue-500); }
+.problema.grave .problema-valor { color: var(--red-600); }
+.problema.grave .problema-rotulo::before { background: var(--red-600); }
+.problema.atencao .problema-valor { color: var(--amber-600); }
+.problema.atencao .problema-rotulo::before { background: var(--amber-600); }
+.problema.ok .problema-valor { color: var(--green-600); }
+.problema.ok .problema-rotulo::before { background: var(--green-600); }
+.problema.pendente .problema-valor { color: var(--gray-500); }
+
+/* Inventário: contexto em uma linha discreta, não cartões */
+.painel-inventario { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 24px;
+  margin: 16px 2px 24px; }
+.painel-inventario dt { font-size: 12px; font-weight: 600; color: var(--gray-700); }
+.painel-inventario dd { margin: 0; }
+.painel-inventario .inventario-valor { font-size: 18px; font-weight: 700; color: var(--navy-900); font-variant-numeric: tabular-nums;
+  margin-top: 2px; }
+.inventario-detalhe { font-size: 12px; color: var(--gray-500); }
+.inventario-detalhe.alerta { color: var(--amber-600); font-weight: 600; }
+
+.charts-row.um { grid-template-columns: 1fr; }
+
+/* Explicações de cálculo recolhidas */
+.como-calculamos { margin-top: 14px; font-size: 12.5px; color: var(--gray-700); line-height: 1.55; }
+.como-calculamos summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  color: var(--blue-500); font-weight: 600; list-style: none; border-radius: var(--radius-sm); }
+.como-calculamos summary::-webkit-details-marker { display: none; }
+.como-calculamos summary::before { content: "\f054"; font-family: "Font Awesome 6 Free"; font-weight: 900;
+  font-size: 9px; transition: transform .15s ease; }
+.como-calculamos[open] summary::before { transform: rotate(90deg); }
+.como-calculamos summary:hover { text-decoration: underline; }
+.como-calculamos > div { margin-top: 8px; max-width: 72ch; display: flex; flex-direction: column; gap: 6px; }
+.como-calculamos code { font-size: 11.5px; background: var(--gray-100); padding: 1px 4px; border-radius: 3px; }
+
+/* Erro com recuperação e esqueleto de carregamento */
+.painel-erro { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; font-size: 13.5px; }
+.painel-esqueleto { display: flex; flex-direction: column; gap: 16px; }
+.esq-linha { border-radius: var(--radius-md); background: linear-gradient(90deg, var(--gray-200) 0%,
+  var(--gray-50) 50%, var(--gray-200) 100%) 0 0 / 200% 100%; animation: esq-brilho 1.4s ease-in-out infinite; }
+.esq-problemas { height: 112px; }
+.esq-inventario { height: 48px; width: 70%; }
+.esq-tabela { height: 280px; }
+@keyframes esq-brilho { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* ==========================================================================
+   Telas estreitas: menu lateral vira gaveta (Shell.tsx / Topbar.tsx)
+   ========================================================================== */
+.menu-toggle { display: none; padding: 8px 10px; margin-right: 8px; font-size: 16px; }
+.topbar-title { min-width: 0; flex: 1; }
+@media (max-width: 1200px) {
+  .painel-inventario { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .sidebar { width: 258px; transform: translateX(-100%); visibility: hidden;
+    transition: transform .22s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .22s; }
+  .sidebar.aberta { transform: none; visibility: visible; box-shadow: var(--shadow-2);
+    transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+  .sidebar-fundo { position: fixed; inset: 0; z-index: 35; background: rgba(12, 35, 56, .45); }
+  .main { margin-left: 0; }
+  .menu-toggle { display: inline-flex; }
+  .topbar { padding: 0 16px; }
+  .content { padding: 18px 16px 48px; }
+}
+@media (max-width: 560px) {
+  .topbar-meta, .topbar-title .crumb { display: none; }
+  .painel-coleta { display: inline; }
+  .panel-head, .panel-body { padding-left: 14px; padding-right: 14px; }
+  .abas-alerta { padding-left: 14px; padding-right: 14px; }
+}
+@media (max-width: 480px) {
+  .painel-problemas ul { grid-template-columns: 1fr 1fr; }
+  .problema { padding: 13px 14px; }
+  .problema-valor { font-size: 26px; }
+  .barras-linha { grid-template-columns: minmax(90px, 40%) 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen, .esq-linha { animation: none; }
+  .sidebar, .sidebar.aberta, .problema-seta, .rosca-svg circle, .como-calculamos summary::before { transition: none; }
+}

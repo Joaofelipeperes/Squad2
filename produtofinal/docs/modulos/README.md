@@ -17,7 +17,7 @@ da raiz do repositório) e o teste `test_guardas_do_projeto.py` verificam isso.
 | [painel](painel.md) | Dashboard, Organizações | Esqueleto | João |
 | [relatorios](relatorios.md) | Relatórios | Esqueleto | João |
 | [assistente](assistente.md) | Assistente GEDA (botão flutuante) | Implementado | Luiza |
-| [envio](envio.md) | Envio de dados do órgão | Não comprometido | — |
+| [envio](envio.md) | Envio de dados do órgão | Não comprometido — tela oculta (ADR-0033) | — |
 | [ia](ia.md) | Modelos de IA | Implementado | Luiza |
 | [parametros](parametros.md) | Parâmetros | Implementado | — |
 

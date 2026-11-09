@@ -35,7 +35,7 @@ Usuário ──< papéis >── Papel ──< permissões >── código do ca
 | Usuários e papéis | `/admin/usuarios` | `acesso.gerenciar_usuarios` | Ordenação por coluna e paginação nas duas tabelas (ADR-0028); Criar/editar usuário (`acesso.gerenciar_usuarios`); criar/editar/excluir papel (`acesso.gerenciar_papeis` — sem ela, papéis aparecem só para leitura) |
 | Log de acesso | `/admin/logs` | `acesso.ver_logs` | Filtrar por usuário (trecho do e-mail) e período (hora de Brasília); ordenar por qualquer coluna; paginação com total no rodapé (50 por página, até 999); exportar CSV gerado no navegador (`;`, UTF-8 com BOM, até 5.000 linhas com os filtros e a ordem atuais) |
 
-Após o login o usuário cai na **primeira tela permitida** (órgão publicador → `/envio`).
+Após o login o usuário cai na **primeira tela permitida**. Com a tela de envio oculta (ADR-0033), quem só tem o papel Órgão publicador vê a página "Sem acesso": não atribua esse papel enquanto o envio não for pedido.
 
 ## API
 | Método | Rota (`/api/v1/acesso`) | Permissão | Descrição |
@@ -199,3 +199,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 26/10/2026 | Permissão `lgpd.varrer` (pedir varredura LGPD) para Administrador e Gerência GEDA. Em banco já existente, o papel Gerência não recebe a permissão sozinho: incluir na tela Usuários e papéis | Squad 2 |
 | 05/11/2026 | Log de acesso paginado e ordenado no banco (ADR-0028): `GET /logs` devolve `LogsAcessoOut` (`total`, `pagina`, `por_pagina`, `ate_id`, `registros`) com `pagina`, `por_pagina` (até 999 na tela, 5.000 na exportação), `ordenar`, `direcao` e `ate_id` (fixa o fim da lista entre páginas); o seletor de limite sai da tela. Tela Usuários e papéis: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028). Middleware `sem_cache_na_api` em `main.py`: toda resposta da API com `Cache-Control: no-store` (ADR-0029) | Victor |
 | 09/11/2026 | Servidor (ADR-0032): `GDA_PAPEIS_INICIAIS` limita os papéis criados na subida (no servidor, só Administrador e Gerência de Dados Abertos); `semear_admin_inicial` cria o administrador inicial (`admin@cge.go.gov.br` / `12345` no compose de produção) quando o banco não tem usuário e avisa no log enquanto a senha inicial não for trocada; `AcessoDao.existe_usuario`. Testes em `test_instalacao.py` | Victor |
+| 09/11/2026 | Tela de envio oculta (ADR-0033): o papel Órgão publicador continua no catálogo, mas sozinho leva à página "Sem acesso" | Victor |

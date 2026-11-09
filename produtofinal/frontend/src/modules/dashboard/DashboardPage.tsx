@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Fragment, useState } from "react";
-import { Link } from "react-router-dom";
+import type { KeyboardEvent, ReactNode } from "react";
+import { useRef } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import type { Alerta, DadosPessoais, Espontaneas, Kpis, VisaoGeral } from "./api";
 import { dashboardApi } from "./api";
 import { BarrasHorizontais } from "./BarrasHorizontais";
@@ -9,190 +10,230 @@ import { Rosca } from "./Rosca";
 import { fmtData, fmtDataHora } from "@/modules/pda/formato";
 import { SituacaoBadge } from "@/modules/pda/SituacaoBadge";
 import { Pode } from "@/shared/acesso/Pode";
-import { PageLede } from "@/shared/ui/PageLede";
 
 const fmt = new Intl.NumberFormat("pt-BR");
+/** Quantidade com singular/plural: qtd(1, "base", "bases") → "1 base". */
+const qtd = (n: number, um: string, varios: string) => `${fmt.format(n)} ${n === 1 ? um : varios}`;
+/** Percentual inteiro que não esconde valores pequenos: 0,3% vira "<1%", não "0%". */
+const pctTexto = (parte: number, todo: number) => {
+  if (!todo || !parte) return "0%";
+  const p = (parte / todo) * 100;
+  return p < 1 ? "<1%" : `${Math.round(p)}%`;
+};
 
-// Cores de status do design system (sempre acompanhadas do rótulo da situação)
+// Cores de status do design system (sempre acompanhadas do rótulo da situação). Cada situação tem
+// um tom próprio: "Prazo vencido" (atraso não confirmado) é cinza escuro; "Não publicado", cinza claro.
 const COR_SITUACAO: Record<string, string> = {
   "Publicado": "var(--green-600)",
   "Em dia": "var(--green-600)",
   "Em atraso": "var(--red-600)",
-  "Prazo vencido": "var(--gray-500)",
-  "Próximo do prazo": "var(--amber-600)",
-  "Não publicado": "var(--gray-500)",
+  "Prazo vencido": "var(--gray-700)",
+  "Próximo do prazo": "var(--amber-400)",
+  "Não publicado": "var(--gray-300)",
   "Sem recurso": "var(--amber-600)",
 };
 
 // Status das atualizações (ADR-0023): cor de status + ícone + rótulo; "não se aplica" hachurado
 const FATIA_ATUALIZACAO: Record<string, Omit<Fatia, "rotulo" | "total">> = {
   "Atualizado": { cor: "var(--green-600)", icone: "fa-circle-check" },
-  "Próximo do vencimento": { cor: "var(--amber-600)", icone: "fa-clock" },
+  "Próximo do vencimento": { cor: "var(--amber-400)", icone: "fa-clock" },
   "Atrasado": { cor: "var(--red-600)", icone: "fa-triangle-exclamation" },
   "Sem periodicidade definida": { cor: "var(--gray-500)", icone: "fa-minus", hachurada: true },
-  "Sem informação": { cor: "var(--gray-500)", icone: "fa-circle-question" },
+  "Sem informação": { cor: "var(--gray-300)", icone: "fa-circle-question" },
 };
 const AGUARDANDO_VINCULO = "Aguardando vínculo";
 
-type Cor = "blue" | "green" | "amber" | "red";
-type Pe = "ok" | "warn" | "bad" | "neutro";
+/** Estado de um indicador de problema: a cor vem do valor, não do indicador. */
+type Estado = "grave" | "atencao" | "ok" | "pendente";
 
-interface Cartao {
-  icone: string; cor: Cor; valor: number | null; rotulo: string; pe: string; classePe: Pe;
+interface Problema {
+  rotulo: string; valor: number | null; nota: string; estado: Estado; destino: string;
 }
 
-function cartoes(k: Kpis, plano: VisaoGeral["plano"]): Cartao[] {
-  const pendente = (rotulo: string, icone: string, cor: Cor, motivo: string): Cartao =>
-    ({ icone, cor, valor: null, rotulo, pe: motivo, classePe: "neutro" });
-  return [
-    { icone: "fa-building-columns", cor: "blue", valor: k.orgaos_monitorados, rotulo: "Órgãos monitorados",
-      pe: `${fmt.format(k.orgaos_no_pda)} com bases no PDA vigente`, classePe: "ok" },
-    { icone: "fa-clipboard-list", cor: "blue", valor: k.bases_previstas, rotulo: "Bases previstas no PDA",
-      pe: plano ? plano.nome : "Nenhum PDA vigente", classePe: plano ? "ok" : "warn" },
-    { icone: "fa-database", cor: "green", valor: k.datasets_publicados, rotulo: "Datasets publicados",
-      pe: k.datasets_fora_do_portal
-        ? `${fmt.format(k.datasets_fora_do_portal)} saíram do portal` : "Ativos no portal",
-      classePe: k.datasets_fora_do_portal ? "warn" : "ok" },
-    { icone: "fa-file-lines", cor: "blue", valor: k.recursos_monitorados, rotulo: "Recursos monitorados",
-      pe: "Base: last_modified, sem dicionário", classePe: "ok" },
-    k.bases_em_atraso == null
-      ? pendente("Bases atrasadas", "fa-triangle-exclamation", "red", "Aguardando vínculo com o portal")
-      : { icone: "fa-triangle-exclamation", cor: "red", valor: k.bases_em_atraso, rotulo: "Bases atrasadas",
-          pe: `Entre ${fmt.format(k.bases_vinculadas)} base(s) vinculada(s)`,
-          classePe: k.bases_em_atraso ? "bad" : "ok" },
-    k.atualizacoes_em_atraso == null
-      ? pendente("Atualizações em atraso", "fa-hourglass-half", "amber", "")
-      : { icone: "fa-hourglass-half", cor: "amber", valor: k.atualizacoes_em_atraso, rotulo: "Atualizações em atraso",
-          pe: "Acima da periodicidade do PDA", classePe: k.atualizacoes_em_atraso ? "warn" : "ok" },
-    k.possiveis_dados_pessoais == null
-      ? pendente("Possíveis dados pessoais", "fa-shield-halved", "red", "")
-      : { icone: "fa-shield-halved", cor: "red", valor: k.possiveis_dados_pessoais, rotulo: "Possíveis dados pessoais",
-          pe: "Aguardando revisão humana", classePe: k.possiveis_dados_pessoais ? "bad" : "ok" },
-    { icone: "fa-circle-question", cor: "amber", valor: k.datasets_sem_recurso, rotulo: "Datasets sem recurso",
-      pe: "Dataset criado, sem arquivo", classePe: k.datasets_sem_recurso ? "warn" : "ok" },
+/**
+ * Indicadores que pedem ação. Com valor > 0 ganham a cor da gravidade; com 0 ficam verdes; sem
+ * cálculo possível mostram "—" e o motivo (nunca 0). "Possíveis dados pessoais" só aparece para
+ * quem tem lgpd.acessar (a API devolve null para os demais).
+ */
+function problemas(k: Kpis): Problema[] {
+  const estado = (v: number | null, gravidade: "grave" | "atencao"): Estado =>
+    v == null ? "pendente" : v > 0 ? gravidade : "ok";
+  const lista: Problema[] = [
+    { rotulo: "Bases atrasadas", valor: k.bases_em_atraso, estado: estado(k.bases_em_atraso, "grave"),
+      nota: k.bases_em_atraso == null ? "Nenhuma base vinculada ao portal ainda"
+        : `Entre ${qtd(k.bases_vinculadas, "base vinculada", "bases vinculadas")} ao portal`,
+      destino: `/pda?situacao=${encodeURIComponent("Em atraso")}` },
+    { rotulo: "Atualizações em atraso", valor: k.atualizacoes_em_atraso,
+      estado: estado(k.atualizacoes_em_atraso, "atencao"),
+      nota: k.atualizacoes_em_atraso == null ? "Nenhuma base vinculada ao portal ainda"
+        : "Recurso sem atualização dentro da periodicidade do PDA",
+      destino: "/atualizacoes" },
   ];
+  if (k.possiveis_dados_pessoais != null) {
+    lista.push({ rotulo: "Possíveis dados pessoais", valor: k.possiveis_dados_pessoais,
+      estado: estado(k.possiveis_dados_pessoais, "grave"), nota: "Aguardando revisão humana", destino: "/lgpd" });
+  }
+  lista.push({ rotulo: "Datasets sem recurso", valor: k.datasets_sem_recurso,
+    estado: estado(k.datasets_sem_recurso, "atencao"), nota: "Dataset criado no portal, sem arquivo",
+    destino: "/datasets" });
+  return lista;
 }
 
-function CartaoKpi({ c }: { c: Cartao }) {
+function Problemas({ k }: { k: Kpis }) {
   return (
-    <div className="kpi-card">
-      <div className="kpi-top">
-        <div className={`kpi-icon ${c.cor}`}><i className={`fa-solid ${c.icone}`} /></div>
-      </div>
-      <div className={`kpi-value${c.valor == null ? " pendente" : ""}`}>
-        {c.valor == null ? "—" : fmt.format(c.valor)}
-      </div>
-      <div className="kpi-label">{c.rotulo}</div>
-      <div className={`kpi-foot ${c.classePe}`}>
-        {c.pe ? <><i className="fa-solid fa-circle" style={{ fontSize: 5 }} />{c.pe}</> : " "}
-      </div>
-    </div>
+    <section className="painel-problemas" aria-labelledby="painel-problemas-titulo">
+      <h2 id="painel-problemas-titulo" className="sr-only">Pontos que pedem conferência</h2>
+      <ul>
+        {problemas(k).map((p) => (
+          <li key={p.rotulo}>
+            <Link to={p.destino} className={`problema ${p.estado}`}>
+              <span className="problema-rotulo">{p.rotulo}</span>
+              <span className="problema-valor">{p.valor == null ? "—" : fmt.format(p.valor)}</span>
+              <span className="problema-nota">{p.nota}</span>
+              <i className="fa-solid fa-arrow-right problema-seta" aria-hidden="true" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
-const FLUXO: [string, string][] = [
-  ["fa-chart-simple", "Dashboard"], ["fa-building-columns", "Órgão"], ["fa-clipboard-check", "Base do PDA"],
-  ["fa-database", "Dataset CKAN"], ["fa-file-lines", "Recurso"], ["fa-circle-check", "Status"],
-  ["fa-triangle-exclamation", "Problema identificado"], ["fa-user-check", "Conferência humana"],
-];
+/** Números de inventário: contexto, não alerta. Ficam numa linha discreta abaixo dos problemas. */
+function Inventario({ k, plano }: { k: Kpis; plano: VisaoGeral["plano"] }) {
+  const itens: [string, number, ReactNode, boolean][] = [
+    ["Órgãos monitorados", k.orgaos_monitorados, `${fmt.format(k.orgaos_no_pda)} com bases no PDA`, false],
+    ["Bases previstas", k.bases_previstas, plano ? plano.nome : "Nenhum PDA vigente", !plano],
+    ["Datasets publicados", k.datasets_publicados,
+      k.datasets_fora_do_portal ? `${qtd(k.datasets_fora_do_portal, "saiu", "saíram")} do portal` : "Todos ativos no portal",
+      k.datasets_fora_do_portal > 0],
+    ["Recursos monitorados", k.recursos_monitorados, "Sem contar dicionários de dados", false],
+  ];
+  return (
+    <dl className="painel-inventario" aria-label="Inventário monitorado">
+      {itens.map(([rotulo, valor, detalhe, alerta]) => (
+        <div key={rotulo}>
+          <dt>{rotulo}</dt>
+          <dd className="inventario-valor">{fmt.format(valor)}</dd>
+          <dd className={`inventario-detalhe${alerta ? " alerta" : ""}`}>{detalhe}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Explicações de cálculo, recolhidas por padrão. */
+function ComoCalculamos({ children }: { children: ReactNode }) {
+  return (
+    <details className="como-calculamos">
+      <summary>Como calculamos</summary>
+      <div>{children}</div>
+    </details>
+  );
+}
 
 /**
- * Tela "Visão Geral" (US19/PBI-56) — referência visual: #screen-dashboard do Protótipo V1.
- * Cartões, bases do PDA vigente por situação, status das atualizações pela periodicidade do PDA
- * (ADR-0023) e alertas prioritários. Indicadores que dependem de regra ou módulo ainda não implementados
- * aparecem como "—" com o motivo, nunca como 0.
+ * Tela "Visão Geral" (US19/PBI-56). Ordem pensada para a rotina da GEDA: primeiro o que pede
+ * conferência (indicadores de problema e alertas), depois o inventário e os gráficos de contexto.
+ * Indicadores que dependem de regra ou módulo ainda não implementados aparecem como "—" com o
+ * motivo, nunca como 0.
  */
 export default function DashboardPage() {
   const dados = useQuery({ queryKey: ["painel", "visao-geral"], queryFn: dashboardApi.visaoGeral });
   const d = dados.data;
 
   return (
-    <section className="screen">
-      <PageLede titulo="Visão Geral">
-        Monitoramento do Portal de Dados Abertos de Goiás — camada de governança externa ao CKAN, sem
-        alteração dos dados publicados.
-      </PageLede>
+    <section className="screen painel">
+      <p className="painel-lede">
+        Cumprimento do PDA, atualização real dos recursos e possíveis dados pessoais no Portal de Dados
+        Abertos de Goiás, monitorados fora do CKAN, sem alterar o que está publicado.
+        {d?.ultima_coleta && (
+          <span className="painel-coleta"> Dados da coleta de {fmtDataHora(d.ultima_coleta)}.</span>
+        )}
+      </p>
 
-      <div className="layer-banner">
-        <i className="fa-solid fa-circle-info" />
-        <span>
-          Este painel consolida o cumprimento do PDA, a atualização real dos recursos e sinalizações de
-          possíveis dados pessoais para conferência humana.
-          {d && <> Dados da coleta de <strong>{d.ultima_coleta ? fmtDataHora(d.ultima_coleta) : "—"}</strong>.</>}
-        </span>
-      </div>
-
-      {dados.isError && (
-        <div className="panel"><div className="panel-body">
-          <div className="inline-msg err" role="alert">Não foi possível carregar a visão geral: {dados.error.message}</div>
+      {dados.isError && !d && (
+        <div className="panel"><div className="panel-body painel-erro" role="alert">
+          <p><strong>Não foi possível carregar a visão geral.</strong> Verifique a conexão e tente de novo;
+            se continuar, avise o administrador do sistema.</p>
+          <p className="help-texto">Detalhe técnico: {dados.error.message}</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => dados.refetch()}
+            disabled={dados.isFetching}>
+            <i className="fa-solid fa-rotate-right" aria-hidden="true" />
+            {dados.isFetching ? "Tentando…" : "Tentar novamente"}
+          </button>
         </div></div>
       )}
-      {!d && !dados.isError && <div className="panel"><div className="panel-body cell-muted">Carregando…</div></div>}
+      {!d && !dados.isError && <Esqueleto />}
 
       {d && (
         <>
-          <div className="kpi-grid">
-            {cartoes(d.kpis, d.plano).map((c) => <CartaoKpi key={c.rotulo} c={c} />)}
-          </div>
+          <Problemas k={d.kpis} />
+          <Inventario k={d.kpis} plano={d.plano} />
+          <Alertas d={d} />
 
           <div className="charts-row">
-            <div className="panel" style={{ marginBottom: 0 }}>
-              <div className="panel-head">
-                <div>
-                  <h3>Cumprimento do PDA por situação</h3>
-                  <div className="sub">
-                    {d.plano
-                      ? `${fmt.format(d.kpis.bases_previstas)} bases previstas no ${d.plano.nome}`
-                      : "Nenhum PDA vigente"}
-                  </div>
-                </div>
-              </div>
-              <div className="panel-body">
-                {d.plano ? (
-                  <>
-                    <BarrasHorizontais rotuloAcessivel="Bases do PDA vigente por situação" unidade={["base", "bases"]}
-                      barras={d.situacoes_pda.map((s) => ({ ...s, cor: COR_SITUACAO[s.rotulo] ?? "var(--gray-500)" }))} />
-                    {d.kpis.bases_prazo_vencido > 0 && (
-                      <p className="help-texto" style={{ marginTop: 12 }}>
-                        “Prazo vencido” = base sem vínculo com o portal e meta já passada: o atraso só é confirmado
-                        depois do vínculo ({fmt.format(d.kpis.bases_vinculadas)} de {fmt.format(d.kpis.bases_previstas)} vinculadas).
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="help-texto">Cadastre ou importe um PDA e defina-o como vigente.</p>
-                )}
-              </div>
-            </div>
-
+            <CumprimentoPda d={d} />
             <StatusAtualizacoes d={d} />
           </div>
 
-          <div className="charts-row">
+          <div className={`charts-row${d.dados_pessoais ? "" : " um"}`}>
             <Pode permissao="lgpd.acessar">
               {d.dados_pessoais && <DadosPessoaisPainel p={d.dados_pessoais} />}
             </Pode>
             <EspontaneasPainel e={d.espontaneas} plano={d.plano} />
           </div>
-
-          <Alertas d={d} />
-
-          <div className="panel">
-            <div className="panel-body">
-              <h3 style={{ fontSize: 13.5, marginBottom: 12, color: "var(--gray-700)" }}>Fluxo de governança monitorado</h3>
-              <div className="flow-strip">
-                {FLUXO.map(([icone, rotulo], i) => (
-                  <Fragment key={rotulo}>
-                    <div className="flow-step"><i className={`fa-solid ${icone} step-ico`} />{rotulo}</div>
-                    {i < FLUXO.length - 1 && <i className="fa-solid fa-chevron-right flow-arrow" />}
-                  </Fragment>
-                ))}
-              </div>
-            </div>
-          </div>
         </>
       )}
     </section>
+  );
+}
+
+/** Esqueleto com a forma da tela, enquanto os dados chegam. */
+function Esqueleto() {
+  return (
+    <div className="painel-esqueleto" aria-busy="true" aria-live="polite">
+      <span className="sr-only">Carregando a visão geral…</span>
+      <div className="esq-linha esq-problemas" />
+      <div className="esq-linha esq-inventario" />
+      <div className="esq-linha esq-tabela" />
+    </div>
+  );
+}
+
+function CumprimentoPda({ d }: { d: VisaoGeral }) {
+  return (
+    <div className="panel" style={{ marginBottom: 0 }}>
+      <div className="panel-head">
+        <div>
+          <h2>Cumprimento do PDA por situação</h2>
+          <div className="sub">
+            {d.plano
+              ? `${qtd(d.kpis.bases_previstas, "base prevista", "bases previstas")} no ${d.plano.nome}`
+              : "Nenhum PDA vigente"}
+          </div>
+        </div>
+      </div>
+      <div className="panel-body">
+        {d.plano ? (
+          <>
+            <BarrasHorizontais rotuloAcessivel="Bases do PDA vigente por situação" unidade={["base", "bases"]}
+              barras={d.situacoes_pda.map((s) => ({ ...s, cor: COR_SITUACAO[s.rotulo] ?? "var(--gray-500)" }))} />
+            <ComoCalculamos>
+              <p>
+                “Em atraso” só vale para bases vinculadas a um dataset do portal ({fmt.format(d.kpis.bases_vinculadas)}{" "}
+                de {fmt.format(d.kpis.bases_previstas)}). “Prazo vencido” é a base ainda sem vínculo cuja meta já
+                passou: o atraso só se confirma depois do vínculo.
+              </p>
+            </ComoCalculamos>
+          </>
+        ) : (
+          <p className="help-texto">
+            Cadastre ou importe um PDA e defina-o como vigente na tela <Link to="/pda">Monitoramento do PDA</Link>.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -206,11 +247,13 @@ function StatusAtualizacoes({ d }: { d: VisaoGeral }) {
     <div className="panel" style={{ marginBottom: 0 }}>
       <div className="panel-head">
         <div>
-          <h3>Status das atualizações</h3>
+          <h2>Status das atualizações</h2>
           <div className="sub">
-            {fmt.format(avaliadas)} bases vinculadas do PDA vigente (periodicidade do PDA; base: last_modified)
+            {qtd(avaliadas, "base vinculada", "bases vinculadas")} ao portal
+            {aguardando > 0 && ` · ${qtd(aguardando, "aguarda", "aguardam")} vínculo`}
           </div>
         </div>
+        <Link className="btn btn-outline btn-sm" to="/atualizacoes">Ver atualizações</Link>
       </div>
       <div className="panel-body">
         {avaliadas > 0 ? (
@@ -219,12 +262,22 @@ function StatusAtualizacoes({ d }: { d: VisaoGeral }) {
         ) : (
           <p className="help-texto">Nenhuma base do PDA vigente vinculada a um dataset do portal.</p>
         )}
-        <p className="help-texto" style={{ marginTop: 12 }}>
-          Prazo pela periodicidade do PDA (Mensal = 30 dias, sem tolerância); “próximo do vencimento” a partir
-          de 80% do prazo. Eventual e Estática não têm prazo fixo.
-          {aguardando > 0 && ` ${fmt.format(aguardando)} base(s) aguardando vínculo não entram no gráfico.`}
-          {d.atualizacao_estimada > 0 && ` ${fmt.format(d.atualizacao_estimada)} base(s) sem last_modified usam a data de criação.`}
-        </p>
+        <ComoCalculamos>
+          <p>
+            O prazo segue a periodicidade do PDA (Mensal = 30 dias, sem tolerância), contado da última alteração
+            do recurso no portal (<code>last_modified</code>). “Próximo do vencimento” começa em 80% do prazo.
+            Eventual e Estática não têm prazo fixo.
+          </p>
+          {aguardando > 0 && (
+            <p>{qtd(aguardando, "base aguardando vínculo não entra", "bases aguardando vínculo não entram")} no gráfico.</p>
+          )}
+          {d.atualizacao_estimada > 0 && (
+            <p>
+              {qtd(d.atualizacao_estimada, "base sem data de alteração usa", "bases sem data de alteração usam")}{" "}
+              a data de criação.
+            </p>
+          )}
+        </ComoCalculamos>
       </div>
     </div>
   );
@@ -236,10 +289,10 @@ function DadosPessoaisPainel({ p }: { p: DadosPessoais }) {
     <div className="panel" style={{ marginBottom: 0 }}>
       <div className="panel-head">
         <div>
-          <h3>Possíveis dados pessoais</h3>
+          <h2>Possíveis dados pessoais</h2>
           <div className="sub">
-            {fmt.format(total)} achado(s) em {fmt.format(p.recursos_com_achados)} de{" "}
-            {fmt.format(p.recursos_analisados)} recurso(s) analisado(s)
+            {qtd(total, "achado", "achados")} em {fmt.format(p.recursos_com_achados)} de{" "}
+            {qtd(p.recursos_analisados, "recurso analisado", "recursos analisados")}
           </div>
         </div>
         <Link className="btn btn-outline btn-sm" to="/lgpd">Ver dados pessoais</Link>
@@ -251,32 +304,35 @@ function DadosPessoaisPainel({ p }: { p: DadosPessoais }) {
         ) : (
           <p className="help-texto">
             {p.recursos_analisados ? "Nenhum possível dado pessoal nos recursos analisados."
-              : "Nenhum recurso analisado ainda: rode a varredura na tela Dados Pessoais."}
+              : <>Nenhum recurso analisado ainda: rode a varredura na tela <Link to="/lgpd">Dados Pessoais</Link>.</>}
           </p>
         )}
-        <div className="status-triagem" aria-label="Situação da triagem">
+        <div className="status-triagem" role="group" aria-label="Situação da triagem">
           {p.por_status.map((c) => (
             <span key={c.rotulo}>{c.rotulo} <strong>{fmt.format(c.total)}</strong></span>
           ))}
         </div>
-        <p className="help-texto" style={{ marginTop: 8 }}>
-          Por tipo, sem os descartados como falso positivo. {fmt.format(p.criticos)} de prioridade alta
-          aguardando revisão. Só contagens: o valor encontrado nunca é guardado.
-        </p>
+        <ComoCalculamos>
+          <p>
+            Por tipo, sem os descartados como falso positivo.{" "}
+            {qtd(p.criticos, "achado de prioridade alta aguarda", "achados de prioridade alta aguardam")} revisão.
+            Só contagens: o valor encontrado nunca é guardado.
+          </p>
+        </ComoCalculamos>
       </div>
     </div>
   );
 }
 
 function EspontaneasPainel({ e, plano }: { e: Espontaneas; plano: VisaoGeral["plano"] }) {
-  const pct = e.datasets_no_portal ? Math.round((e.espontaneas / e.datasets_no_portal) * 100) : 0;
   return (
     <div className="panel" style={{ marginBottom: 0 }}>
       <div className="panel-head">
         <div>
-          <h3>Bases espontâneas</h3>
+          <h2>Bases espontâneas</h2>
           <div className="sub">
-            {fmt.format(e.espontaneas)} de {fmt.format(e.datasets_no_portal)} datasets do portal ({pct}%) sem base
+            {fmt.format(e.espontaneas)} de {qtd(e.datasets_no_portal, "dataset", "datasets")} do portal (
+            {pctTexto(e.espontaneas, e.datasets_no_portal)}) sem base
             {plano ? ` no ${plano.nome}` : " no PDA (nenhum PDA vigente)"}
           </div>
         </div>
@@ -289,10 +345,12 @@ function EspontaneasPainel({ e, plano }: { e: Espontaneas; plano: VisaoGeral["pl
         ) : (
           <p className="help-texto">Todos os datasets ativos do portal estão vinculados a uma base do PDA vigente.</p>
         )}
-        <p className="help-texto" style={{ marginTop: 12 }}>
-          Base espontânea: dataset publicado no portal que nenhuma base do PDA vigente vincula pelo ID do CKAN
-          ({fmt.format(e.no_pda)} estão no PDA). Órgãos com mais espontâneas primeiro.
-        </p>
+        <ComoCalculamos>
+          <p>
+            Base espontânea é o dataset publicado no portal que nenhuma base do PDA vigente vincula pelo ID do CKAN
+            ({qtd(e.no_pda, "está", "estão")} no PDA). Órgãos com mais espontâneas aparecem primeiro.
+          </p>
+        </ComoCalculamos>
       </div>
     </div>
   );
@@ -305,54 +363,103 @@ function Situacao({ a }: { a: Alerta }) {
 }
 
 const TIPOS = ["PDA", "Atualização", "Inventário"] as const;
-const NA_ABA_TODOS = 4; // "Todos" mostra os primeiros de cada tipo
+const ABAS = ["Todos", ...TIPOS] as const;
+type Aba = (typeof ABAS)[number];
+const NA_ABA_TODOS = 4; // "Todos" mostra os mais urgentes de cada tipo
+// Onde a lista completa de cada aba é tratada
+const LISTA_COMPLETA: Record<Aba, [string, string]> = {
+  "Todos": ["/pda", "Ver monitoramento do PDA"],
+  "PDA": ["/pda", "Ver monitoramento do PDA"],
+  "Atualização": ["/atualizacoes", "Ver atualizações"],
+  "Inventário": ["/datasets", "Ver datasets"],
+};
 
+/**
+ * Alertas prioritários com abas por tipo. A aba fica na URL (?alertas=PDA), sobrevive a recarregar
+ * e ao voltar do navegador. Abas no padrão WAI-ARIA: setas, Home e End trocam de aba.
+ */
 function Alertas({ d }: { d: VisaoGeral }) {
-  const [aba, setAba] = useState<string>("Todos");
+  const [params, setParams] = useSearchParams();
+  const pedida = params.get("alertas");
+  const aba: Aba = (ABAS as readonly string[]).includes(pedida ?? "") ? (pedida as Aba) : "Todos";
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const escolher = (nova: Aba) => {
+    const p = new URLSearchParams(params);
+    if (nova === "Todos") p.delete("alertas"); else p.set("alertas", nova);
+    setParams(p, { replace: true });
+  };
+  const teclado = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = ABAS.indexOf(aba);
+    const destino = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: ABAS.length - 1 }[e.key];
+    if (destino == null) return;
+    e.preventDefault();
+    const j = (destino + ABAS.length) % ABAS.length;
+    escolher(ABAS[j]);
+    refs.current[j]?.focus();
+  };
+
   const linhas = aba === "Todos"
     ? TIPOS.flatMap((t) => d.alertas.filter((a) => a.tipo === t).slice(0, NA_ABA_TODOS))
       .sort((a, b) => d.alertas.indexOf(a) - d.alertas.indexOf(b))
     : d.alertas.filter((a) => a.tipo === aba);
   const total = aba === "Todos" ? d.total_alertas : (d.alertas_por_tipo[aba] ?? 0);
-  const abas: [string, number][] = [["Todos", d.total_alertas], ...TIPOS.map((t): [string, number] => [t, d.alertas_por_tipo[t] ?? 0])];
+  const contagem = (nome: Aba) => (nome === "Todos" ? d.total_alertas : (d.alertas_por_tipo[nome] ?? 0));
+  const mostraTipo = aba === "Todos";
+  const [destinoLista, rotuloLista] = LISTA_COMPLETA[aba];
+
   return (
-    <div className="panel">
+    <div className="panel painel-alertas">
       <div className="panel-head">
         <div>
-          <h3>Alertas prioritários</h3>
+          <h2 id="alertas-titulo">Alertas prioritários</h2>
           <div className="sub">
-            Itens que exigem conferência da equipe GEDA
-            {total > linhas.length && ` · ${linhas.length} de ${fmt.format(total)}`}
+            {total === 0 ? "Nada pendente de conferência"
+              : total > linhas.length
+                ? `Os ${fmt.format(linhas.length)} mais urgentes de ${fmt.format(total)}`
+                : qtd(total, "item pede conferência da GEDA", "itens pedem conferência da GEDA")}
           </div>
         </div>
-        <Link className="btn btn-outline btn-sm" to="/pda">Ver monitoramento completo</Link>
+        <Link className="btn btn-outline btn-sm" to={destinoLista}>{rotuloLista}</Link>
       </div>
-      <div className="abas-alerta" role="tablist" aria-label="Tipo de alerta">
-        {abas.map(([nome, n]) => (
-          <button key={nome} type="button" role="tab" aria-selected={aba === nome}
-            className={`btn btn-sm ${aba === nome ? "btn-primary" : "btn-outline"}`} onClick={() => setAba(nome)}>
-            {nome} <span className="abas-alerta-n">{fmt.format(n)}</span>
+      <div className="abas-alerta" role="tablist" aria-labelledby="alertas-titulo" onKeyDown={teclado}>
+        {ABAS.map((nome, i) => (
+          <button key={nome} type="button" role="tab" id={`alertas-aba-${i}`} aria-controls="alertas-painel"
+            aria-selected={aba === nome} tabIndex={aba === nome ? 0 : -1}
+            ref={(el) => { refs.current[i] = el; }}
+            className={`btn btn-sm ${aba === nome ? "btn-primary" : "btn-outline"}`} onClick={() => escolher(nome)}>
+            {nome} <span className="abas-alerta-n">{fmt.format(contagem(nome))}</span>
           </button>
         ))}
       </div>
-      <div className="table-scroll" role="tabpanel">
+      <div className="table-scroll" role="tabpanel" id="alertas-painel"
+        aria-labelledby={`alertas-aba-${ABAS.indexOf(aba)}`}>
         <table>
-          <thead><tr><th>Órgão</th><th>Tipo</th><th>Base / Dataset</th><th>Situação</th><th>Prazo</th><th>Ação</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Órgão</th>{mostraTipo && <th>Tipo</th>}<th>Base / Dataset</th><th>Situação</th><th>Prazo</th>
+              <th><span className="sr-only">Ação</span></th>
+            </tr>
+          </thead>
           <tbody>
             {linhas.length === 0 ? (
-              <tr><td colSpan={6} className="table-empty">
+              <tr><td colSpan={mostraTipo ? 6 : 5} className="table-empty">
                 {aba === "PDA" || aba === "Todos"
                   ? "Nenhum alerta. Bases com prazo vencido e sem vínculo não entram aqui: o atraso ainda não foi confirmado."
                   : "Nenhum alerta deste tipo."}
               </td></tr>
             ) : linhas.map((a, i) => (
               <tr key={`${a.tipo}-${a.item}-${i}`}>
-                <td>{a.orgao ?? "—"}</td>
-                <td><span className="badge badge-blue">{a.tipo}</span></td>
+                <td>{a.orgao ?? <span className="cell-muted">Órgão não identificado</span>}</td>
+                {mostraTipo && <td><span className="badge badge-blue">{a.tipo}</span></td>}
                 <td className="cell-strong">{a.item}</td>
                 <td><Situacao a={a} /></td>
-                <td className="cell-muted">{a.prazo ? fmtData(a.prazo) : "—"}</td>
-                <td><Link className="row-link" to={a.destino}>Ver</Link></td>
+                <td className="cell-muted">{a.prazo ? fmtData(a.prazo) : "Sem prazo"}</td>
+                <td>
+                  <Link className="row-link" to={a.destino}>
+                    Abrir<span className="sr-only">: {a.item}</span>
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

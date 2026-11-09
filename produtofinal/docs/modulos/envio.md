@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | **Não comprometido** — fora do escopo do PGP v2 e do Backlog v2 |
+| **Status** | **Não comprometido — tela oculta** (ADR-0033): fora do escopo do PGP v2 e do Backlog v2; não vai para produção |
 | **Responsável** | a definir |
 | **User stories** | nenhuma (requer nova US) |
 | **Backend** | `backend/app/modules/envio/` |
 | **Frontend** | `frontend/src/modules/envio/` |
-| **Última atualização** | 21/10/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Permitir que servidores dos órgãos estaduais acessem a solução apenas para consultar os datasets
@@ -24,7 +24,7 @@ publicador* e o escopo de órgão no controle de acesso.
 |---|---|---|---|
 | Envio de dados do órgão | `/envio` | `envio.acessar` | Enviar recurso (`envio.enviar_recurso`) — a implementar |
 
-Hoje a tela mostra apenas o órgão do usuário e um aviso de funcionalidade em definição.
+**A tela está oculta** (ADR-0033): fica fora do menu e das rotas porque não foi pedida pela CGE-GO e não vai para produção. Os arquivos ficam para uma implementação futura; para reativar, volte a importar `envioModule` e incluí-lo em `MODULOS` (`frontend/src/modules/registry.ts`). O backend continua registrado em `INSTALLED_MODULES`, sem nenhuma rota. Quando ativa, a tela mostra apenas o órgão do usuário e um aviso de funcionalidade em definição.
 
 ## API
 Nenhum endpoint. Toda rota futura deve aplicar o escopo:
@@ -59,7 +59,7 @@ O papel Órgão publicador **exige órgão** vinculado ao usuário.
 Nenhum.
 
 ## Regras de negócio e decisões
-Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
+Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md), [ADR-0033](../adr/0033-tela-de-envio-oculta.md) (tela oculta).
 
 - Usuário de órgão nunca vê dados de outro órgão (`filtrar_por_orgao`, `exigir_mesmo_orgao`).
 
@@ -71,3 +71,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md).
 |---|---|---|
 | 30/09/2026 | Criado como esqueleto não comprometido para o papel Órgão publicador | Victor |
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): contrato `enviar_recurso` recebe o `id` inteiro do dataset | Victor |
+| 09/11/2026 | Tela "Envio de dados do órgão" oculta: sai de `MODULOS` (menu e rotas) e não vai para produção, pois a CGE-GO não a pediu; arquivos mantidos para implementação futura (ADR-0033) | Victor |

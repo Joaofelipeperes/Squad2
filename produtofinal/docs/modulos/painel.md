@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 06/11/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -16,41 +16,49 @@ Superintendência (inclusive para o Prêmio de Transparência).
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Dashboard (Visão Geral) | `/` | `painel.acessar` | Cartões, gráficos e alertas prioritários; **Ver monitoramento completo** e **Ver** de cada alerta levam ao PDA (`/pda?orgao=<chave>`) ou a Datasets; "Atualizar dados" (`inventario.coletar`) |
+| Dashboard (Visão Geral) | `/` | `painel.acessar` | Indicadores de problema (cada um abre a lista filtrada), inventário, alertas e gráficos; o atalho dos alertas leva à lista da aba e **Abrir** de cada alerta leva ao PDA (`/pda?orgao=<chave>`) ou a Datasets; "Atualizar dados" (`inventario.coletar`) |
 | Organizações | `/organizacoes` | `painel.acessar` | Ordenação por coluna e paginação com total no rodapé (ADR-0028); detalhe do órgão (clique ou Enter na linha); **Ver bases no PDA** abre `/pda?orgao=<chave>` (`pda.acessar`); **Gerar relatório** do órgão (`relatorios.acessar`; exportar com `relatorios.exportar`); **Excel** e **PDF** da tabela como está na tela — filtros, ordem e todas as páginas (`relatorios.exportar`, ADR-0031) |
 
 Referência visual: `#screen-dashboard` e `#screen-organizations`. Ressalvas de 17/09: gráficos de
 evolução temporal abaixo dos cards (PBI-75).
 
-**Dashboard** (`DashboardPage.tsx`, `BarrasHorizontais.tsx`):
-- Faixa informativa do protótipo com a **data da última coleta** (PBI-58).
-- **8 cartões**: Órgãos monitorados (pé: órgãos com bases no PDA vigente); Bases previstas no PDA
-  (pé: nome do PDA vigente); Datasets publicados (ativos; pé: quantos saíram do portal); Recursos
-  monitorados (atuais, sem dicionário); **Bases atrasadas** só entre as vinculadas ("—" e
-  "aguardando vínculo" sem nenhuma vinculada); **Atualizações em atraso** (bases vinculadas
-  "Atrasado" pela periodicidade do PDA, ADR-0023); Datasets sem recurso (PBI-51). Possíveis dados
-  pessoais aparece como "—", com o rodapé em branco (nunca 0).
-- **Cumprimento do PDA por situação**: barras horizontais com as 7 situações do PDA vigente (cor de
-  status + rótulo; dica com quantidade e % ao passar o mouse ou com o teclado) e a nota de que
-  "Prazo vencido" ainda não é atraso confirmado.
-- **Status das atualizações** (rosca do protótipo, `Rosca.tsx`): bases **vinculadas** do PDA vigente
-  por situação de atualização (ADR-0023) — Atualizado, Próximo do vencimento, Atrasado, Sem
-  periodicidade definida (hachurado) e Sem informação; legenda fixa com ícone, rótulo, quantidade e
-  %; centro com o total ou a fatia em foco. As bases sem vínculo ficam numa nota abaixo.
+**Dashboard** (`DashboardPage.tsx`, `BarrasHorizontais.tsx`, `Rosca.tsx`). Ordem pensada para a
+rotina da GEDA (crítica de design de 09/11/2026): primeiro o que pede conferência, depois o contexto.
+- **Introdução** de uma frase. A data da última coleta fica na barra superior; em telas estreitas,
+  onde a barra a esconde, aparece no fim da introdução (PBI-58).
+- **Indicadores de problema** numa faixa só, cada um é um link para a lista já filtrada: **Bases
+  atrasadas** (só entre as vinculadas; abre `/pda?situacao=Em atraso`), **Atualizações em atraso**
+  (ADR-0023; abre `/atualizacoes`), **Possíveis dados pessoais** (só com `lgpd.acessar`; abre
+  `/lgpd`) e **Datasets sem recurso** (PBI-51; abre `/datasets`). A cor vem do valor: vermelho ou
+  âmbar com valor > 0, verde com 0, cinza com "—" e o motivo (nunca 0) quando não há base vinculada.
+- **Inventário** numa linha discreta (não cartões): Órgãos monitorados (com bases no PDA), Bases
+  previstas (nome do PDA vigente), Datasets publicados (quantos saíram do portal) e Recursos
+  monitorados (sem dicionário de dados).
 - **Alertas prioritários** em abas **Todos / PDA / Atualização / Inventário** com o total de cada
-  tipo; cada aba mostra até 10 do tipo e "Todos" mostra até 4 de cada tipo, para um tipo numeroso
-  não esconder os outros. Ordem de prioridade: base em atraso confirmado → **atualização
-  atrasada** (tipo "Atualização", prazo = vencimento pela periodicidade) → base vinculada sem
-  recurso → base próxima do prazo → dataset sem recurso (inventário). "Prazo vencido" sem vínculo
-  não vira alerta.
+  tipo; cada aba mostra até 10 do tipo e "Todos" mostra os 4 mais urgentes de cada tipo, para um
+  tipo numeroso não esconder os outros. A aba fica na URL (`?alertas=PDA`) e as abas seguem o
+  padrão WAI-ARIA (setas, Home, End). A coluna Tipo só aparece em "Todos"; o atalho do painel leva
+  à lista da aba. Ordem de prioridade: base em atraso confirmado → **atualização atrasada** (tipo
+  "Atualização", prazo = vencimento pela periodicidade) → base vinculada sem recurso → base próxima
+  do prazo → dataset sem recurso (inventário). "Prazo vencido" sem vínculo não vira alerta.
+- **Cumprimento do PDA por situação**: barras horizontais com as 7 situações do PDA vigente (um tom
+  de status para cada situação + rótulo; dica com quantidade e % ao passar o mouse; o % também é
+  lido pelo leitor de tela).
+- **Status das atualizações** (rosca, `Rosca.tsx`): bases **vinculadas** do PDA vigente por situação
+  de atualização (ADR-0023) — Atualizado, Próximo do vencimento, Atrasado, Sem periodicidade
+  definida (hachurado) e Sem informação; legenda fixa com ícone, rótulo, quantidade e %; atalho
+  **Ver atualizações**.
 - **Possíveis dados pessoais** (só com `lgpd.acessar`, via `<Pode>` e no backend): barras por tipo
   (sem falso positivo), situação da triagem (Revisar, Confirmado, Falso positivo, Tratado),
-  recursos com achados de N analisados e atalho **Ver dados pessoais** (`/lgpd`). O cartão do
-  topo mostra os achados aguardando revisão.
+  recursos com achados de N analisados e atalho **Ver dados pessoais** (`/lgpd`). Sem a permissão,
+  **Bases espontâneas** ocupa a linha inteira.
 - **Bases espontâneas** (ADR-0026): datasets ativos do portal sem base do PDA vigente vinculada
-  pelo ID — total e % no título, barras pelos 10 órgãos com mais espontâneas (o resto em "Outros
-  órgãos (N)") e atalho **Ver datasets**.
-- **Fluxo de governança monitorado** (faixa estática do protótipo).
+  pelo ID — total e % no título ("<1%" quando pequeno, nunca 0% com valor), barras pelos 10 órgãos
+  com mais espontâneas (o resto em "Outros órgãos (N)") e atalho **Ver datasets**.
+- As regras de cálculo de cada gráfico ficam recolhidas em **Como calculamos** (`<details>`).
+- Carregamento com esqueleto (`aria-busy`); erro com mensagem em linguagem simples, detalhe técnico
+  à parte e botão **Tentar novamente**.
+- A faixa estática "Fluxo de governança monitorado" do protótipo foi retirada.
 - Gráficos em HTML/CSS, sem biblioteca de gráficos (nenhuma dependência nova).
 
 **Organizações** (`OrganizacoesPage.tsx`, `OrganizacaoDetalheModal.tsx`):
@@ -193,3 +201,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 05/11/2026 | Organizações: **Últimas alterações** no detalhe do órgão com os últimos eventos da rastreabilidade (`HistoricoRecente`), no lugar do texto pendente. Sem mudança na API | Humberto |
 | 05/11/2026 | Organizações: colunas **Riscos LGPD** e **Índice de atenção** (ADR-0030) — `regras.py` novo (`indice_atencao`, média ponderada com pesos e faixas dos Parâmetros), `criterio_atencao`, campos novos em `OrganizacaoOut`/`OrganizacoesOut`; filtro por faixa, ordenação pelo valor, cartão de dados pessoais e índice explicado no detalhe; `indice_atencao_por_orgao` (stub) removido | Humberto |
 | 06/11/2026 | Organizações: botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031); Riscos LGPD só entra no arquivo com `lgpd.acessar` | Humberto |
+| 09/11/2026 | Dashboard reorganizado pela crítica de design: indicadores de problema clicáveis com cor vinda do valor, inventário em linha, alertas logo abaixo (aba na URL, abas por teclado, coluna Tipo só em "Todos", link com o nome do item), regras recolhidas em "Como calculamos", esqueleto e erro com "Tentar novamente", faixa "Fluxo de governança" retirada; gráficos sem parada de Tab por barra. Sem mudança na API | Victor |
