@@ -9,7 +9,7 @@ from typing import NamedTuple
 from sqlalchemy.orm import Session
 
 from app.core import crypto
-from app.core.config import CKAN_LOCAL_DOCKER, get_settings
+from app.core.config import CKAN_LOCAL_DOCKER, CKAN_PORTAL_OFICIAL, get_settings
 from app.core.db import SessionLocal
 from app.integrations.ckan.client import CkanClient
 from app.modules.ckan_config.dao import CkanConfigDao
@@ -17,6 +17,7 @@ from app.modules.ckan_config.models import CkanPerfil
 from app.modules.ckan_config.schemas import PerfilCkanIn, PerfilCkanOut
 
 NOME_PERFIL_DOCKER = "CKAN Docker"
+NOME_PERFIL_PORTAL = "Portal de Dados Abertos GO"
 
 
 class PerfilNaoEncontrado(Exception):
@@ -133,16 +134,25 @@ def selecionar(db: Session, perfil_id: int, user) -> PerfilCkanOut:
 
 
 # ------------------------------------------------------------------ seed inicial
-def semear_perfil_docker(db: Session) -> None:
-    """Na primeira subida, grava as configurações do CKAN local do Docker como o perfil em uso."""
+def semear_perfil_inicial(db: Session) -> None:
+    """Na primeira subida (nenhum perfil gravado), grava o CKAN lido como o perfil em uso, para ele
+    aparecer na tela Configurações CKAN:
+    - produção (servidores da UFG e da CGE, ADR-0032): o portal oficial (`GDA_CKAN_BASE_URL`, que
+      vazio é https://dadosabertos.go.gov.br — ADR-0024). O CKAN local do Docker não vai ao servidor;
+    - dev e homologação: o CKAN local do Docker (docker-compose.ckan-local.yml)."""
+    s = get_settings()
     dao = CkanConfigDao(db)
     if dao.existe_algum():
         return
-    s = get_settings()
     env_token = s.ckan_auditoria_api_token
     token = env_token.get_secret_value().strip() if env_token else ""
+    if s.environment == "producao":
+        base = (s.ckan_base_url or CKAN_PORTAL_OFICIAL).rstrip("/")
+        nome, auditoria = NOME_PERFIL_PORTAL, (s.ckan_auditoria_base_url or "").rstrip("/") or None
+    else:
+        nome, base, auditoria = NOME_PERFIL_DOCKER, CKAN_LOCAL_DOCKER, CKAN_LOCAL_DOCKER
     perfil = CkanPerfil(
-        nome=NOME_PERFIL_DOCKER, base_url=CKAN_LOCAL_DOCKER, auditoria_base_url=CKAN_LOCAL_DOCKER,
+        nome=nome, base_url=base, auditoria_base_url=auditoria,
         auditoria_api_token_cifrada=crypto.encrypt(token) if token else None,
         auditoria_api_token_dica=crypto.hint(token) if token else None, selecionado=True)
     dao.salvar(perfil)

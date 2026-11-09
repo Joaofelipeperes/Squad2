@@ -225,3 +225,34 @@ def excluir_perfil(db: Session, perfil: PerfilProvedorIA, usuario_id: int | None
 
 def listar_usos(db: Session, limite: int):
     return IaDao(db).usos(limite)
+
+
+# ------------------------------------------------------------------ IA local do servidor
+def configurar_ia_local(db: Session, url: str, modelo_chat: str, modelo_embeddings: str,
+                        autor: str = "sistema") -> list[str]:
+    """Perfis do Ollama do servidor (ADR-0032) e vínculo das tarefas da varredura LGPD, que
+    processam dado pessoal e por isso só rodam em modelo local (ADR-0002). Idempotente: cria só os
+    perfis que faltam (pelo nome) e vincula só as tarefas ainda sem perfil; o que o administrador
+    escolheu na tela Modelos de IA fica como está. O Assistente (modelo externo, com chave de API)
+    não é tocado: o administrador o configura depois. Devolve o que foi feito, para o log."""
+    perfis = {
+        TarefaIA.CLASSIFICACAO_DADO_PESSOAL: PerfilIn(
+            nome=f"Ollama local — {modelo_chat}", tipo="ollama", modelo=modelo_chat,
+            base_url=url, execucao_local=True, temperatura=0, timeout_s=300),
+        TarefaIA.EMBEDDINGS_DADO_PESSOAL: PerfilIn(
+            nome=f"Ollama local — {modelo_embeddings} (embeddings)", tipo="ollama",
+            modelo=modelo_embeddings, base_url=url, execucao_local=True, timeout_s=120),
+    }
+    feito: list[str] = []
+    vinculadas = {t.tarefa: t.perfil_id for t in listar_tarefas(db)}
+    for tarefa, dados in perfis.items():
+        perfil = perfil_por_nome(db, dados.nome)
+        if perfil is None:
+            perfil = salvar_perfil(db, dados)
+            feito.append(f"Perfil criado: {dados.nome}")
+        if vinculadas.get(tarefa) is None:
+            vincular(db, tarefa, VinculoIn(perfil_id=perfil.id), autor)
+            feito.append(f"Tarefa {tarefa.value} vinculada a {dados.nome}")
+        else:
+            feito.append(f"Tarefa {tarefa.value} já tem perfil escolhido; mantida.")
+    return feito

@@ -1,5 +1,6 @@
 # Nunca versionar (CLAUDE.md, regra 6): segredos, bancos locais e artefatos de build
 .env
+.env.tmp
 *.db
 *.sqlite
 *.sqlite3

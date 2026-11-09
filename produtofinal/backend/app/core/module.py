@@ -26,4 +26,6 @@ class BackendModule:
     tags: list[str]
     router: APIRouter | None = None
     jobs: list[JobSpec] = field(default_factory=list)
+    # Executadas uma vez quando o worker inicia, em segundo plano (ex.: primeira coleta, ADR-0032)
+    ao_iniciar_worker: list[Callable[[], None]] = field(default_factory=list)
     user_stories: list[str] = field(default_factory=list)  # rastreabilidade com o backlog

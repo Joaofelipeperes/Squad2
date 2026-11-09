@@ -1,7 +1,7 @@
 """Configurações CKAN (ADR-0024): perfis de conexão e troca do CKAN em uso."""
 import pytest
 
-from app.core.config import CKAN_LOCAL_DOCKER
+from app.core.config import CKAN_LOCAL_DOCKER, CKAN_PORTAL_OFICIAL, Settings
 from app.core.db import SessionLocal
 from app.modules.ckan_config import service
 from app.modules.ckan_config.schemas import PerfilCkanIn
@@ -15,13 +15,25 @@ def _novo(nome, base="http://ckan-a:5000", aud=None, token=None):
 
 def test_seed_cria_perfil_docker_selecionado():
     with SessionLocal() as db:
-        service.semear_perfil_docker(db)
-        service.semear_perfil_docker(db)  # idempotente
+        service.semear_perfil_inicial(db)
+        service.semear_perfil_inicial(db)  # idempotente
         perfis = service.listar(db)
     assert [p.nome for p in perfis] == [service.NOME_PERFIL_DOCKER]
     docker = perfis[0]
     assert docker.selecionado is True
     assert docker.base_url == CKAN_LOCAL_DOCKER and docker.auditoria_base_url == CKAN_LOCAL_DOCKER
+
+
+def test_seed_em_producao_grava_o_portal_oficial(monkeypatch):
+    # No servidor (UFG/CGE, ADR-0032) não existe o CKAN local: o perfil em uso é o portal oficial
+    s = Settings(environment="producao", secret_key="x" * 40, encryption_key="k")
+    monkeypatch.setattr(service, "get_settings", lambda: s)
+    with SessionLocal() as db:
+        service.semear_perfil_inicial(db)
+        perfis = service.listar(db)
+    assert [(p.nome, p.base_url, p.selecionado) for p in perfis] == [
+        (service.NOME_PERFIL_PORTAL, CKAN_PORTAL_OFICIAL, True)]
+    assert perfis[0].auditoria_base_url is None  # auditoria = o próprio portal
 
 
 def test_primeiro_perfil_entra_em_uso_e_troca_atualiza_tudo():

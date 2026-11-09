@@ -7,7 +7,7 @@
 | **User stories** | US11, US28 (PBI-96) |
 | **Backend** | `backend/app/modules/ia/` · adaptadores em `backend/app/integrations/ai/` |
 | **Frontend** | `frontend/src/modules/ia/` |
-| **Última atualização** | 27/10/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Permite trocar entre modelos locais e comerciais sem alterar código e garante que dados pessoais
@@ -121,3 +121,4 @@ Decisões registradas: [ADR-0002](../adr/0002-camada-ia-plugavel.md) · [ADR-001
 | 23/10/2026 | Campos adicionais por provedor gravados em `extra` (tela, API e teste de conexão); campo "ID do workspace" no `anthropic` | Squad 2 |
 | 26/10/2026 | Embeddings no contrato (`embed`) e no gateway; tarefa `embeddings_dp` (filtro semântico da varredura LGPD); `think: false` com fallback no Ollama; tipo da tarefa na API e na tela | Squad 2 |
 | 27/10/2026 | Merge com `desenvolvimento`: `embed`, `configurada` e o teste de embedding pelo `IaDao` (`vinculos_do_perfil`); `extra` devolvido com `atualizado_em` = `changed` | Luiza |
+| 09/11/2026 | `service.configurar_ia_local` (veio do `app/cli.py`): na primeira subida do servidor, sem nenhum perfil de IA, a API cria os perfis do Ollama (`qwen2.5:7b-instruct` e `bge-m3`) e vincula as tarefas da varredura LGPD; o Assistente (modelo externo com chave) fica sem perfil (ADR-0032). Teste em `test_instalacao.py` | Victor |

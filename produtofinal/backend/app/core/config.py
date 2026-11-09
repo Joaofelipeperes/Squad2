@@ -88,6 +88,25 @@ class Settings(BaseSettings):
     # False (padrão): tarefas que tocam dado pessoal só podem usar provedor marcado como LOCAL.
     ia_permitir_externo_para_sensivel: bool = False
 
+    # Primeira subida no servidor (ADR-0032): o que a API e o worker preparam sozinhos, para o
+    # `docker compose up -d` deixar o sistema pronto. Tudo desligado por padrão (dev e testes);
+    # o docker-compose.prod.yml liga.
+    # Papéis do catálogo criados automaticamente. Vazio = todos (dev); no servidor, só
+    # administrador e gerente_geda: os demais a GEDA cria na tela Usuários e papéis.
+    papeis_iniciais: list[str] = []
+    # Administrador criado quando o banco não tem nenhum usuário. A senha inicial é trocada pelo
+    # próprio administrador no primeiro acesso (aviso no log enquanto não for).
+    admin_inicial_email: str | None = None
+    admin_inicial_nome: str = "Administrador"
+    admin_inicial_senha: SecretStr = SecretStr("12345")
+    # Perfis de IA local criados quando ainda não há nenhum perfil de IA (Ollama do compose).
+    # O modelo externo (chave de API, ex.: Assistente) fica para o administrador configurar.
+    ia_local_url: str | None = None
+    ia_local_modelo_chat: str = "qwen2.5:7b-instruct"
+    ia_local_modelo_embeddings: str = "bge-m3"
+    # Worker dispara a coleta do CKAN ao iniciar se nunca houve nenhuma (depois, só no cron)
+    coleta_inicial: bool = False
+
     @model_validator(mode="after")
     def _ckan_do_ambiente(self) -> "Settings":
         if self.environment not in AMBIENTES:

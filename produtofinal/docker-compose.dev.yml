@@ -24,7 +24,11 @@ services:
       - ./frontend:/web
       - /web/node_modules
 
+  # O "polling" lê a pasta do Windows (montagem 9p do WSL2), que às vezes devolve erro passageiro
+  # ("Cannot allocate memory", os error 12). O vigia de arquivos morre junto e o container para:
+  # o restart abaixo o põe de pé de novo sozinho.
   api:
+    restart: unless-stopped
     command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --forwarded-allow-ips '*' --reload --reload-dir app"]
     environment:
       WATCHFILES_FORCE_POLLING: "true"
@@ -32,6 +36,7 @@ services:
       - ./backend:/app
 
   worker:
+    restart: unless-stopped
     command: ["watchfiles", "--filter", "python", "python -m app.worker", "app"]
     environment:
       WATCHFILES_FORCE_POLLING: "true"

@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -72,7 +72,13 @@ Serviço (`modules/acesso/service.py`):
 - `autenticar(db, email, senha)` — valida e registra `ultimo_acesso` (auditoria: o próprio usuário).
   Usuário excluído não autentica e o token dele deixa de valer.
 - `sincronizar_papeis_padrao(db)` — cria papéis do catálogo que faltam e exclui (logicamente) permissões órfãs;
-  não sobrescreve ajustes feitos na tela. Roda na subida da API.
+  não sobrescreve ajustes feitos na tela. Roda na subida da API. Com `GDA_PAPEIS_INICIAIS` (servidor,
+  ADR-0032) cria só os papéis listados — no servidor, `administrador` e `gerente_geda`; os demais a
+  GEDA cria na tela.
+- `semear_admin_inicial(db)` — com `GDA_ADMIN_INICIAL_EMAIL` e o banco sem nenhum usuário, cria o
+  administrador com `GDA_ADMIN_INICIAL_SENHA` (padrão `12345`; não passa pela regra de 8 caracteres,
+  é provisória). Enquanto a senha não for trocada, cada subida da API registra um aviso no log.
+  Chamado pela preparação da API (`app/instalacao.py`).
 - `salvar_usuario(db, dados, usuario=None, editor=None)` · `excluir_usuario(db, usuario, editor=None)`
   (exclusão lógica; sem rota na API por ora; bloqueada se for o último administrador ativo) ·
   `criar_usuario(...)` (CLI/testes) · `orgao_por_referencia(db, id_ckan_ou_name)` (CLI).
@@ -150,7 +156,8 @@ sobrescreve ajustes. Conceda pela tela Usuários e papéis (ex.: `pda.gerenciar_
 | é consumido por | todos | o middleware `log_de_acesso` registra toda requisição de qualquer módulo em `acesso_log` |
 
 ## Jobs agendados
-Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.py`).
+Nenhum. A sincronização de papéis e o administrador inicial rodam na subida da API (`lifespan` em
+`main.py` → `app/instalacao.py`, ADR-0032).
 
 ## Regras de negócio e decisões
 Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-0016](../adr/0016-log-de-acesso-no-banco.md) (log de acesso).
@@ -191,3 +198,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 22/10/2026 | Banco só pelo `AcessoDao` (ADR-0019): exclusão lógica de papéis (com vínculos) e de usuários (`excluir_usuario`); vínculos usuário–papel e papel–permissão viram tabelas com `id` e são trocados por exclusão lógica + criação; auditoria `created_id`/`changed_id` com o editor; e-mail e código únicos só entre ativos | Victor |
 | 26/10/2026 | Permissão `lgpd.varrer` (pedir varredura LGPD) para Administrador e Gerência GEDA. Em banco já existente, o papel Gerência não recebe a permissão sozinho: incluir na tela Usuários e papéis | Squad 2 |
 | 05/11/2026 | Log de acesso paginado e ordenado no banco (ADR-0028): `GET /logs` devolve `LogsAcessoOut` (`total`, `pagina`, `por_pagina`, `ate_id`, `registros`) com `pagina`, `por_pagina` (até 999 na tela, 5.000 na exportação), `ordenar`, `direcao` e `ate_id` (fixa o fim da lista entre páginas); o seletor de limite sai da tela. Tela Usuários e papéis: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028). Middleware `sem_cache_na_api` em `main.py`: toda resposta da API com `Cache-Control: no-store` (ADR-0029) | Victor |
+| 09/11/2026 | Servidor (ADR-0032): `GDA_PAPEIS_INICIAIS` limita os papéis criados na subida (no servidor, só Administrador e Gerência de Dados Abertos); `semear_admin_inicial` cria o administrador inicial (`admin@cge.go.gov.br` / `12345` no compose de produção) quando o banco não tem usuário e avisa no log enquanto a senha inicial não for trocada; `AcessoDao.existe_usuario`. Testes em `test_instalacao.py` | Victor |

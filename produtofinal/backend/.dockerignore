@@ -1,0 +1,15 @@
+# Fora da imagem (ADR-0032): segredos, dados pessoais da anonimização e artefatos locais
+.env
+.env.*
+dados_lgpd/
+*.db
+*.sqlite
+*.sqlite3
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

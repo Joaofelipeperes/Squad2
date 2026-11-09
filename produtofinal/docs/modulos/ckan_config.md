@@ -22,7 +22,11 @@ CKAN as próximas leituras vêm.
 `service.config_ativa()` lê o perfil `selecionado` do banco a cada construção de cliente
 (`cliente_leitura`, `cliente_auditoria`), então a troca é imediata e vale para a API e o worker.
 Sem nenhum perfil, cai para o `.env` (compatível com quem ainda não abriu a tela). Na primeira
-subida, `semear_perfil_docker` grava o CKAN local do Docker como o perfil "CKAN Docker" em uso.
+subida (nenhum perfil gravado), `semear_perfil_inicial` grava o CKAN lido como perfil em uso: com
+`GDA_ENVIRONMENT=producao` (servidores da UFG e da SECTI/CGE, ADR-0032), o "Portal de Dados Abertos
+GO" (`GDA_CKAN_BASE_URL`, vazio = https://dadosabertos.go.gov.br); em dev e homologação, o "CKAN
+Docker" local. Chamado pela preparação da API a cada subida (`app/instalacao.py`); não mexe em
+perfis já gravados.
 
 ## Rotas
 - `GET /ckan-config/perfis` — lista os perfis.
@@ -30,3 +34,9 @@ subida, `semear_perfil_docker` grava o CKAN local do Docker como o perfil "CKAN 
 - `PUT /ckan-config/perfis/{id}` — edita (token: ausente = mantém, vazio = remove, texto = troca).
 - `DELETE /ckan-config/perfis/{id}` — exclui (não permite excluir o perfil em uso).
 - `POST /ckan-config/perfis/{id}/selecionar` — passa a usar este CKAN em todo o sistema.
+
+## Histórico de alterações
+| Data | Alteração | Autor |
+|---|---|---|
+| 06/11/2026 | `semear_perfil_docker` não grava o perfil "CKAN Docker" com `GDA_ENVIRONMENT=producao`: no servidor (UFG/CGE, ADR-0032) a coleta tentava o CKAN local inexistente e falhava. Teste `test_seed_nao_grava_perfil_docker_em_producao` | Victor |
+| 09/11/2026 | `semear_perfil_docker` vira `semear_perfil_inicial` e, em produção, grava o perfil "Portal de Dados Abertos GO" (portal oficial) em uso, para a tela mostrar o CKAN lido no servidor (ADR-0032, revisão da ADR-0024). Chamado por `app/instalacao.py`. Teste `test_seed_em_producao_grava_o_portal_oficial` | Victor |

@@ -6,9 +6,10 @@ COPY . .
 RUN npm run build
 
 FROM nginx:1.27-alpine
-# Template: a imagem do nginx aplica envsubst (só variáveis definidas) e gera conf.d/default.conf
-COPY nginx.conf /etc/nginx/templates/default.conf.template
-# Proxy reverso confiável para o IP real (ADR-0016); o docker-compose sobrescreve pelo .env
-ENV GDA_PROXY_CONFIAVEL=127.0.0.1
+# Configuração montada ao iniciar por 30-gda-config.sh (ADR-0032): modo HTTP atrás de proxy ou
+# HTTPS próprio (certificado em /etc/nginx/certs), proxy confiável pelo GDA_PROXY_CONFIAVEL
+COPY nginx/*.conf /etc/nginx/gda/
+COPY nginx/30-gda-config.sh /docker-entrypoint.d/30-gda-config.sh
+RUN chmod +x /docker-entrypoint.d/30-gda-config.sh && rm -f /etc/nginx/conf.d/default.conf
 COPY --from=build /web/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 80 443

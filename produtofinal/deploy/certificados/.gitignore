@@ -1,0 +1,4 @@
+# Certificados e chaves nunca entram no repositório
+*
+!.gitignore
+!LEIAME.md

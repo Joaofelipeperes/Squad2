@@ -69,6 +69,10 @@ a fonte.
 | 05/11/2026 | Tela Datasets mostra e filtra o tipo de base (prevista × espontânea) | Negócio | Revisão da ADR-0026 | [ADR-0026](0026-base-espontanea-dataset-sem-vinculo-no-pda-vigente.md) |
 | 05/11/2026 | Índice de atenção por órgão = média ponderada do risco LGPD (% dos recursos varridos com achado em aberto) e do atraso de atualização, pesos 70/30 e faixas 25/50 em Parâmetros | Negócio | Aceita (validar com a GEDA) | [ADR-0030](0030-indice-de-atencao-por-media-ponderada.md) |
 | 06/11/2026 | Tabelas das telas (PDA, Atualizações, Organizações, Datasets) exportadas para Excel e PDF pelo backend, a partir das linhas que a tela mostra (`POST /relatorios/tabela/exportar`) | Técnica | Proposta | [ADR-0031](0031-exportacao-das-tabelas-das-telas.md) |
+| 05/11/2026 | IP real no log só do nginx do container (API) e do proxy configurado (nginx); IP forjado chamando a API direto deixa de ser aceito | Técnica | Revisão da ADR-0016 | [ADR-0016](0016-log-de-acesso-no-banco.md) |
+| 09/11/2026 | Entrega em servidor (VM da UFG e SECTI/CGE-GO) como código-fonte com `docker-compose.prod.yml` que se prepara sozinho no `docker compose up -d`: segredos gerados num volume, papéis Administrador e Gerência de Dados Abertos, admin inicial com senha padrão, portal oficial, IA local do Ollama e primeira coleta; API só alcançável pelo nginx; HTTPS por proxy ou certificado próprio | Técnica | Aceita | [ADR-0032](0032-entrega-por-codigo-fonte-com-subida-automatica.md) |
+| 09/11/2026 | Em produção, a 1ª subida grava o perfil "Portal de Dados Abertos GO" (portal oficial) em uso na tela Configurações CKAN | Técnica | Revisão da ADR-0024 | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
+| 09/11/2026 | API e worker do modo desenvolvimento com `restart: unless-stopped` (vigia de arquivos cai com erro passageiro da pasta montada do Windows) | Técnica | Revisão da ADR-0017 | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
 
 ## Decisões em aberto
 
