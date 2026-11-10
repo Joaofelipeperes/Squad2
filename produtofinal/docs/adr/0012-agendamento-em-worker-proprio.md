@@ -57,3 +57,4 @@ A confirmar na decisão de implantação (PBI-102).
 | Data | Revisão | Autor |
 |---|---|---|
 | 29/10/2026 | O worker passa a executar também a fila da varredura LGPD (job `lgpd.fila_varredura`, a cada minuto — ADR-0025). Ciclo longo faz o APScheduler pular as execuções seguintes do mesmo job (`max_instances=1`), o que é o esperado | Victor |
+| 10/11/2026 | O worker passa a executar também os backups internos do banco (`backup.diario` 00:00, `backup.mensal` 00:00 do dia 1 e `backup.limpeza` 01:00 — ADR-0034) | João |

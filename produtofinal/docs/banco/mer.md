@@ -4,7 +4,7 @@
 > Não edite à mão: altere o modelo (ou sua docstring), crie a migração e rode o script.
 > Convenções de modelagem: [convencoes.md](convencoes.md) · Decisão: [ADR-0013](../adr/0013-banco-de-dados-e-convencoes.md) · [ADR-0019](../adr/0019-dao-exclusao-logica-e-auditoria.md).
 
-24 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, `created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), omitidas do diagrama e listadas no dicionário de dados.
+25 tabelas · linhas contínuas = chave estrangeira · linhas tracejadas = referência lógica sem FK (ver tabela ao final). Toda tabela tem ainda `deleted`, `created`, `created_id`, `changed` e `changed_id` (exclusão lógica e auditoria), omitidas do diagrama e listadas no dicionário de dados.
 
 ## Diagrama
 
@@ -288,6 +288,20 @@ erDiagram
         text auditoria_api_token_cifrada
         varchar auditoria_api_token_dica
         bool selecionado
+    }
+    backup_copia {
+        int id PK
+        varchar tipo
+        varchar referencia
+        varchar situacao
+        varchar formato
+        datetime iniciado_em
+        datetime concluido_em
+        datetime expira_em
+        int tamanho_bytes
+        varchar sha256
+        text erro
+        other conteudo
     }
     acesso_papel ||--o{ acesso_papel_permissao : "papel_id"
     usuario ||--o{ acesso_usuario_papel : "usuario_id"
@@ -944,3 +958,32 @@ Perfil de conexão com um CKAN. Um fica `selecionado` e rege todo o sistema (sob
 | `changed_id` | int | sim |  |  |  |
 
 Índices: `uq_ckan_perfil_nome`
+
+### Módulo `backup` — backup
+Documentação do módulo: [docs/modulos/backup.md](../modulos/backup.md)
+
+#### `backup_copia`
+
+Cópia completa do banco da aplicação, guardada cifrada na própria tabela (ADR-0034). Uma por tipo e referência: diário = data (AAAA-MM-DD, guardado 7 dias); mensal = mês que terminou (AAAA-MM, guardado 1 ano). Vencido: a linha é excluída logicamente e o `conteudo` é liberado.
+
+| Coluna | Tipo | Nulo | Chave | Referência | Padrão |
+|---|---|:-:|---|---|---|
+| `id` | int | não | PK |  |  |
+| `tipo` | varchar(10) | não |  |  |  |
+| `referencia` | varchar(10) | não |  |  |  |
+| `situacao` | varchar(10) | não |  |  |  |
+| `formato` | varchar(20) | sim |  |  |  |
+| `iniciado_em` | datetime | não |  |  |  |
+| `concluido_em` | datetime | sim |  |  |  |
+| `expira_em` | datetime | não |  |  |  |
+| `tamanho_bytes` | int | sim |  |  |  |
+| `sha256` | varchar(64) | sim |  |  |  |
+| `erro` | text | sim |  |  |  |
+| `conteudo` | BLOB | sim |  |  |  |
+| `deleted` | bool | não |  |  | `False` |
+| `created` | datetime | não |  |  | função |
+| `created_id` | int | sim |  |  |  |
+| `changed` | datetime | não |  |  | função |
+| `changed_id` | int | sim |  |  |  |
+
+Índices: `ix_backup_copia_expira_em`, `uq_backup_copia_tipo_referencia`

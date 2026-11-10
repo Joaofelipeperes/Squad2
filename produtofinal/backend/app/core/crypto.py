@@ -36,6 +36,18 @@ def decrypt(token: str) -> str:
         raise RuntimeError("Não foi possível decifrar o segredo armazenado.") from exc
 
 
+def encrypt_bytes(dados: bytes) -> bytes:
+    """Cifra um conteúdo binário (ex.: backup do banco, ADR-0034) com a mesma chave mestra."""
+    return _fernet().encrypt(dados)
+
+
+def decrypt_bytes(token: bytes) -> bytes:
+    try:
+        return _fernet().decrypt(token)
+    except InvalidToken as exc:  # chave mestra trocada ou dado corrompido
+        raise RuntimeError("Não foi possível decifrar o conteúdo armazenado.") from exc
+
+
 def hint(plain: str) -> str:
     """Dica exibível de um segredo, sem revelá-lo: ••••1a2b."""
     return "••••" + plain[-4:] if len(plain) >= 8 else "••••"
