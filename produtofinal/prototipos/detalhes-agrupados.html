@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Protótipo — janelas de detalhe agrupadas</title>
+<style>
+/* Tokens do protótipo V1 aprovado (prototipo-v1.css): nenhuma cor nova */
+:root{
+  --navy-900:#0c2338;--navy-800:#0f2c46;--navy-700:#163f61;--blue-500:#1d6fa5;--blue-100:#e3eef6;
+  --green-600:#2f7a4f;--green-100:#e4f2e9;--amber-600:#a8710f;--amber-100:#faf0dc;
+  --red-600:#af3527;--red-100:#f8e6e3;
+  --gray-50:#f3f5f8;--gray-100:#eef1f5;--gray-200:#dfe4ea;--gray-300:#c7cfd8;--gray-500:#7c8a99;--gray-700:#425160;
+  --ink:#1c2733;--surface:#fff;--radius-sm:4px;--radius-md:6px;
+  --shadow-2:0 8px 24px rgba(12,35,56,.14);
+  font-size:15px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--gray-100)}
+h1,h2,h3,h4{margin:0;font-weight:700;letter-spacing:-.01em}
+p{margin:0}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace}
+
+/* ---- barra de escolha do protótipo (não faz parte da tela) ---- */
+.proto{background:var(--navy-900);color:#fff;padding:12px 24px;display:flex;flex-wrap:wrap;gap:10px 28px;align-items:center;position:sticky;top:0;z-index:20}
+.proto b{font-size:13px;letter-spacing:.02em}
+.grupo{display:flex;gap:0;border:1px solid rgba(255,255,255,.28);border-radius:var(--radius-md);overflow:hidden}
+.grupo button{background:transparent;color:#cfe0ee;border:0;border-right:1px solid rgba(255,255,255,.28);padding:7px 14px;font:inherit;font-size:13px;cursor:pointer}
+.grupo button:last-child{border-right:0}
+.grupo button[aria-pressed=true]{background:#fff;color:var(--navy-900);font-weight:700}
+.grupo button:focus-visible{outline:2px solid #fff;outline-offset:-3px}
+.nota-proto{max-width:1100px;margin:18px auto 0;padding:0 24px;font-size:13px;color:var(--gray-700)}
+.nota-proto strong{color:var(--ink)}
+
+/* ---- fundo escurecido + janela ---- */
+.palco{padding:24px 16px 48px}
+.modal{background:var(--surface);width:100%;max-width:800px;border-radius:8px;box-shadow:var(--shadow-2);overflow:hidden;border:1px solid var(--gray-200)}
+.modal-head{display:flex;justify-content:space-between;gap:16px;padding:18px 22px 14px;border-bottom:1px solid var(--gray-200)}
+.modal-head h3{font-size:16px}
+.modal-head .sub{font-size:12.5px;color:var(--gray-500);margin-top:3px}
+.x{width:30px;height:30px;border-radius:var(--radius-md);border:0;background:var(--gray-100);color:var(--gray-700);font-size:16px;cursor:pointer;flex:none}
+.modal-body{padding:0 22px 6px}
+.modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 22px;border-top:1px solid var(--gray-200);background:var(--gray-50)}
+.btn{font:inherit;font-size:13px;font-weight:600;padding:7px 13px;border-radius:var(--radius-md);border:1px solid var(--gray-300);background:#fff;color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--navy-700);border-color:var(--navy-700);color:#fff}
+.btn.ghost{border-color:transparent;color:var(--blue-500)}
+.btn.danger{border-color:var(--red-600);color:var(--red-600)}
+.btn.ok{border-color:var(--green-600);color:var(--green-600)}
+
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.b-green{background:var(--green-100);color:var(--green-600)}
+.b-amber{background:var(--amber-100);color:var(--amber-600)}
+.b-red{background:var(--red-100);color:var(--red-600)}
+.b-gray{background:var(--gray-100);color:var(--gray-700)}
+.b-blue{background:var(--blue-100);color:var(--blue-500)}
+
+/* ---- NOVO: faixa-resumo no topo ---- */
+.resumo{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:center;padding:14px 0;border-bottom:1px solid var(--gray-200)}
+.resumo .badges{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 100%}
+.fato{display:flex;flex-direction:column}
+.fato .n{font-size:17px;font-weight:800;color:var(--navy-900)}
+.fato .l{font-size:11.5px;color:var(--gray-500)}
+
+/* ---- NOVO: seção agrupada ---- */
+.sec{padding:16px 0 4px;border-bottom:1px solid var(--gray-200)}
+.sec:last-child{border-bottom:0}
+.sec-t{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.sec-t h4{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--navy-700)}
+.sec-t .ico{width:20px;height:20px;border-radius:var(--radius-sm);background:var(--blue-100);color:var(--blue-500);display:grid;place-items:center;font-size:11px;font-weight:800}
+.sec-t .hint{margin-left:auto;font-size:11.5px;color:var(--gray-500)}
+.grade{display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;margin-bottom:14px}
+.grade .full{grid-column:1/-1}
+.it label{display:block;font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.03em;font-weight:700;margin-bottom:3px}
+.it .v{font-size:13.5px;font-weight:600;color:var(--ink)}
+.it .v.mono{font-weight:500;word-break:break-all}
+.it .v.leve{font-weight:400}
+.it .nota{font-size:12px;color:var(--gray-500);font-weight:400;margin-top:2px}
+.vazio{color:var(--gray-500);font-weight:500}
+
+table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--gray-500);padding:6px 10px;border-bottom:1px solid var(--gray-200);background:var(--gray-50)}
+td{padding:8px 10px;border-bottom:1px solid var(--gray-100)}
+.linha-hist{display:flex;gap:12px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--gray-100)}
+.linha-hist time{color:var(--gray-500);flex:none;width:92px}
+
+/* KPIs agrupados (organização) */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-md);padding:10px 12px}
+.kpi .n{font-size:20px;font-weight:800;color:var(--navy-900)}
+.kpi .l{font-size:11.5px;color:var(--gray-500);margin-top:2px}
+.kpi.alerta .n{color:var(--red-600)}
+.indice{display:flex;align-items:center;gap:16px;padding:14px 0;border-bottom:1px solid var(--gray-200)}
+.indice .n{font-size:34px;font-weight:800;color:var(--amber-600);line-height:1}
+.indice .t{font-size:12px;color:var(--gray-500)}
+.barra{height:8px;background:var(--gray-100);border-radius:4px;overflow:hidden;margin-top:6px}
+.barra i{display:block;height:100%;background:var(--blue-500)}
+.callout{display:flex;gap:10px;background:var(--blue-100);border-radius:var(--radius-md);padding:11px 13px;font-size:12.5px;color:var(--navy-700);margin:14px 0}
+textarea{width:100%;font:inherit;font-size:13px;border:1px solid var(--gray-300);border-radius:var(--radius-md);padding:8px 10px;min-height:56px;resize:vertical}
+
+/* ---- variante B: abas ---- */
+.abas{display:flex;gap:2px;border-bottom:1px solid var(--gray-200);margin:0 -22px;padding:0 22px}
+.abas button{font:inherit;font-size:13px;font-weight:600;background:none;border:0;padding:11px 14px;color:var(--gray-700);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px}
+.abas button[aria-selected=true]{color:var(--navy-700);border-bottom-color:var(--blue-500)}
+.abas button:focus-visible{outline:2px solid var(--blue-500);outline-offset:-2px}
+.painel{padding-top:16px}
+
+/* ---- antes (tela atual) para comparar ---- */
+.antes .def{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;padding:18px 0}
+.antes .it .v{font-size:13.5px}
+.rotulo-versao{max-width:800px;margin:0 auto 8px;font-size:12px;font-weight:700;color:var(--gray-700);letter-spacing:.04em;text-transform:uppercase}
+/* Hoje x Proposta lado a lado */
+.lado{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;max-width:1700px;margin:0 auto}
+.lado .modal{max-width:none}
+.antes .kpis{grid-template-columns:1fr 1fr}
+.antes .def .full{grid-column:1/-1}
+@media (max-width:1100px){.lado{grid-template-columns:1fr}}
+@media (max-width:640px){.grade,.kpis{grid-template-columns:1fr}.proto{padding:10px 16px}}
+</style>
+</head>
+<body>
+
+<div class="proto" role="toolbar" aria-label="Escolha do protótipo">
+  <b>PROTÓTIPO · janelas de detalhe</b>
+  <div class="grupo" id="g-tela" role="group" aria-label="Tela">
+    <button data-v="dataset" aria-pressed="true">Dataset</button>
+    <button data-v="base" aria-pressed="false">Base do PDA</button>
+    <button data-v="org" aria-pressed="false">Organização</button>
+    <button data-v="achado" aria-pressed="false">Achado LGPD</button>
+  </div>
+  <div class="grupo" id="g-var" role="group" aria-label="Versão">
+    <button data-v="lado" aria-pressed="true">Hoje × Proposta A</button>
+    <button data-v="antes" aria-pressed="false">Hoje</button>
+    <button data-v="A" aria-pressed="false">Proposta A · Seções</button>
+    <button data-v="B" aria-pressed="false">Proposta B · Abas</button>
+  </div>
+</div>
+<p class="nota-proto" id="nota"></p>
+<div class="palco"><div id="saida"></div></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const it = (rot, val, o = {}) =>
+  `<div class="it ${o.full ? "full" : ""}"><label>${rot}</label><div class="v ${o.mono ? "mono" : ""} ${o.leve ? "leve" : ""}">${val}</div>${o.nota ? `<div class="nota">${o.nota}</div>` : ""}</div>`;
+const vazio = `<span class="vazio">—</span>`;
+const sec = (ico, titulo, corpo, hint = "") =>
+  `<section class="sec"><div class="sec-t"><span class="ico" aria-hidden="true">${ico}</span><h4>${titulo}</h4>${hint ? `<span class="hint">${hint}</span>` : ""}</div>${corpo}</section>`;
+const grade = (...itens) => `<div class="grade">${itens.join("")}</div>`;
+const fato = (n, l) => `<div class="fato"><span class="n">${n}</span><span class="l">${l}</span></div>`;
+const badge = (cls, t) => `<span class="badge b-${cls}">${t}</span>`;
+const k = (n, l, c = "") => `<div class="kpi ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+const kpis = (...x) => `<div class="kpis">${x.join("")}</div>`;
+const par = (t) => `<p class="it v leve" style="font-size:13.5px;line-height:1.5;margin-bottom:14px">${t}</p>`;
+const resumo = (badges, fatos) => `<div class="resumo" aria-label="Resumo"><div class="badges">${badges.join("")}</div>${fatos.join("")}</div>`;
+const SUB = (o) => `${o} · Camada de monitoramento (dados refletem o CKAN, sem alterá-lo)`;
+
+function janela(titulo, sub, corpo, rodape) {
+  return `<div class="modal" role="dialog" aria-label="${titulo}">
+    <div class="modal-head"><div><h3>${titulo}</h3><div class="sub">${sub}</div></div><button class="x" aria-label="Fechar">×</button></div>
+    <div class="modal-body">${corpo}</div><div class="modal-foot">${rodape}</div></div>`;
+}
+const def = (...x) => `<div class="def">${x.join("")}</div>`;
+
+/* Cada tela: titulo, sub, resumo (faixa do topo), secs (seções da proposta), abas (agrupamento da variante B),
+   antes (corpo da janela como está hoje), rodape. */
+const TELAS = {};
+
+/* ================= DATASET ================= */
+{
+  const t = "Doses aplicadas em crianças menores de 2 anos de idade", o = "Secretaria de Estado da Saúde";
+  const semBase = "Nenhuma base do PDA vinculada a este dataset";
+  const tabRec = `<table><thead><tr><th>Recurso</th><th>Formato</th><th>Última atualização</th></tr></thead><tbody><tr><td>Doses aplicadas — 2025</td><td>CSV</td><td>28/10/2026 09:12</td></tr></tbody></table>`;
+  TELAS.dataset = {
+    titulo: t, sub: SUB(o),
+    rodape: `<button class="btn ghost">↗ Abrir no portal</button><button class="btn">Fechar</button>`,
+    resumo: resumo([badge("green", "Publicado"), badge("amber", "Base espontânea"), badge("gray", "Sem base do PDA vinculada"), badge("gray", "Atualização: regra não definida")],
+      [fato("28/10/2026", "Última atualização real"), fato("1", "Recurso"), fato("CSV", "Formato")]),
+    secs: {
+      ident: sec("1", "Identificação", grade(it("Nome da base", t), it("Órgão responsável", o),
+        it("ID do dataset (CKAN)", "3bc0bd93-c596-4451-9dd7-1d61ab9b7321", { mono: true }), it("Licença", vazio))),
+      pda: sec("2", "Vínculo com o PDA", grade(it("Prazo previsto (PDA)", vazio, { nota: semBase }), it("Situação PDA", vazio, { nota: semBase }))),
+      atual: sec("3", "Atualização", grade(it("Periodicidade", vazio, { nota: "não declarada no portal" }),
+        it("Situação de atualização", vazio, { nota: "Regra por periodicidade ainda não definida (módulo Atualizações)" }),
+        it("Última atualização real", "28/10/2026", { nota: "Maior last_modified dos recursos" }),
+        it("Última alteração de metadados", "30/10/2026", { nota: "Data exibida pelo CKAN; não indica atualização dos dados" }))),
+      rec: sec("4", "Publicação e recursos", grade(it("Data de publicação", "27/10/2026"), it("Formato", "CSV"),
+        it("Recursos", "1", { nota: "Dicionário de dados não entra na contagem" })) + tabRec),
+      desc: sec("5", "Descrição", par("Conjunto de dados abertos com informações sobre doses de vacinas aplicadas em crianças menores de 2 anos de idade, permitindo consultar dados relacionados às vacinas, às doses aplicadas e ao município.")),
+      hist: sec("6", "Histórico recente", `<div class="linha-hist"><time>30/10/2026</time><span>Metadados alterados (descrição)</span></div>
+        <div class="linha-hist"><time>28/10/2026</time><span>Recurso “Doses aplicadas — 2025” atualizado</span></div>
+        <div class="linha-hist"><time>27/10/2026</time><span>Dataset publicado</span></div>
+        <p style="margin:8px 0 14px"><a href="#" style="font-size:13px;color:var(--blue-500)">Ver na Rastreabilidade →</a></p>`),
+    },
+    abas: [["Identificação", ["ident", "desc"]], ["PDA e atualização", ["pda", "atual"]], ["Recursos", ["rec"]], ["Histórico", ["hist"]]],
+    antes: def(
+      it("Nome da base", t), it("Órgão responsável", o),
+      it("ID do dataset (CKAN)", "3bc0bd93-c596-4451-9dd7-1d61ab9b7321", { mono: true }), it("Prazo previsto (PDA)", vazio, { nota: semBase }),
+      it("Data de publicação", "27/10/2026"), it("Periodicidade", vazio, { nota: "não declarada no portal" }),
+      it("Última atualização real", "28/10/2026", { nota: "Maior last_modified dos recursos" }),
+      it("Última alteração de metadados", "30/10/2026", { nota: "Data exibida pelo CKAN; não indica atualização dos dados" }),
+      it("Formato", "CSV"), it("Recursos", "1", { nota: "Dicionário de dados não entra na contagem" }),
+      it("Status no portal", badge("green", "Publicado")), it("Situação PDA", vazio, { nota: semBase }),
+      it("Situação de atualização", vazio, { nota: "Regra por periodicidade ainda não definida" }), it("Licença", vazio),
+      it("Descrição", "Conjunto de dados abertos com informações sobre doses de vacinas aplicadas em crianças menores de 2 anos de idade, permitindo consultar dados relacionados às vacinas, às doses aplicadas e ao município.", { full: true, leve: true }),
+      `<div class="it full"><label>Recursos no portal (1)</label>${tabRec}</div>`,
+      `<div class="it full"><label>Histórico recente</label><div class="v leve" style="font-size:13px">30/10 metadados alterados · 28/10 recurso atualizado · 27/10 publicado</div></div>`),
+  };
+}
+
+/* ================= BASE DO PDA ================= */
+{
+  const t = "Acordos sem Transferência Recursos";
+  TELAS.base = {
+    titulo: t, sub: SUB("ABC · Agência Brasil Central"),
+    rodape: `<button class="btn danger">Excluir base</button><button class="btn">Editar</button><button class="btn ghost">↗ Abrir no portal</button><button class="btn">Fechar</button>`,
+    resumo: resumo([badge("green", "Publicado"), badge("blue", "Vínculo resolvido"), badge("gray", "PDA")],
+      [fato("01/12/2025", "Prazo previsto"), fato("21/10/2025", "Publicada em"), fato("Anual", "Periodicidade")]),
+    secs: {
+      ident: sec("1", "Identificação", grade(it("Nome da base", t), it("Órgão responsável", "ABC — Agência Brasil Central - ABC"),
+        it("Unidade responsável", "GEGF/Setor de Planejamento"), it("PDA de origem", "PDA"))),
+      vinc: sec("2", "Vínculo com o portal", grade(it("Dataset no portal", "Acordos sem Transferência de Recursos - ABC"),
+        it("ID do dataset (CKAN)", "f495c5eb-5aed-4ac0-a3e7-cd1eb2d6061c", { mono: true }))),
+      prazo: sec("3", "Prazo e atualização", grade(it("Prazo previsto (PDA)", "01/12/2025"), it("Data de publicação", "21/10/2025"),
+        it("Periodicidade", "Anual"), it("Última atualização real", "14/08/2025"), it("Situação PDA", badge("green", "Publicado")))),
+      rec: sec("4", "Recursos", grade(it("Recursos válidos", "1", { nota: "Dicionário de dados não entra na contagem" }), it("Formatos dos recursos", "CSV"))),
+      cls: sec("5", "Classificação", grade(it("Conteúdo sigiloso", vazio), it("Políticas públicas", vazio))),
+      desc: sec("6", "Descrição", par("Informações Básicas de Acordos da ABC em que não há transferência de recursos")),
+    },
+    abas: [["Identificação e vínculo", ["ident", "vinc"]], ["Prazo e recursos", ["prazo", "rec"]], ["Classificação e descrição", ["cls", "desc"]]],
+    antes: def(
+      it("Nome da base", t), it("Órgão responsável", "ABC — Agência Brasil Central - ABC"),
+      it("Unidade responsável", "GEGF/Setor de Planejamento"), it("ID do dataset (CKAN)", "f495c5eb-5aed-4ac0-a3e7-cd1eb2d6061c", { mono: true }),
+      it("Dataset no portal", "Acordos sem Transferência de Recursos - ABC"), it("Prazo previsto (PDA)", "01/12/2025"),
+      it("Data de publicação", "21/10/2025"), it("Periodicidade", "Anual"),
+      it("Última atualização real", "14/08/2025"), it("Recursos válidos", "1", { nota: "Dicionário de dados não entra na contagem" }),
+      it("Formatos dos recursos", "CSV"), it("Situação PDA", badge("green", "Publicado")),
+      it("Conteúdo sigiloso", vazio), it("Políticas públicas", vazio), it("PDA de origem", "PDA"),
+      it("Descrição", "Informações Básicas de Acordos da ABC em que não há transferência de recursos", { full: true, leve: true })),
+  };
+}
+
+/* ================= ORGANIZAÇÃO ================= */
+{
+  const stat = (n, l, nota) => `<div class="kpi"><div class="n">${n}</div><div class="l">${l}</div>${nota ? `<div class="l" style="font-style:italic">${nota}</div>` : ""}</div>`;
+  TELAS.org = {
+    titulo: "Agência Brasil Central", sub: "ABC · Resumo de governança de dados abertos",
+    rodape: `<button class="btn">Fechar</button><button class="btn">Gerar relatório</button><button class="btn primary">Ver bases no PDA</button>`,
+    resumo: `<div class="indice"><div class="n">38</div><div style="flex:1"><div class="t">ÍNDICE DE ATENÇÃO</div>${badge("amber", "Atenção média")}
+      <div class="barra" aria-hidden="true"><i style="width:38%"></i></div></div>
+      <div class="t" style="max-width:260px">70% risco LGPD · 30% atraso de atualização (pesos em Parâmetros)</div></div>`,
+    secs: {
+      pda: sec("1", "Publicação no PDA", kpis(k(24, "Bases previstas"), k(19, "Bases publicadas"), k(5, "Bases não publicadas"), k(2, "Bases em atraso", "alerta"), k(3, "Próximas do prazo"), k(21, "Bases vinculadas ao portal"))),
+      atu: sec("2", "Atualização", kpis(k(4, "Atualizações atrasadas", "alerta"), k("82%", "em dia"), k(17, "Bases com prazo definido")), "de 17 base(s) com prazo"),
+      fmt: sec("3", "Formatos", kpis(k(11, "Recursos sem formato aberto", "alerta"), k(143, "Recursos válidos"), k(21, "Datasets no portal")) + `<p class="it nota" style="margin:-4px 0 14px">Formatos fechados: PDF (8), XLS (3)</p>`),
+      lgpd: sec("4", "Dados pessoais (LGPD)", kpis(k(6, "Recursos com possíveis dados pessoais", "alerta"), k(4, "Achados a revisar"), k(2, "Confirmados")), "de 96 recursos varridos"),
+    },
+    abas: [["Publicação e atualização", ["pda", "atu"]], ["Formatos e dados pessoais", ["fmt", "lgpd"]]],
+    antes: `<div class="kpis" style="margin-top:14px">${stat(24, "Bases previstas")}${stat(19, "Bases publicadas", "21 base(s) vinculada(s) ao portal")}${stat(5, "Bases não publicadas")}${stat(4, "Atualizações atrasadas", "de 17 base(s) com prazo (82% em dia)")}${stat(11, "Recursos sem formato aberto", "de 143 recurso(s) em 21 dataset(s)")}${stat(6, "Recursos com possíveis dados pessoais", "de 96 varrido(s): 4 achado(s) a revisar, 2 confirmado(s)")}</div>` +
+      def(it("Bases em atraso", "2", { nota: "entre as 21 vinculada(s); não confirmado nas demais" }), it("Bases próximas do prazo", "3"),
+        it("Índice de atenção", `<span style="color:var(--amber-600);font-weight:800;font-size:18px">38</span> ${badge("amber", "Média")}`, { full: true, nota: "70% risco LGPD · 30% atraso de atualização" }),
+        it("Formatos fechados", "PDF (8), XLS (3)", { full: true })),
+  };
+}
+
+/* ================= ACHADO LGPD ================= */
+{
+  const expl = `<ul style="margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.6"><li>Nome da coluna sugere documento pessoal</li><li>1.482 células seguem o padrão de CPF</li><li>Dígitos verificadores válidos em 99% das células</li></ul>`;
+  const callout = `<div class="callout"><span aria-hidden="true">ⓘ</span><div>Sinalização automática indicativa. Nenhum bloqueio, ocultação ou anonimização é feito pelo sistema — a decisão cabe à equipe responsável, mediante análise humana.</div></div>`;
+  TELAS.achado = {
+    titulo: "Possível dado pessoal identificado", sub: "Sinalização automática — requer revisão humana",
+    rodape: `<button class="btn danger">Marcar como falso positivo</button><button class="btn ok">Marcar como confirmado</button><button class="btn">Fechar</button>`,
+    resumo: resumo([badge("red", "Prioridade alta"), badge("amber", "Aguardando revisão humana"), badge("gray", "Regra (padrão e validação)")],
+      [fato("CPF", "Tipo identificado"), fato("97%", "Confiança"), fato("1.482", "Células na coluna")]),
+    secs: {
+      onde: sec("1", "Onde está", grade(it("Dataset", "Servidores ativos — 2026"), it("Órgão", "Secretaria de Estado da Administração"),
+        it("Recurso", "folha_2026_10.csv", { mono: true }), it("Coluna", "doc_servidor", { mono: true }), it("Linha (primeira ocorrência)", "14"),
+        it("Valor", "Não armazenado (política de não retenção). Confira no arquivo, coluna “doc_servidor”, linha 14.", { leve: true }))),
+      porque: sec("2", "Por que foi sinalizado", `<div class="it" style="margin-bottom:10px"><label>Confiança da detecção</label><div class="v">97%</div><div class="barra"><i style="width:97%"></i></div></div>${expl}<div style="height:14px"></div>`),
+      dec: sec("3", "Decisão", `<div class="it full" style="margin-bottom:12px"><label>Justificativa da decisão (opcional)</label><textarea placeholder="Ex.: coluna guarda código da escola, não telefone"></textarea></div>
+        <div class="it" style="margin-bottom:14px"><label>Histórico de decisões</label><div class="v leve" style="font-size:13px">Nenhuma decisão registrada.</div></div>`) + callout,
+    },
+    abas: [["Onde e por quê", ["onde", "porque"]], ["Decisão", ["dec"]]],
+    antes: def(
+      it("Dataset", "Servidores ativos — 2026"), it("Órgão", "Secretaria de Estado da Administração"),
+      it("Recurso", "folha_2026_10.csv", { mono: true }), it("Coluna", "doc_servidor", { mono: true }),
+      it("Linha (primeira ocorrência)", "14"), it("Células com esse tipo na coluna", "1.482"),
+      it("Tipo identificado", "CPF"), it("Detectado por", "Regra (padrão e validação)"),
+      it("Prioridade", badge("red", "Alta")), it("Status", "Aguardando revisão humana"),
+      it("Valor", "Não armazenado (política de não retenção). Confira no arquivo, coluna “doc_servidor”, linha 14.", { full: true, leve: true }),
+      `<div class="it full"><label>Confiança da detecção</label><div class="v">97%</div><div class="barra"><i style="width:97%"></i></div></div>`,
+      `<div class="it full"><label>Por que foi sinalizado</label>${expl}</div>`,
+      `<div class="it full"><label>Justificativa da decisão (opcional)</label><textarea placeholder="Ex.: coluna guarda código da escola, não telefone"></textarea></div>`,
+      `<div class="it full"><label>Histórico de decisões</label><div class="v leve" style="font-size:13px">Nenhuma decisão registrada.</div></div>`,
+      `<div class="full">${callout}</div>`),
+  };
+}
+
+/* ================= montagem ================= */
+const ROTULO_ANTES = `<div class="rotulo-versao">Hoje (como está na tela)</div>`;
+const ROTULO_A = `<div class="rotulo-versao">Proposta A · seções</div>`;
+function antes(t) { return `<div class="antes">${janela(t.titulo, t.sub, t.antes, t.rodape)}</div>`; }
+function propostaA(t) { return janela(t.titulo, t.sub, t.resumo + Object.values(t.secs).join(""), t.rodape); }
+function propostaB(t) {
+  const abas = t.abas.map(([n], i) => `<button role="tab" aria-selected="${i === 0}" data-aba="${i}">${n}</button>`).join("");
+  const paineis = t.abas.map(([, ks], i) => `<div data-p="${i}" ${i ? "hidden" : ""}>${ks.map((x) => t.secs[x]).join("")}</div>`).join("");
+  return janela(t.titulo, t.sub, `${t.resumo}<div class="abas" role="tablist">${abas}</div><div class="painel">${paineis}</div>`, t.rodape);
+}
+const NOTAS = {
+  dataset: "<strong>Dataset</strong> (telas Datasets e Atualizações): 16 campos soltos viram 6 seções, e a faixa-resumo traz o essencial de relance.",
+  base: "<strong>Base do PDA</strong>: 15 campos soltos viram 6 seções (Identificação, Vínculo, Prazo e atualização, Recursos, Classificação, Descrição). O rodapé mantém Excluir/Editar.",
+  org: "<strong>Organização</strong>: 6 cartões e campos soltos viram 4 grupos, e o índice de atenção ganha destaque no topo.",
+  achado: "<strong>Achado LGPD</strong>: 10 campos e 4 blocos soltos viram 3 perguntas em sequência — onde está, por que foi sinalizado, o que decidir.",
+};
+const NOTA_VAR = { lado: "Esquerda: como está hoje. Direita: Proposta A.", antes: "Como está hoje.", A: "Proposta A: seções empilhadas, tudo visível numa rolagem só.", B: "Proposta B: as mesmas seções divididas em abas (menos rolagem, mas informação atrás de cliques)." };
+let tela = "dataset", varia = "lado";
+function desenhar() {
+  const t = TELAS[tela];
+  $("#saida").innerHTML = varia === "lado" ? `<div class="lado"><div>${ROTULO_ANTES}${antes(t)}</div><div>${ROTULO_A}${propostaA(t)}</div></div>`
+    : `<div style="max-width:800px;margin:0 auto">${varia === "antes" ? ROTULO_ANTES + antes(t) : varia === "A" ? ROTULO_A + propostaA(t) : `<div class="rotulo-versao">Proposta B · abas</div>` + propostaB(t)}</div>`;
+  $("#nota").innerHTML = `${NOTAS[tela]} <em>${NOTA_VAR[varia]}</em>`;
+  document.querySelectorAll("#g-tela button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === tela));
+  document.querySelectorAll("#g-var button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === varia));
+  document.querySelectorAll("[data-aba]").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-aba]").forEach((x) => x.setAttribute("aria-selected", x === b));
+    document.querySelectorAll("[data-p]").forEach((p) => (p.hidden = p.dataset.p !== b.dataset.aba));
+  }));
+}
+document.querySelectorAll("#g-tela button").forEach((b) => b.addEventListener("click", () => { tela = b.dataset.v; desenhar(); }));
+document.querySelectorAll("#g-var button").forEach((b) => b.addEventListener("click", () => { varia = b.dataset.v; desenhar(); }));
+desenhar();
+</script>
+</body>
+</html>

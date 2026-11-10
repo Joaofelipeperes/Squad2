@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 10/11/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -206,3 +206,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 04/11/2026 | Tela: achados agrupados por arquivo, com resumo (tipos, células, situação) e detalhe ao clicar; lista de varreduras com rolagem, até 200 (fila inteira) | Luiza |
 | 05/11/2026 | Tela Riscos de Dados Pessoais: tabela de arquivos com ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); a tabela de achados de cada arquivo também ordena por coluna. Sem mudança na API | Victor |
 | 05/11/2026 | `riscos_por_orgao` (contagens por órgão para a tela Organizações e o índice de atenção, ADR-0030), `RiscoLgpdOrgaoOut`, `regras.EM_ABERTO`, `LgpdDao.recursos_analisados_por_orgao` | Humberto |
+| 10/11/2026 | Detalhe do achado agrupado em três seções (Onde está, Por que foi sinalizado, Decisão), com faixa-resumo de prioridade, status, método, tipo e confiança (`shared/ui/Detalhe.tsx`). Sem mudança de dados nem de API | João |
