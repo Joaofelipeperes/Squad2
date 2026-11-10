@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 /**
  * Peças das janelas de detalhe agrupadas em seções (Dataset, Base do PDA, Organização, Achado LGPD).
  * Estrutura: <Detalhe> → <Resumo> (faixa com o essencial) → várias <Secao> com <Grade> de <Campo>.
- * A numeração das seções é automática (contador CSS em `.det`), então seção omitida por permissão
- * não deixa buraco. Estilos em `design-system/overrides.css` (prefixo `det-`).
+ * Seção omitida por permissão simplesmente não aparece. Estilos em `design-system/overrides.css`
+ * (prefixo `det-`).
  */
 export function Detalhe({ children }: { children: ReactNode }) {
   return <div className="det">{children}</div>;
@@ -35,7 +35,6 @@ export function Secao({ titulo, nota, children }: { titulo: string; nota?: strin
   return (
     <section className="det-secao">
       <div className="det-secao-t">
-        <span className="det-ico" aria-hidden="true" />
         <h4>{titulo}</h4>
         {nota && <span className="det-nota-t">{nota}</span>}
       </div>

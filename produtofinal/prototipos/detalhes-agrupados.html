@@ -67,7 +67,6 @@ p{margin:0}
 .sec:last-child{border-bottom:0}
 .sec-t{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .sec-t h4{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--navy-700)}
-.sec-t .ico{width:20px;height:20px;border-radius:var(--radius-sm);background:var(--blue-100);color:var(--blue-500);display:grid;place-items:center;font-size:11px;font-weight:800}
 .sec-t .hint{margin-left:auto;font-size:11.5px;color:var(--gray-500)}
 .grade{display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;margin-bottom:14px}
 .grade .full{grid-column:1/-1}
@@ -144,7 +143,7 @@ const it = (rot, val, o = {}) =>
   `<div class="it ${o.full ? "full" : ""}"><label>${rot}</label><div class="v ${o.mono ? "mono" : ""} ${o.leve ? "leve" : ""}">${val}</div>${o.nota ? `<div class="nota">${o.nota}</div>` : ""}</div>`;
 const vazio = `<span class="vazio">—</span>`;
 const sec = (ico, titulo, corpo, hint = "") =>
-  `<section class="sec"><div class="sec-t"><span class="ico" aria-hidden="true">${ico}</span><h4>${titulo}</h4>${hint ? `<span class="hint">${hint}</span>` : ""}</div>${corpo}</section>`;
+  `<section class="sec"><div class="sec-t"><h4>${titulo}</h4>${hint ? `<span class="hint">${hint}</span>` : ""}</div>${corpo}</section>`;
 const grade = (...itens) => `<div class="grade">${itens.join("")}</div>`;
 const fato = (n, l) => `<div class="fato"><span class="n">${n}</span><span class="l">${l}</span></div>`;
 const badge = (cls, t) => `<span class="badge b-${cls}">${t}</span>`;

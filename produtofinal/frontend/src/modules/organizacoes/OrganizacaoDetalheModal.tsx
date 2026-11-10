@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CriterioAtencao, Organizacao } from "./api";
-import { IndiceAtencao, NAO_CONFIRMADO, explicarIndice } from "./OrganizacoesPage";
+import { CLASSE_ATENCAO, IndiceAtencao, NAO_CONFIRMADO, explicarIndice } from "./OrganizacoesPage";
 import { GerarRelatorioOrgaoModal } from "@/modules/relatorios/RelatorioOrgao";
 import { HistoricoRecente } from "@/modules/rastreabilidade/HistoricoRecente";
 import { Detalhe, Secao } from "@/shared/ui/Detalhe";
@@ -22,9 +22,9 @@ function Kpi({ n, rotulo, nota, alerta = false }: { n: ReactNode; rotulo: string
 const PENDENTE = <span style={{ color: "var(--gray-500)" }}>—</span>;
 
 /**
- * Resumo de governança do órgão (showOrganizationDetails() do protótipo V1), agrupado em seções:
- * índice de atenção no topo e depois Publicação no PDA, Atualização, Formatos, Dados pessoais
- * (LGPD) e Últimas alterações.
+ * Resumo de governança do órgão (showOrganizationDetails() do protótipo V1), agrupado em seções
+ * como no protótipo `prototipos/detalhes-agrupados.html`: índice de atenção em destaque no topo e
+ * depois Publicação no PDA, Atualização, Formatos, Dados pessoais (LGPD) e Últimas alterações.
  */
 export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, criterio, onFechar }: {
   org: Organizacao | null; formatosAbertos: string[]; lgpdVisivel: boolean; criterio: CriterioAtencao;
@@ -38,6 +38,9 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, cri
   const vinculado = o.bases_vinculadas > 0;
   const semConfirmacao = o.bases_vinculadas < o.bases_previstas;
   const fechados = Object.entries(o.formatos_fechados);
+  const faixa = o.indice_atencao;
+  const valor = o.indice_atencao_valor;
+  const classeValor = faixa === "Alto" ? "alto" : faixa === "Médio" ? "medio" : "baixo";
 
   function verNoPda() {
     onFechar();
@@ -62,44 +65,61 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, cri
       </>}>
       <Detalhe>
         <div className="det-indice">
-          <div>
-            <div className="rotulo">Índice de atenção</div>
-            <div style={{ marginTop: 4 }}><IndiceAtencao o={o} criterio={criterio} /></div>
-          </div>
-          <p className="explicacao">
-            {o.indice_atencao
-              ? explicarIndice(o, criterio)
-              : "Sem risco LGPD (nenhum recurso varrido) e sem atualização avaliada (nenhuma base vinculada com prazo)."}
-          </p>
+          {faixa && valor != null ? (
+            <>
+              <div className={`valor ${classeValor}`} aria-label={`Índice ${valor}`}>{valor}</div>
+              <div className="centro">
+                <div className="rotulo">Índice de atenção</div>
+                <div style={{ marginTop: 4 }}>
+                  <span className={`badge ${CLASSE_ATENCAO[faixa]}`}>Atenção {faixa.toLowerCase()}</span>
+                </div>
+                <div className="det-barra" aria-hidden="true"><i style={{ width: `${Math.min(100, valor)}%` }} /></div>
+              </div>
+              <p className="explicacao">{explicarIndice(o, criterio)}</p>
+            </>
+          ) : (
+            <>
+              <div className="centro">
+                <div className="rotulo">Índice de atenção</div>
+                <div style={{ marginTop: 4 }}><IndiceAtencao o={o} criterio={criterio} /></div>
+              </div>
+              <p className="explicacao">
+                Sem risco LGPD (nenhum recurso varrido) e sem atualização avaliada (nenhuma base vinculada com prazo).
+              </p>
+            </>
+          )}
         </div>
 
         <Secao titulo="Publicação no PDA">
           <div className="det-kpis">
             <Kpi n={o.bases_previstas} rotulo="Bases previstas" />
             <Kpi n={vinculado ? o.bases_publicadas : PENDENTE} rotulo="Bases publicadas"
-              nota={vinculado ? `${o.bases_vinculadas} base(s) vinculada(s) ao portal` : "aguardando vínculo"} />
+              nota={vinculado ? undefined : "aguardando vínculo"} />
             <Kpi n={vinculado ? o.bases_previstas - o.bases_publicadas : PENDENTE} rotulo="Bases não publicadas"
               nota={vinculado ? undefined : "aguardando vínculo"} />
             <Kpi n={o.bases_em_atraso ?? PENDENTE} rotulo="Bases em atraso" alerta={!!o.bases_em_atraso}
               nota={o.bases_em_atraso == null ? "aguardando vínculo"
                 : semConfirmacao ? `entre as ${o.bases_vinculadas} vinculada(s); ${NAO_CONFIRMADO.toLowerCase()} nas demais` : undefined} />
-            <Kpi n={o.bases_proximas_do_prazo} rotulo="Bases próximas do prazo" />
+            <Kpi n={o.bases_proximas_do_prazo} rotulo="Próximas do prazo" />
+            <Kpi n={o.bases_vinculadas} rotulo="Bases vinculadas ao portal" />
           </div>
         </Secao>
 
-        <Secao titulo="Atualização">
+        <Secao titulo="Atualização"
+          nota={vinculado ? `de ${o.atualizacoes_avaliadas} base(s) com prazo` : "aguardando vínculo"}>
           <div className="det-kpis">
             <Kpi n={o.atualizacoes_atrasadas ?? PENDENTE} rotulo="Atualizações atrasadas" alerta={!!o.atualizacoes_atrasadas}
-              nota={o.atualizacoes_atrasadas != null
-                ? `de ${o.atualizacoes_avaliadas} base(s) com prazo (${o.atualizacao_pct}% em dia)`
-                : vinculado ? "sem base com prazo definido" : "aguardando vínculo"} />
+              nota={o.atualizacoes_atrasadas == null && vinculado ? "sem base com prazo definido" : undefined} />
+            <Kpi n={o.atualizacao_pct != null ? `${o.atualizacao_pct}%` : PENDENTE} rotulo="em dia" />
+            <Kpi n={o.atualizacoes_avaliadas} rotulo="Bases com prazo definido" />
           </div>
         </Secao>
 
         <Secao titulo="Formatos">
           <div className="det-kpis">
-            <Kpi n={o.recursos_formato_fechado} rotulo="Recursos sem formato aberto" alerta={o.recursos_formato_fechado > 0}
-              nota={`de ${o.recursos_validos} recurso(s) em ${o.datasets_no_portal} dataset(s)`} />
+            <Kpi n={o.recursos_formato_fechado} rotulo="Recursos sem formato aberto" alerta={o.recursos_formato_fechado > 0} />
+            <Kpi n={o.recursos_validos} rotulo="Recursos válidos" />
+            <Kpi n={o.datasets_no_portal} rotulo="Datasets no portal" />
           </div>
           {fechados.length > 0 && (
             <div style={{ marginBottom: 14 }}>
@@ -118,12 +138,14 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, cri
           )}
         </Secao>
 
-        <Secao titulo="Dados pessoais (LGPD)">
+        <Secao titulo="Dados pessoais (LGPD)"
+          nota={!lgpdVisivel ? "sem acesso ao módulo de dados pessoais"
+            : o.riscos_lgpd == null ? "nenhum recurso varrido"
+            : `de ${o.lgpd_recursos_analisados} recurso(s) varrido(s)`}>
           <div className="det-kpis">
-            <Kpi n={o.riscos_lgpd ?? PENDENTE} rotulo="Recursos com possíveis dados pessoais" alerta={!!o.riscos_lgpd}
-              nota={!lgpdVisivel ? "sem acesso ao módulo de dados pessoais"
-                : o.riscos_lgpd == null ? "nenhum recurso varrido"
-                : `de ${o.lgpd_recursos_analisados} varrido(s): ${o.lgpd_aguardando_revisao} achado(s) a revisar, ${o.lgpd_confirmados} confirmado(s)`} />
+            <Kpi n={o.riscos_lgpd ?? PENDENTE} rotulo="Recursos com possíveis dados pessoais" alerta={!!o.riscos_lgpd} />
+            <Kpi n={lgpdVisivel && o.riscos_lgpd != null ? o.lgpd_aguardando_revisao : PENDENTE} rotulo="Achados a revisar" />
+            <Kpi n={lgpdVisivel && o.riscos_lgpd != null ? o.lgpd_confirmados : PENDENTE} rotulo="Confirmados" />
           </div>
         </Secao>
 
