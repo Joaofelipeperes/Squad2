@@ -108,8 +108,24 @@ docker compose exec worker python -m app.cli coletar   # coleta manual, em prime
 e os volumes ficam) e rode `docker compose up -d --build`. As migrações rodam sozinhas e nada do
 que foi configurado nas telas é sobrescrito.
 
-**Backup** (agende diariamente, guarde fora do servidor e com acesso restrito: contém dados pessoais
-de usuários, o log de acesso e as chaves do sistema):
+**Backups internos (automáticos, ADR-0034).** O `worker` gera sozinho uma cópia completa do banco
+`gda` todo dia à 00:00 (guardada por 7 dias) e outra à 00:00 do dia 1 de cada mês, cobrindo o mês que
+terminou (guardada por 1 ano). Ficam cifrados na tabela `backup_copia` do próprio banco, sem tela por
+enquanto:
+
+```bash
+docker compose exec worker python -m app.cli backups                       # lista
+docker compose exec worker python -m app.cli backup-agora diario           # gera uma agora
+docker compose exec worker python -m app.cli exportar-backup 12 /tmp/gda.dump
+docker compose exec worker python -m app.cli restaurar-backup 12 --banco gda_restaurado
+```
+
+Eles protegem de erro lógico (dado apagado, migração ruim), **não** da perda do volume `pgdata`:
+a cópia mora no mesmo banco. Para isso serve o backup externo abaixo, que continua necessário. Para
+abrir uma cópia é preciso a chave do volume `gda_segredos` (GDA_ENCRYPTION_KEY).
+
+**Backup externo** (agende diariamente, guarde fora do servidor e com acesso restrito: contém dados
+pessoais de usuários, o log de acesso e as chaves do sistema):
 
 ```bash
 docker compose exec -T db pg_dump -U gda -Fc gda > gda-$(date +%F).dump

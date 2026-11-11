@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 09/11/2026 |
+| **Última atualização** | 10/11/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -192,3 +192,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 06/11/2026 | Datasets: botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031), com o ID do CKAN completo | Humberto |
 | 06/11/2026 | Detalhe do dataset: sai o item "Name no portal" (`name` técnico; o título já aparece em "Nome da base"). Sem mudança na API | Humberto |
 | 09/11/2026 | `job_coleta_inicial` (`ao_iniciar_worker`): com `GDA_COLETA_INICIAL=true`, o worker faz a primeira coleta ao iniciar se nunca houve nenhuma (subida do servidor sem comandos, ADR-0032). Teste em `test_instalacao.py` | Victor |
+| 10/11/2026 | Detalhe do dataset agrupado em seções (faixa-resumo com situação no portal, tipo de base, situação PDA e números-chave; Identificação, Vínculo com o PDA, Atualização, Publicação e recursos, Descrição e Histórico), com os componentes compartilhados `shared/ui/Detalhe.tsx`. Sem mudança de dados nem de API | João |

@@ -338,6 +338,55 @@ th[aria-sort] { padding: 0; }
   .barras-linha { grid-template-columns: minmax(90px, 40%) 1fr; }
 }
 
+/* Janelas de detalhe em seções (shared/ui/Detalhe.tsx): faixa-resumo + seções com título, separadas
+   por linha fina (sem cartão nem sombra). */
+.det { margin: 0 -2px; }
+.det-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 28px; padding: 2px 0 14px;
+  border-bottom: 1px solid var(--gray-200); }
+.det-selos { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 100%; }
+.det-fato { display: flex; flex-direction: column; }
+.det-fato .n { font-size: 17px; font-weight: 800; color: var(--navy-900); }
+.det-fato .l { font-size: 11.5px; color: var(--gray-500); }
+.det-secao { padding: 16px 0 2px; border-bottom: 1px solid var(--gray-200); }
+.det-secao:last-child { border-bottom: 0; }
+.det-secao-t { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.det-secao-t h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--navy-700); }
+.det-nota-t { margin-left: auto; font-size: 11.5px; color: var(--gray-500); text-align: right; }
+.det-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-bottom: 14px; }
+.det-campo { min-width: 0; }
+.det-campo.cheio { grid-column: 1 / -1; }
+.det-campo label { display: block; font-size: 11px; color: var(--gray-500); text-transform: uppercase;
+  letter-spacing: .03em; font-weight: 700; margin-bottom: 3px; }
+.det-valor { font-size: 13.5px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.det-valor.mono { font-family: 'IBM Plex Mono', monospace; font-weight: 500; }
+.det-valor.leve { font-weight: 400; white-space: pre-line; }
+.det-nota { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+.det-vazio { color: var(--gray-500); font-weight: 500; }
+/* Conteúdos que já trazem título próprio entram na seção sem repeti-lo */
+.det-secao .mini-history { margin-top: 0; border-top: 0; padding-top: 0; }
+.det-secao .mini-history > h4 { display: none; }
+.det-secao .table-scroll, .det-secao > table { margin-bottom: 14px; }
+.det-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.det-kpi { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+  padding: 10px 12px; }
+.det-kpi .n { font-size: 20px; font-weight: 800; color: var(--navy-900); }
+.det-kpi .l { font-size: 11.5px; color: var(--gray-500); margin-top: 2px; }
+.det-kpi.alerta .n { color: var(--red-600); }
+.det-indice { display: flex; align-items: center; gap: 16px; padding: 2px 0 14px; border-bottom: 1px solid var(--gray-200); }
+.det-indice .rotulo { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--gray-500); text-transform: uppercase; }
+.det-indice .explicacao { font-size: 12px; color: var(--gray-500); flex: 1; max-width: 300px; }
+.det-indice .valor { font-size: 34px; font-weight: 800; line-height: 1; min-width: 44px; }
+.det-indice .valor.alto { color: var(--red-600); }
+.det-indice .valor.medio { color: var(--amber-600); }
+.det-indice .valor.baixo { color: var(--green-600); }
+.det-indice .centro { flex: 1; min-width: 0; }
+.det-barra { height: 8px; background: var(--gray-100); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+.det-barra i { display: block; height: 100%; background: var(--blue-500); }
+@media (max-width: 640px) {
+  .det-grade, .det-kpis { grid-template-columns: 1fr; }
+  .det-indice { flex-wrap: wrap; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .screen, .esq-linha { animation: none; }
   .sidebar, .sidebar.aberta, .problema-seta, .rosca-svg circle, .como-calculamos summary::before { transition: none; }

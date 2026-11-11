@@ -335,7 +335,7 @@ export function RiscosLgpd({ o, visivel }: { o: Organizacao; visivel: boolean })
   );
 }
 
-const CLASSE_ATENCAO = { Alto: "badge-red", Médio: "badge-amber", Baixo: "badge-green" } as const;
+export const CLASSE_ATENCAO = { Alto: "badge-red", Médio: "badge-amber", Baixo: "badge-green" } as const;
 
 /** Como o índice foi calculado, em texto (dica da coluna e detalhe do órgão). */
 export function explicarIndice(o: Organizacao, c: CriterioAtencao): string {
