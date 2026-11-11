@@ -1,4 +1,4 @@
-﻿# Publica o produto final no servidor por SSH, sempre a partir da main do GitHub (ADR-0034).
+﻿# Publica o produto final no servidor por SSH, sempre a partir da main do GitHub (ADR-0035).
 # Faz tudo de uma vez: busca a origin/main, cria a versão (tag) se for nova, gera o pacote
 # (deploy/empacotar.ps1), envia por scp e, no servidor, troca a pasta e roda o docker compose.
 # A pasta do servidor guarda o .env, deploy/certificados/ e os volumes; a versão anterior fica em
@@ -52,7 +52,7 @@ if ($LASTEXITCODE -ne 0) { throw "Não consegui buscar a origin/main." }
 
 if ($Versao) {
     $tag = if ($Versao.StartsWith("v")) { $Versao } else { "v$Versao" }
-    if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Versão deve ser MAIOR.MENOR.CORRECAO, ex.: 1.0.0 (ADR-0034)." }
+    if ($tag -notmatch '^v\d+\.\d+\.\d+$') { throw "Versão deve ser MAIOR.MENOR.CORRECAO, ex.: 1.0.0 (ADR-0035)." }
     git rev-parse -q --verify "refs/tags/$tag" | Out-Null
     if ($LASTEXITCODE -eq 0) {
         git merge-base --is-ancestor "$tag^{commit}" origin/main

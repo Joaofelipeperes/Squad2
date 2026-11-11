@@ -1,4 +1,4 @@
-# ADR-0034 — Publicar no servidor só versões da `main`, marcadas com tag, por um script que faz o deploy por SSH
+# ADR-0035 — Publicar no servidor só versões da `main`, marcadas com tag, por um script que faz o deploy por SSH
 
 | | |
 |---|---|

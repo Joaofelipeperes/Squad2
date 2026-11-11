@@ -12,7 +12,7 @@
 #   .\produtofinal\deploy\empacotar.ps1 -Saida C:\x.tar.gz
 #   .\produtofinal\deploy\empacotar.ps1 -Ref v1.0.0              # de uma versão (tag) ou branch
 # O pacote leva o arquivo VERSAO (versão, commit e data), que o servidor mostra após a subida.
-# Para publicar no servidor da main, use deploy/publicar.ps1 (ADR-0034), que chama este script.
+# Para publicar no servidor da main, use deploy/publicar.ps1 (ADR-0035), que chama este script.
 param(
     [string]$Saida = "",
     [string]$ArquivoEnv = "",

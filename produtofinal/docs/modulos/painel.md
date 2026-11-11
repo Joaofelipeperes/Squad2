@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 09/11/2026 |
+| **Última atualização** | 10/11/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -202,3 +202,5 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 05/11/2026 | Organizações: colunas **Riscos LGPD** e **Índice de atenção** (ADR-0030) — `regras.py` novo (`indice_atencao`, média ponderada com pesos e faixas dos Parâmetros), `criterio_atencao`, campos novos em `OrganizacaoOut`/`OrganizacoesOut`; filtro por faixa, ordenação pelo valor, cartão de dados pessoais e índice explicado no detalhe; `indice_atencao_por_orgao` (stub) removido | Humberto |
 | 06/11/2026 | Organizações: botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031); Riscos LGPD só entra no arquivo com `lgpd.acessar` | Humberto |
 | 09/11/2026 | Dashboard reorganizado pela crítica de design: indicadores de problema clicáveis com cor vinda do valor, inventário em linha, alertas logo abaixo (aba na URL, abas por teclado, coluna Tipo só em "Todos", link com o nome do item), regras recolhidas em "Como calculamos", esqueleto e erro com "Tentar novamente", faixa "Fluxo de governança" retirada; gráficos sem parada de Tab por barra. Sem mudança na API | Victor |
+| 10/11/2026 | Detalhe da organização agrupado em seções: índice de atenção em destaque no topo e depois Publicação no PDA, Atualização, Formatos, Dados pessoais (LGPD) e Últimas alterações (`shared/ui/Detalhe.tsx`). Sem mudança de dados nem de API | João |
+| 10/11/2026 | Detalhe da organização alinhado ao protótipo (`prototipos/detalhes-agrupados.html`): índice de atenção com valor, faixa e barra no topo; seções com um indicador por cartão (Publicação no PDA, Atualização, Formatos, Dados pessoais). Retirada a numeração à esquerda do título das seções em todas as janelas de detalhe (`shared/ui/Detalhe.tsx`) | João |

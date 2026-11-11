@@ -74,7 +74,9 @@ a fonte.
 | 09/11/2026 | Em produção, a 1ª subida grava o perfil "Portal de Dados Abertos GO" (portal oficial) em uso na tela Configurações CKAN | Técnica | Revisão da ADR-0024 | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
 | 09/11/2026 | API e worker do modo desenvolvimento com `restart: unless-stopped` (vigia de arquivos cai com erro passageiro da pasta montada do Windows) | Técnica | Revisão da ADR-0017 | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
 | 09/11/2026 | Tela "Envio de dados do órgão" oculta (fora do menu e das rotas): não vai para produção porque a CGE-GO não a pediu; arquivos do módulo `envio` mantidos para implementação futura | Escopo | Aceita | [ADR-0033](0033-tela-de-envio-oculta.md) |
-| 11/11/2026 | Servidor recebe só versões da `main` marcadas com tag `vX.Y.Z`, publicadas por `deploy/publicar.ps1` (pacote + `scp` + build ao lado da versão no ar + troca de pasta, com volta para a anterior) | Processo | Aceita | [ADR-0034](0034-publicacao-por-versao-da-main.md) |
+| 10/11/2026 | Backups internos do banco: diário (00:00, 7 dias) e mensal (00:00 do dia 1, cobre o mês que terminou, 1 ano), gerados com `pg_dump -Fc` e guardados cifrados na tabela `backup_copia` do próprio banco, sem tela; vencidos têm o conteúdo liberado (exclusão lógica) | Técnica | Aceita | [ADR-0034](0034-backups-internos-do-banco-com-pg-dump.md) |
+| 10/11/2026 | Worker passa a executar também os backups internos do banco (diário, mensal e limpeza) | Técnica | Revisão da ADR-0012 | [ADR-0012](0012-agendamento-em-worker-proprio.md) |
+| 11/11/2026 | Servidor recebe só versões da `main` marcadas com tag `vX.Y.Z`, publicadas por `deploy/publicar.ps1` (pacote + `scp` + build ao lado da versão no ar + troca de pasta, com volta para a anterior) | Processo | Aceita | [ADR-0035](0035-publicacao-por-versao-da-main.md) |
 
 ## Decisões em aberto
 
@@ -89,6 +91,7 @@ a fonte.
 | Distribuição dos papéis padrão | Matriz atual × ajustes da GEDA | Paloma | ADR-0005 |
 | Envio de recursos pelos órgãos | Incluir no escopo × manter fora (hoje: tela oculta, ADR-0033) | Paloma / Júnior, com a SECTI | docs/modulos/envio.md, ADR-0033 |
 | Retenção do log de acesso | Prazo de guarda (ex.: 6 meses, Marco Civil) e expurgo automático × guarda indefinida | Paloma, com a coordenação | ADR-0016 |
+| Destino externo dos backups do banco | Só a tabela `backup_copia` (hoje) × volume separado × armazenamento da SECTI; e a retenção (7 dias / 1 ano) | Paloma, com a SECTI (Wagner) | ADR-0034 |
 
 ## Pendências de validação com a CGE-GO
 
