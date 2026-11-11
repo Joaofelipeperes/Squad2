@@ -4,10 +4,14 @@ import type { StatusAchado } from "./api";
 import { ROTULO_STATUS, lgpdApi } from "./api";
 import { PrioridadeTag, fmtMomento } from "./formato";
 import { useAuth } from "@/app/auth/AuthContext";
+import { Campo, Detalhe, Grade, Resumo, Secao } from "@/shared/ui/Detalhe";
 import { Modal } from "@/shared/ui/Modal";
 import { useToast } from "@/shared/ui/Toast";
 
-/** Detalhe do achado — referência: #modal-lgpd do Protótipo V1, com a decisão gravada no backend. */
+/**
+ * Detalhe do achado — referência: #modal-lgpd do Protótipo V1, com a decisão gravada no backend.
+ * Agrupado em três perguntas: onde está, por que foi sinalizado e o que decidir.
+ */
 export function AchadoModal({ id, onFechar, onDecidido, onAnonimizar }: {
   id: number | null; onFechar: () => void; onDecidido: () => void;
   onAnonimizar: (recursoId: number) => void;
@@ -66,76 +70,85 @@ export function AchadoModal({ id, onFechar, onDecidido, onAnonimizar }: {
       ) : !a ? (
         <p className="cell-muted">Carregando…</p>
       ) : (
-        <>
-          <div className="def-grid">
-            <Item rotulo="Dataset" valor={a.dataset_titulo} />
-            <Item rotulo="Órgão" valor={a.orgao_nome ?? "—"} />
-            <div className="def-item"><label>Recurso</label><div className="val mono">
-              {a.recurso_url
-                ? <a href={a.recurso_url} target="_blank" rel="noreferrer">{a.recurso_nome ?? a.recurso_id}</a>
-                : (a.recurso_nome ?? a.recurso_id)}
-            </div></div>
-            <Item rotulo="Coluna" valor={a.coluna} mono />
-            <Item rotulo="Linha (primeira ocorrência)" valor={a.linha ?? "—"} />
-            <Item rotulo="Células com esse tipo na coluna" valor={a.ocorrencias} />
-            <Item rotulo="Tipo identificado" valor={a.tipo_rotulo} />
-            <Item rotulo="Detectado por" valor={a.metodo === "ia" ? "Modelo local (IA)" : "Regra (padrão e validação)"} />
-            <div className="def-item"><label>Prioridade</label><div className="val"><PrioridadeTag prioridade={a.prioridade} /></div></div>
-            <Item rotulo="Status" valor={a.status === "revisar" ? "Aguardando revisão humana" : ROTULO_STATUS[a.status]} />
-            <div className="def-item" style={{ gridColumn: "1 / -1" }}>
-              <label>Valor</label>
-              <div className="val cell-muted">
+        <Detalhe>
+          <Resumo
+            selos={<>
+              <PrioridadeTag prioridade={a.prioridade} />
+              <span className="badge badge-gray">{a.status === "revisar" ? "Aguardando revisão humana" : ROTULO_STATUS[a.status]}</span>
+              <span className="badge badge-gray">{a.metodo === "ia" ? "Modelo local (IA)" : "Regra (padrão e validação)"}</span>
+            </>}
+            fatos={[
+              { valor: a.tipo_rotulo, rotulo: "Tipo identificado" },
+              { valor: `${a.confianca}%`, rotulo: "Confiança" },
+              { valor: a.ocorrencias, rotulo: "Células com esse tipo na coluna" },
+            ]} />
+
+          <Secao titulo="Onde está">
+            <Grade>
+              <Campo rotulo="Dataset">{a.dataset_titulo}</Campo>
+              <Campo rotulo="Órgão">{a.orgao_nome ?? "—"}</Campo>
+              <Campo rotulo="Recurso" mono>
+                {a.recurso_url
+                  ? <a href={a.recurso_url} target="_blank" rel="noreferrer">{a.recurso_nome ?? a.recurso_id}</a>
+                  : (a.recurso_nome ?? a.recurso_id)}
+              </Campo>
+              <Campo rotulo="Coluna" mono>{a.coluna}</Campo>
+              <Campo rotulo="Linha (primeira ocorrência)">{a.linha ?? "—"}</Campo>
+              <Campo rotulo="Valor" leve>
                 Não armazenado (política de não retenção). Confira no arquivo do recurso, coluna
                 “{a.coluna}”, linha {a.linha ?? "—"}.
-              </div>
+              </Campo>
+            </Grade>
+          </Secao>
+
+          <Secao titulo="Por que foi sinalizado">
+            <div className="det-campo" style={{ marginBottom: 12 }}>
+              <label>Confiança da detecção</label>
+              <div className="det-valor">{a.confianca}%</div>
+              <div className="confidence-bar"><div className="confidence-fill" style={{ width: `${a.confianca}%` }} /></div>
             </div>
-          </div>
-          <div className="def-item" style={{ marginTop: 16 }}>
-            <label>Confiança da detecção</label>
-            <div className="val">{a.confianca}%</div>
-            <div className="confidence-bar"><div className="confidence-fill" style={{ width: `${a.confianca}%` }} /></div>
-          </div>
-          {a.explicacao && (
-            <div className="def-item" style={{ marginTop: 16 }}>
-              <label>Por que foi sinalizado</label>
-              <ul className="lgpd-explicacao">
+            {a.explicacao && (
+              <ul className="lgpd-explicacao" style={{ marginBottom: 14 }}>
                 {a.explicacao.split("; ").map((p, i) => <li key={i}>{p}</li>)}
               </ul>
+            )}
+          </Secao>
+
+          <Secao titulo="Decisão">
+            <div className="det-campo" style={{ marginBottom: 14 }}>
+              <label>Status</label>
+              <div className="det-valor">{a.status === "revisar" ? "Aguardando revisão humana" : ROTULO_STATUS[a.status]}</div>
             </div>
-          )}
-          {triar && (
-            <div className="form-field" style={{ marginTop: 16 }}>
-              <label htmlFor="lgpd-justificativa">Justificativa da decisão (opcional)</label>
-              <textarea id="lgpd-justificativa" className="text-input" maxLength={1000} value={justificativa}
-                        placeholder="Ex.: coluna guarda código da escola, não telefone"
-                        onChange={(e) => setJustificativa(e.target.value)} />
+            {triar && (
+              <div className="form-field" style={{ marginBottom: 14 }}>
+                <label htmlFor="lgpd-justificativa">Justificativa da decisão (opcional)</label>
+                <textarea id="lgpd-justificativa" className="text-input" maxLength={1000} value={justificativa}
+                          placeholder="Ex.: coluna guarda código da escola, não telefone"
+                          onChange={(e) => setJustificativa(e.target.value)} />
+              </div>
+            )}
+            {a.decisoes.length > 0 && (
+              <div className="det-campo" style={{ marginBottom: 14 }}>
+                <label>Histórico de decisões</label>
+                <ul className="lgpd-explicacao">
+                  {a.decisoes.map((d, i) => (
+                    <li key={i}>
+                      <b>{ROTULO_STATUS[d.decisao]}</b> · {d.usuario} · {fmtMomento(d.momento)}
+                      {d.justificativa && <> — {d.justificativa}</>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="alert-callout" style={{ marginBottom: 14 }}>
+              <i className="fa-solid fa-circle-info" />
+              <div>Esta é uma sinalização automática indicativa. Nenhuma ação de bloqueio, ocultação ou
+                anonimização é realizada pelo sistema — a decisão cabe à equipe responsável, mediante
+                análise humana.</div>
             </div>
-          )}
-          {a.decisoes.length > 0 && (
-            <div className="def-item" style={{ marginTop: 16 }}>
-              <label>Histórico de decisões</label>
-              <ul className="lgpd-explicacao">
-                {a.decisoes.map((d, i) => (
-                  <li key={i}>
-                    <b>{ROTULO_STATUS[d.decisao]}</b> · {d.usuario} · {fmtMomento(d.momento)}
-                    {d.justificativa && <> — {d.justificativa}</>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="alert-callout" style={{ marginTop: 16, marginBottom: 0 }}>
-            <i className="fa-solid fa-circle-info" />
-            <div>Esta é uma sinalização automática indicativa. Nenhuma ação de bloqueio, ocultação ou
-              anonimização é realizada pelo sistema — a decisão cabe à equipe responsável, mediante
-              análise humana.</div>
-          </div>
-        </>
+          </Secao>
+        </Detalhe>
       )}
     </Modal>
   );
-}
-
-function Item({ rotulo, valor, mono }: { rotulo: string; valor: string | number; mono?: boolean }) {
-  return <div className="def-item"><label>{rotulo}</label><div className={mono ? "val mono" : "val"}>{valor}</div></div>;
 }

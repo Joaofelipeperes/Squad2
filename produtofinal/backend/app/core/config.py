@@ -84,6 +84,18 @@ class Settings(BaseSettings):
     lgpd_sal_hash: SecretStr | None = None  # sal do operador "hash"; vazio = deriva da secret_key
     timezone: str = "America/Sao_Paulo"
 
+    # Backups internos do banco (ADR-0034). Diário todo dia 00:00 (guardado por 7 dias); mensal à
+    # 00:00 do dia 1, cobrindo o mês que terminou (guardado por 1 ano). Ficam na tabela
+    # `backup_copia`, cifrados; a limpeza libera o conteúdo dos vencidos.
+    backup_diario_cron: str = "0 0 * * *"
+    backup_mensal_cron: str = "0 0 1 * *"
+    backup_limpeza_cron: str = "0 1 * * *"
+    backup_retencao_diaria_dias: int = 7
+    backup_retencao_mensal_dias: int = 365
+    backup_pg_dump: str = "pg_dump"  # binários do PostgreSQL 16 (instalados na imagem do backend)
+    backup_pg_restore: str = "pg_restore"
+    backup_timeout_s: int = 3600
+
     # IA — política de dados sensíveis
     # False (padrão): tarefas que tocam dado pessoal só podem usar provedor marcado como LOCAL.
     ia_permitir_externo_para_sensivel: bool = False

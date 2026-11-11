@@ -14,7 +14,54 @@ vai só o produto final e a IA local (Ollama); o CKAN local é apenas do desenvo
 | Internet de saída | Na instalação: Docker Hub, npm, PyPI, ollama.com. Sempre: `dadosabertos.go.gov.br` | — |
 | Usuário | No grupo `docker` (ou com `sudo`) | — |
 
-## 1. Gerar o pacote (no computador do time)
+## Publicar uma versão (o jeito do dia a dia)
+
+Decisão: [ADR-0035](../docs/adr/0035-publicacao-por-versao-da-main.md). **Só vai ao servidor o que
+está na `main`** do GitHub, identificado por uma versão `vMAIOR.MENOR.CORRECAO` (tag). O fluxo é:
+merge de `desenvolvimento` na `main` (PR) → um comando no seu computador:
+
+```powershell
+.\produtofinal\deploy\publicar.ps1 -Versao 1.0.0   # cria a tag v1.0.0 na origin/main e publica
+.\produtofinal\deploy\publicar.ps1 -Versao 1.0.0   # republica a mesma versão (tag já existe)
+.\produtofinal\deploy\publicar.ps1 -Status         # versão e containers no servidor
+.\produtofinal\deploy\publicar.ps1 -Voltar         # volta para a versão anterior
+```
+
+O script busca a `origin/main` (sua branch atual e alterações locais não importam), cria e envia a
+tag (pede confirmação; `-Sim` pula), gera o pacote, envia por `scp` e, no servidor:
+
+1. extrai em `~/gda.novo` e copia para lá o `.env` e `deploy/certificados/` da instalação atual;
+2. faz o `docker compose build` com a versão atual ainda no ar (se o build falhar, nada muda);
+3. move `~/gda` para `~/gda.anterior`, põe a nova no lugar e roda `docker compose up -d`;
+4. mostra `docker compose ps` e o arquivo `VERSAO` (versão, commit e data do pacote).
+
+Volumes (banco, segredos, modelos de IA) não mudam: o projeto se chama sempre `gda`. O `-Voltar`
+troca as pastas de volta, mas **não desfaz migrações de banco** já aplicadas pela versão nova.
+
+Numeração: `MAIOR` para mudança que exige ação de quem opera (ex.: nova variável obrigatória no
+`.env`), `MENOR` para funcionalidade nova, `CORRECAO` para correção. Sem `-Versao`, o script publica
+a `origin/main` atual com um rótulo como `v1.0.0-3-g1a2b3c4` — use só para testes rápidos.
+
+**Configurar uma vez** (no seu computador): o servidor como apelido no `~/.ssh/config` e entrada por
+chave, para não digitar senha a cada comando.
+
+```
+Host ufg
+  HostName 200.137.197.131
+  Port 55753
+  User <seu usuário na VM>
+```
+
+```powershell
+ssh-keygen -t ed25519
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh ufg "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+Outro servidor ou pasta: `-Servidor <apelido>` e `-Pasta <nome na home>` (padrões `ufg` e `gda`).
+
+## Pacote manual (sem SSH, ex.: entregar à SECTI)
+
+### 1. Gerar o pacote (no computador do time)
 
 ```powershell
 .\produtofinal\deploy\empacotar.ps1                               # do último commit
@@ -25,7 +72,7 @@ Sai `gda-AAAAMMDD-<commit>.tar.gz`, com o compose de produção já como `docker
 desenvolvimento e o do CKAN local ficam de fora) e o modelo de configuração como `.env.example`.
 Copie para o servidor, por exemplo: `scp -P <porta> gda-*.tar.gz usuario@servidor:~`.
 
-## 2. Subir (no servidor)
+### 2. Subir (no servidor)
 
 ```bash
 tar -xzf gda-AAAAMMDD-<commit>.tar.gz && cd gda
@@ -104,12 +151,28 @@ docker compose exec worker python -m app.cli coletar   # coleta manual, em prime
 
 (No repositório, sem o pacote, acrescente `-f docker-compose.prod.yml` a cada comando.)
 
-**Atualizar a versão:** extraia o pacote novo por cima (`tar -xzf ... `; o `.env`, `deploy/certificados/`
+**Atualizar a versão:** use `deploy/publicar.ps1` (acima). À mão: extraia o pacote novo por cima (`tar -xzf ... `; o `.env`, `deploy/certificados/`
 e os volumes ficam) e rode `docker compose up -d --build`. As migrações rodam sozinhas e nada do
 que foi configurado nas telas é sobrescrito.
 
-**Backup** (agende diariamente, guarde fora do servidor e com acesso restrito: contém dados pessoais
-de usuários, o log de acesso e as chaves do sistema):
+**Backups internos (automáticos, ADR-0034).** O `worker` gera sozinho uma cópia completa do banco
+`gda` todo dia à 00:00 (guardada por 7 dias) e outra à 00:00 do dia 1 de cada mês, cobrindo o mês que
+terminou (guardada por 1 ano). Ficam cifrados na tabela `backup_copia` do próprio banco, sem tela por
+enquanto:
+
+```bash
+docker compose exec worker python -m app.cli backups                       # lista
+docker compose exec worker python -m app.cli backup-agora diario           # gera uma agora
+docker compose exec worker python -m app.cli exportar-backup 12 /tmp/gda.dump
+docker compose exec worker python -m app.cli restaurar-backup 12 --banco gda_restaurado
+```
+
+Eles protegem de erro lógico (dado apagado, migração ruim), **não** da perda do volume `pgdata`:
+a cópia mora no mesmo banco. Para isso serve o backup externo abaixo, que continua necessário. Para
+abrir uma cópia é preciso a chave do volume `gda_segredos` (GDA_ENCRYPTION_KEY).
+
+**Backup externo** (agende diariamente, guarde fora do servidor e com acesso restrito: contém dados
+pessoais de usuários, o log de acesso e as chaves do sistema):
 
 ```bash
 docker compose exec -T db pg_dump -U gda -Fc gda > gda-$(date +%F).dump

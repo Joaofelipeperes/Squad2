@@ -20,6 +20,7 @@ da raiz do repositório) e o teste `test_guardas_do_projeto.py` verificam isso.
 | [envio](envio.md) | Envio de dados do órgão | Não comprometido — tela oculta (ADR-0033) | — |
 | [ia](ia.md) | Modelos de IA | Implementado | Luiza |
 | [parametros](parametros.md) | Parâmetros | Implementado | — |
+| [backup](backup.md) | — (interno, sem tela) | Implementado (sem interface) | João |
 
 ## Mapa de dependências
 
