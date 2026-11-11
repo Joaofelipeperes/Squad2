@@ -74,6 +74,7 @@ a fonte.
 | 09/11/2026 | Em produção, a 1ª subida grava o perfil "Portal de Dados Abertos GO" (portal oficial) em uso na tela Configurações CKAN | Técnica | Revisão da ADR-0024 | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
 | 09/11/2026 | API e worker do modo desenvolvimento com `restart: unless-stopped` (vigia de arquivos cai com erro passageiro da pasta montada do Windows) | Técnica | Revisão da ADR-0017 | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
 | 09/11/2026 | Tela "Envio de dados do órgão" oculta (fora do menu e das rotas): não vai para produção porque a CGE-GO não a pediu; arquivos do módulo `envio` mantidos para implementação futura | Escopo | Aceita | [ADR-0033](0033-tela-de-envio-oculta.md) |
+| 11/11/2026 | Servidor recebe só versões da `main` marcadas com tag `vX.Y.Z`, publicadas por `deploy/publicar.ps1` (pacote + `scp` + build ao lado da versão no ar + troca de pasta, com volta para a anterior) | Processo | Aceita | [ADR-0034](0034-publicacao-por-versao-da-main.md) |
 
 ## Decisões em aberto
 
