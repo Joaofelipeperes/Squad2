@@ -230,3 +230,59 @@ def test_tipo_de_base():
     assert regras.tipo_de_base(False, True) == regras.PREVISTA  # vinculada, mesmo fora do portal
     assert regras.tipo_de_base(True, False) == regras.ESPONTANEA
     assert regras.tipo_de_base(False, False) is None  # fora do portal: não é espontânea
+
+
+def test_coleta_tenta_de_novo_quando_portal_devolve_html(monkeypatch):
+    """Regressão (coleta de 10/11/2026): o firewall do portal devolveu uma página HTML com HTTP 200
+    no `package_search`. A coleta repete a chamada em vez de falhar na primeira resposta ruim."""
+    from app.integrations.ckan import client as ckan
+
+    pausas, html = [], [2]  # as 2 primeiras chamadas ao package_search vêm em HTML
+
+    def handler(request: httpx.Request):
+        if request.url.path.endswith("/package_search") and html[0]:
+            html[0] -= 1
+            return httpx.Response(200, text="<html>Request Rejected</html>",
+                                  headers={"content-type": "text/html"})
+        return _handler(request)
+
+    monkeypatch.setattr(ckan.time, "sleep", pausas.append)
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(handler), max_retries=3)
+    with SessionLocal() as db:
+        c = service.iniciar(db, origem="manual")
+    service.executar(c.id, client=client)
+    with SessionLocal() as db:
+        coleta = service.ultima_coleta(db)
+        assert coleta.status == "ok", coleta.erro
+        assert coleta.total_datasets == 3
+    assert pausas == [1, 2]
+
+
+def test_html_persistente_esgota_tentativas_e_mantem_a_mensagem(monkeypatch):
+    """HTML em todas as tentativas: falha com a mensagem de corpo não-JSON (não 'indisponível'),
+    sem esperar depois da última tentativa. Actions sem `repetir_nao_json` falham na hora."""
+    from app.integrations.ckan import client as ckan
+
+    pausas, chamadas = [], []
+
+    def sempre_html(request: httpx.Request):
+        chamadas.append(request.url.path)
+        return httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+
+    monkeypatch.setattr(ckan.time, "sleep", pausas.append)
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(sempre_html),
+                        max_retries=2)
+    try:
+        list(client.iter_datasets())
+    except ckan.CkanError as exc:
+        assert "não-JSON" in str(exc) and exc.status_http == 200
+    else:
+        raise AssertionError("esperava CkanError")
+    assert len(chamadas) == 3 and pausas == [1, 2]
+
+    chamadas.clear()
+    try:
+        client.dataset("d1")  # package_show: HTML não é repetido (ex.: portal sem a extensão)
+    except ckan.CkanError:
+        pass
+    assert len(chamadas) == 1
