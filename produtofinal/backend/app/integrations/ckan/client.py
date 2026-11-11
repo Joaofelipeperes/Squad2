@@ -102,8 +102,13 @@ class CkanClient:
         self.close()
 
     # ------------------------------------------------------------------ baixo nível
-    def action(self, name: str, **params: Any) -> Any:
-        """Chama /api/3/action/<name> com retentativa exponencial em falhas transitórias."""
+    def action(self, name: str, *, repetir_nao_json: bool = False, **params: Any) -> Any:
+        """Chama /api/3/action/<name> com retentativa exponencial em falhas transitórias.
+
+        `repetir_nao_json`: trata corpo não-JSON (HTML com HTTP 200) como falha transitória. Só
+        para actions públicas que o portal sempre atende em JSON (coleta diária): o firewall/
+        balanceador do portal às vezes devolve uma página HTML por um instante (coleta de
+        10/11/2026). Nas actions de extensão (auditoria) o HTML é permanente e não se repete."""
         last_exc: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
@@ -120,17 +125,27 @@ class CkanClient:
                     # Corpo não-JSON (ex.: página HTML de "Acesso Negado" com HTTP 200, típica de
                     # portal sem a extensão/endpoint): vira erro tratado em vez de JSONDecodeError.
                     tipo = resp.headers.get("content-type", "?")
-                    raise CkanError(f"{name}: resposta não-JSON do CKAN "
-                                    f"(HTTP {resp.status_code}, {tipo})", resp.status_code) from exc
-                if not data.get("success"):
-                    raise CkanError(f"{name} falhou: {data.get('error')}")
-                return data["result"]
+                    erro = CkanError(f"{name}: resposta não-JSON do CKAN "
+                                     f"(HTTP {resp.status_code}, {tipo})", resp.status_code)
+                    # início do corpo no log: mostra o que o portal devolveu no lugar do JSON
+                    log.warning("CKAN %s devolveu corpo não-JSON (HTTP %s, %s): %r", name,
+                                resp.status_code, tipo, resp.text[:300])
+                    if not repetir_nao_json:
+                        raise erro from exc
+                    last_exc = erro
+                else:
+                    if not data.get("success"):
+                        raise CkanError(f"{name} falhou: {data.get('error')}")
+                    return data["result"]
             except (httpx.TransportError, httpx.HTTPStatusError) as exc:
                 last_exc = exc
+            if attempt < self.max_retries:
                 wait = 2**attempt
                 log.warning("CKAN %s tentativa %s falhou (%s); nova tentativa em %ss",
-                            name, attempt + 1, exc, wait)
+                            name, attempt + 1, last_exc, wait)
                 time.sleep(wait)
+        if isinstance(last_exc, CkanError):
+            raise last_exc
         raise CkanError(f"{name} indisponível após {self.max_retries + 1} tentativas") from last_exc
 
     # ------------------------------------------------------------------ alto nível
@@ -146,8 +161,8 @@ class CkanClient:
         vistos: set[str] = set()
         offset = 0
         while True:
-            batch = self.action("organization_list", all_fields=True, include_extras=True,
-                                limit=page_size, offset=offset)
+            batch = self.action("organization_list", repetir_nao_json=True, all_fields=True,
+                                include_extras=True, limit=page_size, offset=offset)
             novos = [o for o in batch if o.get("id") not in vistos]
             orgs.extend(novos)
             vistos.update(o.get("id") for o in novos)
@@ -164,7 +179,7 @@ class CkanClient:
         start = 0
         while True:
             result = self.action(
-                "package_search", q="*:*", rows=rows, start=start,
+                "package_search", repetir_nao_json=True, q="*:*", rows=rows, start=start,
                 sort="metadata_created desc, id asc",
                 include_private=False,
             )
