@@ -18,6 +18,12 @@ def datasets_sem_recurso(db: Session) -> list[Dataset]:
     return MetadadosDao(db).datasets_ativos_sem_recurso()
 
 
+def recursos_validos(db: Session) -> list[Recurso]:
+    """Recursos ATUAIS (ainda no pacote do dataset) de datasets ativos no portal, fora do
+    dicionário de dados — os "recursos válidos" contados no painel (relatório detalhado do órgão)."""
+    return MetadadosDao(db).recursos_validos_de_datasets_ativos()
+
+
 def recursos_formato_fechado(db: Session, formatos_abertos: list[str]) -> list[Recurso]:
     """PBI-53 — recursos ATUAIS (ainda no pacote do dataset) de datasets ativos no portal, fora
     do dicionário de dados, cujo formato não está em `formatos_abertos` (parâmetro da GEDA).

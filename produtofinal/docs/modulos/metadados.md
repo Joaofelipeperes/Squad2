@@ -7,7 +7,7 @@
 | **User stories** | US16 (PBI-48 a PBI-50), US17 (PBI-51 a PBI-53) |
 | **Backend** | `backend/app/modules/metadados/` |
 | **Frontend** | sem tela própria — resultados aparecem em Datasets, Organizações e Relatórios |
-| **Última atualização** | 28/10/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Mede o preenchimento dos metadados obrigatórios e identifica datasets sem recurso e recursos em
@@ -33,6 +33,8 @@ Contratos em `service.py`:
 - `datasets_sem_recurso(db) -> list[Dataset]` — PBI-51: datasets **ativos** no portal sem recurso
   válido (sem arquivo, ou só com o dicionário de dados; recurso apagado do CKAN não conta).
   **Implementado** (`MetadadosDao.datasets_ativos_sem_recurso`).
+- `recursos_validos(db) -> list[Recurso]` — recursos atuais, sem dicionário, de datasets ativos (os
+  "recursos válidos" do painel); usado no relatório detalhado do órgão.
 - `recursos_formato_fechado(db, formatos_abertos) -> list[Recurso]` — PBI-53: recursos atuais (ainda
   no pacote) de datasets ativos, sem dicionário de dados, com formato fora da lista. **Implementado.**
 
@@ -53,7 +55,7 @@ Sem tabelas próprias: lê `dataset` e `recurso`.
 | consome | inventario | `Dataset` (campos e extras), `Recurso.formato` |
 | consome | parametros | `metadados_obrigatorios`, `formatos_abertos` |
 | é consumido por | painel | `recursos_formato_fechado` e `regras.normalizar_formato` — "Recursos sem formato aberto" na tela Organizações; `datasets_sem_recurso` — cartão e alertas do Dashboard |
-| é consumido por | relatorios | indicadores e listas exportáveis |
+| é consumido por | relatorios | indicadores e listas exportáveis; `recursos_validos` e `regras.eh_formato_aberto` no relatório detalhado do órgão |
 
 ## Jobs agendados
 Nenhum.
@@ -80,3 +82,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 21/10/2026 | Chave primária própria no inventário (ADR-0018): `recursos_formato_fechado` junta `Recurso` × `Dataset` por `Dataset.id`; sem mudança de comportamento | Victor |
 | 22/10/2026 | Banco só pelo `MetadadosDao` (ADR-0019); recursos excluídos não entram no formato fechado | Victor |
 | 28/10/2026 | Datasets sem recurso (PBI-51): `service.datasets_sem_recurso` e `MetadadosDao.datasets_ativos_sem_recurso`, usados pelo Dashboard | Humberto |
+| 09/11/2026 | `recursos_validos(db)`: lista dos recursos válidos (o que o painel conta), para o relatório detalhado do órgão | Humberto |

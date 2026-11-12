@@ -7,7 +7,7 @@
 | **User stories** | US20 (PBI-60, PBI-61, PBI-77) |
 | **Backend** | `backend/app/modules/relatorios/` |
 | **Frontend** | `frontend/src/modules/relatorios/` |
-| **Última atualização** | 06/11/2026 |
+| **Última atualização** | 09/11/2026 |
 
 ## Propósito
 Substitui o controle manual em planilhas da GEDA por relatórios exportáveis com as mesmas colunas.
@@ -15,27 +15,36 @@ Substitui o controle manual em planilhas da GEDA por relatórios exportáveis co
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Relatórios | `/relatorios` | `relatorios.acessar` | Gerar relatório (prévia, `relatorios.acessar` + permissão do módulo de origem); **Relatório de um órgão** (escolher o órgão e os relatórios); exportar Excel/CSV/PDF (`relatorios.exportar`) |
+| Relatórios | `/relatorios` | `relatorios.acessar` | Gerar relatório (prévia, `relatorios.acessar` + permissão do módulo de origem); **Relatório de um órgão** (digitar o órgão e gerar o relatório detalhado); exportar Excel/CSV/PDF (`relatorios.exportar`) |
 
 Referência visual: `#screen-reports` (6 relatórios do protótipo, PBI-77). Cada cartão abre um modal
 com a prévia (até 50 linhas, total de linhas e referência, ex.: o PDA vigente). A exportação leva o
 relatório inteiro. Os cartões mostrados dependem do perfil: só aparecem os relatórios cujo módulo de
 origem o usuário acessa.
 
-**Relatório de um órgão** (`RelatorioOrgao.tsx`, painel acima dos cartões): o usuário escolhe o
-órgão (lista do escopo de órgão dele) e marca quantos relatórios quiser ("Marcar todos"). Na
-marcação, o "Relatório por Órgão" (o comparativo de todos os órgãos, que continua como cartão)
-aparece como **Resumo do órgão** ("Indicador | Valor"): primeira opção, **já marcada**, que o
-usuário pode desmarcar; quando marcado, abre o documento. É preciso marcar ao menos um item.
-**Gerar relatório** abre um
-modal com uma seção por item (prévia de 10 linhas de cada) e as exportações **PDF** (um documento
-com seções), **Excel** (uma aba por seção) e **CSV** (as seções em sequência, cada uma com o
-título). Com o órgão escolhido, cada relatório vem só com as linhas dele e sem as colunas
-Sigla/Órgão (o órgão vai no título). Depois do resumo, as seções seguem a ordem do catálogo.
+**Relatório de um órgão** (`RelatorioOrgao.tsx`, painel acima dos cartões; pedido da GEDA de
+05/11): o usuário **digita** o nome ou a sigla do órgão (busca com sugestões, sem diferenciar
+acentos; setas, Enter e Esc) e gera **um** relatório detalhado — não há mais marcação de relatórios.
+O documento traz o **Resumo do órgão** ("Indicador | Valor") e, para cada número dele, a **lista do
+que ele conta**:
 
-O mesmo fluxo existe no **detalhe do órgão em Organizações** (botão **Gerar relatório**, só com
-`relatorios.acessar` e quando o órgão tem organização no portal): `GerarRelatorioOrgaoModal` já
-vem com o órgão escolhido, mostra a mesma marcação e abre a mesma prévia/exportação.
+| Seção (`id`) | O que lista | Exige |
+|---|---|---|
+| Resumo do órgão (`resumo`) | os indicadores da tela Organizações | `painel.acessar` |
+| Bases previstas no PDA (`bases`) | todas as bases do PDA vigente: situação, prazo, periodicidade, dataset do portal (título; "vínculo pendente"/"fora do portal") e data de publicação — as que pedem ação primeiro | `pda.acessar` |
+| Bases em atraso (`bases-em-atraso`) e Bases próximas do prazo (`bases-proximas`) | quais são | `pda.acessar` |
+| Atualização das bases (`atualizacao`) | cada base vinculada: periodicidade, última atualização, se é estimada, vencimento e situação (ADR-0023) — atrasadas primeiro | `atualizacoes.acessar` |
+| Datasets no portal (`datasets`) e Datasets sem recurso (`sem-recurso`) | título, criação no CKAN, recursos válidos, formatos, última atualização, tipo de base | `inventario.acessar` |
+| Recursos válidos (`recursos`) e Recursos em formato fechado (`formatos`) | dataset, recurso, formato (aberto ou não) e última atualização | `inventario.acessar` |
+| Possíveis dados pessoais em aberto (`dados-pessoais`) | prioridade, dataset, arquivo, tipo, coluna, primeira linha, células e situação — **nunca o valor** | `lgpd.acessar` |
+
+Seção sem a permissão do módulo de origem fica fora do documento. **Gerar relatório** abre um modal
+com a prévia de 10 linhas de cada seção e as exportações **PDF** (um documento com seções), **Excel**
+(uma aba por seção) e **CSV** (as seções em sequência, cada uma com o título).
+
+O mesmo relatório abre do **detalhe do órgão em Organizações** (botão **Gerar relatório**, só com
+`relatorios.acessar` e quando o órgão tem organização no portal), direto na prévia
+(`RelatorioOrgaoModal`).
 
 | Relatório (`id`) | Módulo de origem (permissão exigida) | Conteúdo |
 |---|---|---|
@@ -54,8 +63,8 @@ vem com o órgão escolhido, mostra a mesma marcação e abre a mesma prévia/ex
 | POST | `/api/v1/relatorios/tabela/exportar` | `relatorios.exportar` | Excel ou PDF de uma tabela das telas (ADR-0031): corpo `TabelaExportarIn` `{titulo, filtros, colunas, linhas, formato: pdf\|xlsx}` com as linhas como a tela mostra; arquivo `<titulo>-<aaaa-mm-dd>.<formato>`. Não consulta o banco. **422** formato inválido, sem colunas, linha com número de colunas diferente do cabeçalho, mais de 30 colunas ou 20 mil linhas |
 | GET | `/api/v1/relatorios/{id}/exportar?formato=xlsx\|csv\|pdf` | `relatorios.acessar` + `relatorios.exportar` + origem | Arquivo `relatorio-<id>-<aaaa-mm-dd>.<formato>` |
 | GET | `/api/v1/relatorios/por-orgao/orgaos` | `relatorios.acessar` | `OrgaoOpcaoOut[]` (`{id, nome}`): órgãos do escopo do usuário, por nome |
-| GET | `/api/v1/relatorios/por-orgao/{orgao}/previa?relatorios=pda&relatorios=…` | `relatorios.acessar` + origem de cada relatório | `RelatorioOrgaoOut`: `orgao`, `hoje` e `secoes` — um `PreviaOut` por item escolhido, já filtrado; `orgaos` = resumo do órgão (título "Resumo do órgão", `painel.acessar`), sempre a primeira seção. **404** órgão fora do escopo ou relatório desconhecido; **403** sem a permissão de origem; **422** nada escolhido |
-| GET | `/api/v1/relatorios/por-orgao/{orgao}/exportar?relatorios=…&formato=pdf\|xlsx\|csv` | `relatorios.acessar` + `relatorios.exportar` + origem | Arquivo `relatorio-<sigla ou nome do órgão>-<aaaa-mm-dd>.<formato>` |
+| GET | `/api/v1/relatorios/por-orgao/{orgao}/previa` | `relatorios.acessar` (+ origem de cada seção) | `RelatorioOrgaoOut`: `orgao`, `hoje` e `secoes` (`PreviaOut` por seção do relatório detalhado, ids na tabela acima). **404** órgão fora do escopo; **403** sem acesso a nenhum módulo de origem |
+| GET | `/api/v1/relatorios/por-orgao/{orgao}/exportar?formato=pdf\|xlsx\|csv` | `relatorios.acessar` + `relatorios.exportar` (+ origem de cada seção) | Arquivo `relatorio-<sigla ou nome do órgão>-<aaaa-mm-dd>.<formato>` |
 
 Erros: relatório inexistente → 404; sem a permissão do módulo de origem → 403; formato inválido → 422.
 
@@ -65,11 +74,11 @@ Erros: relatório inexistente → 404; sem a permissão do módulo de origem →
   de órgão; com `orgao` (id da organização), cada montador filtra as linhas daquele órgão e as
   colunas de órgão saem (`regras.sem_colunas_de_orgao`); o relatório por órgão vira
   `regras.transpor` ("Indicador | Valor").
-- `orgaos_disponiveis(db, user)`, `previa_orgao(db, orgao, relatorios, user)` e
-  `exportar_orgao(db, orgao, relatorios, formato, user)` — relatório de um órgão: valida o órgão
-  (escopo) e os relatórios (sem repetição, ordem do catálogo, permissão de origem de cada um); o
-  "Resumo do órgão" (`RESUMO` = relatório "orgaos", `_secao_do_orgao`) entra só quando pedido,
-  sempre como 1ª seção.
+- `orgaos_disponiveis(db, user)`, `previa_orgao(db, orgao, user)` e
+  `exportar_orgao(db, orgao, formato, user)` — relatório detalhado de um órgão: `_secoes_do_orgao`
+  valida o órgão (escopo) e monta as seções conforme as permissões (`montar("orgaos")` para o
+  resumo, `_secoes_pda`, `_secao_atualizacao`, `_secoes_portal` com `inventario.listar_datasets`
+  e `metadados.recursos_validos`, `_secao_lgpd` com os achados em `lgpd.regras.EM_ABERTO`).
 - `previa(db, nome, user, limite=50) -> PreviaOut`.
 - `exportar(db, nome, formato, user) -> (bytes, media_type, nome_arquivo)` — PBI-60/61; formato `xlsx`, `csv` ou `pdf`.
 - `regras.gerar_xlsx` / `regras.gerar_csv` / `regras.gerar_pdf` (puras): XLSX com cabeçalho em
@@ -105,12 +114,12 @@ por órgão.
 | consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` e `hoje_local()`: bases previstas, situação e prazos, **sempre do PDA vigente** |
 | consome | atualizacoes | `regras.vencimento_atualizacao` e situações (`ATRASADO`, `PROXIMO_DO_VENCIMENTO`) |
 | consome | painel | `organizacoes(db, user)` (relatório por órgão) e `situacao_atualizacao(base, hoje)` |
-| é consumido por | painel | tela Organizações usa `GerarRelatorioOrgaoModal` no detalhe do órgão |
+| é consumido por | painel | tela Organizações usa `RelatorioOrgaoModal` (relatório detalhado) no detalhe do órgão |
 | consome | lgpd | `listar_achados(db, user, status="revisar")` |
-| consome | metadados | `datasets_sem_recurso(db)` e `recursos_formato_fechado(db, formatos_abertos)` |
+| consome | metadados | `datasets_sem_recurso(db)`, `recursos_formato_fechado(db, formatos_abertos)`, `recursos_validos(db)` e `regras.eh_formato_aberto` |
 | consome | parametros | `formatos_abertos` |
-| consome | inventario | `Organizacao` (nome/sigla do órgão nas listas do inventário) |
-| é consumido por | pda, atualizacoes, painel, inventario | `POST /tabela/exportar` — Excel e PDF das tabelas de Monitoramento do PDA, Atualizações, Organizações e Datasets (`shared/ui/ExportarTabela.tsx`, ADR-0031) |
+| consome | inventario | `Organizacao` (nome/sigla do órgão nas listas do inventário); `service.listar_datasets(orgao=)` e `regras` (situação no portal) — relatório detalhado do órgão |
+| é consumido por | pda, atualizacoes, painel, inventario, lgpd | `POST /tabela/exportar` — Excel e PDF das tabelas de Monitoramento do PDA, Atualizações, Organizações, Datasets e Riscos de Dados Pessoais (`shared/ui/ExportarTabela.tsx`, ADR-0031) |
 
 ## Jobs agendados
 Nenhum.
@@ -145,3 +154,5 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 05/11/2026 | Relatório por Órgão: colunas Riscos LGPD (recursos) e Recursos varridos (só com `lgpd.acessar`), Índice de atenção e Índice de atenção (0-100) | Humberto |
 | 06/11/2026 | `POST /tabela/exportar` (`exportar_tabela`, `TabelaExportarIn`, `nome_arquivo_tabela`): Excel e PDF das tabelas das telas, usado por PDA, Atualizações, Organizações e Datasets (ADR-0031) | Humberto |
 | 06/11/2026 | Relatório Datasets sem Recurso: sai a coluna "Name (CKAN)" (`name` técnico); ficam o título e o ID no CKAN | Humberto |
+| 09/11/2026 | Interações: a tela Riscos de Dados Pessoais (`lgpd`) também usa `POST /tabela/exportar` (sem mudança no código do módulo) | Humberto |
+| 09/11/2026 | **Relatório de um órgão detalhado** (pedido da GEDA): o órgão é escolhido digitando (busca com sugestões) e sai **um** relatório — o resumo e, para cada número, a lista do que ele conta (bases, em atraso, próximas do prazo, atualização, datasets, sem recurso, recursos, formato fechado, dados pessoais em aberto), cada seção conforme a permissão do módulo de origem. Sai a marcação de relatórios (`?relatorios=`) e o `GerarRelatorioOrgaoModal` | Humberto |

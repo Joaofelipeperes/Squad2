@@ -51,12 +51,11 @@ def orgaos(db: DbSession, user: Annotated[UsuarioAtual, Depends(require(P.RELATO
 
 @router.get("/por-orgao/{orgao}/previa", response_model=RelatorioOrgaoOut)
 def previa_orgao(orgao: int, db: DbSession,
-                 user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))],
-                 relatorios: Annotated[list[str] | None, Query()] = None):
-    """Prévia do relatório de um órgão: uma seção por item escolhido (?relatorios=orgaos&
-    relatorios=pda&...; "orgaos" = resumo do órgão, sempre a primeira seção)."""
+                 user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR))]):
+    """Prévia do relatório detalhado de um órgão: o resumo e a lista do que cada número conta
+    (bases, atualização, datasets, recursos, dados pessoais), conforme o acesso do usuário."""
     try:
-        return service.previa_orgao(db, orgao, relatorios or [], user)
+        return service.previa_orgao(db, orgao, user)
     except service.ErroRelatorio as exc:
         raise _erro(exc) from exc
 
@@ -65,13 +64,11 @@ def previa_orgao(orgao: int, db: DbSession,
 def exportar_orgao(orgao: int, db: DbSession,
                    user: Annotated[UsuarioAtual, Depends(require(P.RELATORIOS_ACESSAR,
                                                                  P.RELATORIOS_EXPORTAR))],
-                   relatorios: Annotated[list[str] | None, Query()] = None,
                    formato: Annotated[str, Query(pattern="^(xlsx|csv|pdf)$")] = "pdf"):
-    """Arquivo do relatório de um órgão (itens escolhidos): PDF com seções, XLSX com
-    uma aba por seção ou CSV com as seções em sequência."""
+    """Arquivo do relatório detalhado de um órgão: PDF com seções, XLSX com uma aba por seção ou
+    CSV com as seções em sequência."""
     try:
-        conteudo, media_type, arquivo = service.exportar_orgao(db, orgao, relatorios or [],
-                                                               formato, user)
+        conteudo, media_type, arquivo = service.exportar_orgao(db, orgao, formato, user)
     except service.ErroRelatorio as exc:
         raise _erro(exc) from exc
     return Response(conteudo, media_type=media_type,

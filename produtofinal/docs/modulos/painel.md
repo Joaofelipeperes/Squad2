@@ -154,7 +154,7 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 | consome | parametros | `formatos_abertos`; `peso_lgpd_indice_atencao`, `peso_atualizacao_indice_atencao`, `indice_atencao_limite_medio`, `indice_atencao_limite_alto` (ADR-0030) |
 | é consumido por | relatorios | `organizacoes(db, user)` (relatório por órgão) e `situacao_atualizacao(base, hoje)` (relatório de atualizações) |
 | consome | rastreabilidade | tela: `HistoricoRecente` (`GET /rastreabilidade/eventos?orgao=<id>`) — "Últimas alterações" no detalhe do órgão em Organizações |
-| consome | relatorios | tela: `GerarRelatorioOrgaoModal` (`relatorios/RelatorioOrgao.tsx`) no detalhe do órgão em Organizações — marca os relatórios e gera o documento do órgão (`/relatorios/por-orgao/{organizacao_id}/…`) |
+| consome | relatorios | tela: `RelatorioOrgaoModal` (`relatorios/RelatorioOrgao.tsx`) no detalhe do órgão em Organizações — prévia e exportação do relatório detalhado do órgão (`/relatorios/por-orgao/{organizacao_id}/…`) |
 | consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
 ## Jobs agendados
@@ -202,5 +202,6 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 05/11/2026 | Organizações: colunas **Riscos LGPD** e **Índice de atenção** (ADR-0030) — `regras.py` novo (`indice_atencao`, média ponderada com pesos e faixas dos Parâmetros), `criterio_atencao`, campos novos em `OrganizacaoOut`/`OrganizacoesOut`; filtro por faixa, ordenação pelo valor, cartão de dados pessoais e índice explicado no detalhe; `indice_atencao_por_orgao` (stub) removido | Humberto |
 | 06/11/2026 | Organizações: botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031); Riscos LGPD só entra no arquivo com `lgpd.acessar` | Humberto |
 | 09/11/2026 | Dashboard reorganizado pela crítica de design: indicadores de problema clicáveis com cor vinda do valor, inventário em linha, alertas logo abaixo (aba na URL, abas por teclado, coluna Tipo só em "Todos", link com o nome do item), regras recolhidas em "Como calculamos", esqueleto e erro com "Tentar novamente", faixa "Fluxo de governança" retirada; gráficos sem parada de Tab por barra. Sem mudança na API | Victor |
+| 09/11/2026 | Organizações: **Gerar relatório** no detalhe do órgão abre direto o relatório detalhado do órgão (sem marcação de relatórios) | Humberto |
 | 10/11/2026 | Detalhe da organização agrupado em seções: índice de atenção em destaque no topo e depois Publicação no PDA, Atualização, Formatos, Dados pessoais (LGPD) e Últimas alterações (`shared/ui/Detalhe.tsx`). Sem mudança de dados nem de API | João |
 | 10/11/2026 | Detalhe da organização alinhado ao protótipo (`prototipos/detalhes-agrupados.html`): índice de atenção com valor, faixa e barra no topo; seções com um indicador por cartão (Publicação no PDA, Atualização, Formatos, Dados pessoais). Retirada a numeração à esquerda do título das seções em todas as janelas de detalhe (`shared/ui/Detalhe.tsx`) | João |

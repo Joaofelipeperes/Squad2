@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CriterioAtencao, Organizacao } from "./api";
 import { CLASSE_ATENCAO, IndiceAtencao, NAO_CONFIRMADO, explicarIndice } from "./OrganizacoesPage";
-import { GerarRelatorioOrgaoModal } from "@/modules/relatorios/RelatorioOrgao";
+import { RelatorioOrgaoModal } from "@/modules/relatorios/RelatorioOrgao";
 import { HistoricoRecente } from "@/modules/rastreabilidade/HistoricoRecente";
 import { Detalhe, Secao } from "@/shared/ui/Detalhe";
 import { Modal } from "@/shared/ui/Modal";
@@ -154,8 +154,7 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, cri
         </Secao>
       </Detalhe>
       {relatorio && o.organizacao_id != null && (
-        <GerarRelatorioOrgaoModal orgao={o.organizacao_id} nome={o.nome}
-          onFechar={() => setRelatorio(false)} />
+        <RelatorioOrgaoModal orgao={o.organizacao_id} onFechar={() => setRelatorio(false)} />
       )}
     </Modal>
   );

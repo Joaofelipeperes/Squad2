@@ -7,21 +7,39 @@ Relatório de um órgão: o usuário escolhe um órgão e quantos relatórios qu
 que segue com uma seção por relatório escolhido, montado só com as linhas daquele órgão (PDF com
 seções, XLSX com uma aba por seção, CSV com as seções em sequência)."""
 from collections.abc import Callable
-from dataclasses import dataclass, replace
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.deps import UsuarioAtual
+from app.core.permissoes import P
 from app.modules.atualizacoes import regras as regras_atualizacao
+from app.modules.inventario import regras as regras_inventario
+from app.modules.inventario.service import listar_datasets
+from app.modules.lgpd import regras as regras_lgpd
 from app.modules.lgpd import service as lgpd
-from app.modules.metadados.service import datasets_sem_recurso, recursos_formato_fechado
+from app.modules.metadados import regras as regras_metadados
+from app.modules.metadados.service import (
+    datasets_sem_recurso,
+    recursos_formato_fechado,
+    recursos_validos,
+)
 from app.modules.painel import service as painel
 from app.modules.parametros.router import obter as obter_parametro
 from app.modules.pda import service as pda
-from app.modules.pda.regras import normalizar_texto
+from app.modules.pda.regras import (
+    EM_ATRASO,
+    EM_DIA,
+    NAO_PUBLICADO,
+    PRAZO_VENCIDO,
+    PROXIMO_DO_PRAZO,
+    PUBLICADO,
+    SEM_RECURSO,
+    normalizar_texto,
+)
 from app.modules.relatorios import regras
 from app.modules.relatorios.dao import RelatoriosDao
 from app.modules.relatorios.schemas import (
@@ -236,62 +254,182 @@ def orgaos_disponiveis(db: Session, user: UsuarioAtual) -> list[OrgaoOpcaoOut]:
                   key=lambda o: normalizar_texto(o.nome))
 
 
-RESUMO = "orgaos"  # o relatório por órgão vira o "Resumo do órgão", 1ª seção quando escolhido
-TITULO_RESUMO = "Resumo do órgão"
+# Seções do relatório detalhado do órgão (pedido da GEDA em 05/11): cada número do resumo vira a
+# lista dos itens que ele conta. Cada seção exige o acesso ao módulo de onde vêm os dados.
+_ORDEM_SITUACAO_PDA = {EM_ATRASO: 0, PROXIMO_DO_PRAZO: 1, PRAZO_VENCIDO: 2, NAO_PUBLICADO: 3,
+                       SEM_RECURSO: 4, EM_DIA: 5, PUBLICADO: 6}
+_ORDEM_ATUALIZACAO = {regras_atualizacao.ATRASADO: 0, regras_atualizacao.PROXIMO_DO_VENCIMENTO: 1,
+                      regras_atualizacao.ATUALIZADO: 2}
+_COLUNAS_BASES = ["Base prevista", "Situação", "Prazo de abertura", "Periodicidade",
+                  "Dataset no portal", "Data de publicação"]
 
 
-def _orgao_e_relatorios(db: Session, orgao: int, relatorios: list[str],
-                        user: UsuarioAtual) -> tuple[OrgaoOpcaoOut, list[str]]:
-    """Valida o órgão (no escopo do usuário) e monta a lista das seções escolhidas, sem
-    repetição, cada uma com a permissão do módulo de origem: o resumo do órgão ("orgaos") primeiro,
-    se escolhido, e depois os relatórios na ordem do catálogo."""
+def _dia(valor: datetime | None) -> date | None:
+    """Data-hora → dia no fuso da aplicação (as listas do relatório mostram só a data)."""
+    if valor is None:
+        return None
+    if valor.tzinfo is None:
+        valor = valor.replace(tzinfo=UTC)
+    return valor.astimezone(_agora_local().tzinfo).date()
+
+
+def _dataset_da_base(b) -> str | None:
+    """Dataset do portal ligado à base, pelo título do CKAN (o informado no PDA se pendente)."""
+    if b.vinculo == "resolvido":
+        nome = b.dataset_titulo or b.dataset_name or "—"
+        return nome + (" (fora do portal)" if b.dataset_ativo is False else "")
+    if b.vinculo == "pendente":
+        return f"{b.dataset_name_planilha or b.dataset_id_ckan_planilha} (vínculo pendente)"
+    return None
+
+
+def _linhas_bases(bases) -> list[list]:
+    """Bases do PDA: as que pedem ação primeiro (em atraso, próximas do prazo...), depois prazo."""
+    ordenadas = sorted(bases, key=lambda b: (_ORDEM_SITUACAO_PDA.get(b.situacao, 9),
+                                             b.prazo_abertura or date.max,
+                                             normalizar_texto(b.nome_previsto)))
+    return [[b.nome_previsto, b.situacao, b.prazo_abertura, b.periodicidade, _dataset_da_base(b),
+             _dia(b.data_publicacao)] for b in ordenadas]
+
+
+def _secoes_pda(db: Session, user: UsuarioAtual, orgao: int) -> list[tuple[str, regras.Secao]]:
+    plano, bases = _bases_vigentes(db, user, orgao)
+    ref = plano.nome if plano else "Nenhum PDA vigente"
+    secoes = [("bases", regras.Secao("Bases previstas no PDA", _COLUNAS_BASES,
+                                      _linhas_bases(bases), ref)),
+              ("bases-em-atraso", regras.Secao(
+                  "Bases em atraso", _COLUNAS_BASES,
+                  _linhas_bases([b for b in bases if b.situacao == EM_ATRASO]), ref)),
+              ("bases-proximas", regras.Secao(
+                  "Bases próximas do prazo", _COLUNAS_BASES,
+                  _linhas_bases([b for b in bases if b.situacao == PROXIMO_DO_PRAZO]), ref))]
+    return secoes
+
+
+def _secao_atualizacao(db: Session, user: UsuarioAtual, orgao: int) -> regras.Secao:
+    """Cada base vinculada com a situação de atualização pela periodicidade do PDA (ADR-0023):
+    atrasadas primeiro, depois pelo vencimento."""
+    plano, bases = _bases_vigentes(db, user, orgao)
+    hoje = pda.hoje_local()
+    linhas = []
+    for b in bases:
+        if not b.dataset_id:
+            continue
+        vencimento = regras_atualizacao.vencimento_atualizacao(
+            b.periodicidade, b.ultima_atualizacao, b.periodicidade_original)
+        linhas.append([b.nome_previsto, _dataset_da_base(b), b.periodicidade,
+                       _dia(b.ultima_atualizacao), b.ultima_atualizacao_estimada, vencimento,
+                       painel.situacao_atualizacao(b, hoje)])
+    linhas.sort(key=lambda x: (_ORDEM_ATUALIZACAO.get(x[6], 9), x[5] or date.max,
+                               normalizar_texto(x[0])))
+    return regras.Secao("Atualização das bases",
+                        ["Base prevista", "Dataset no portal", "Periodicidade",
+                         "Última atualização", "Data estimada", "Vencimento", "Situação"],
+                        linhas, plano.nome if plano else "Nenhum PDA vigente")
+
+
+def _secoes_portal(db: Session, user: UsuarioAtual, orgao: int) -> list[tuple[str, regras.Secao]]:
+    """Datasets e recursos do órgão no portal (inventário da última coleta)."""
+    datasets = [d for d in listar_datasets(db, user, orgao=orgao).datasets
+                if d.situacao != regras_inventario.FORA_DO_PORTAL]
+    datasets.sort(key=lambda d: normalizar_texto(d.titulo))
+    abertos = list(obter_parametro(db, "formatos_abertos"))
+    recursos = sorted((r for r in recursos_validos(db) if r.dataset.organizacao_id == orgao),
+                      key=lambda r: (normalizar_texto(r.dataset.titulo),
+                                     normalizar_texto(r.nome or ""), r.id))
+
+    def ultima(r) -> str:
+        data = _dia(r.last_modified or r.created_ckan)
+        return regras.texto(data) + (" (est.)" if data and not r.last_modified else "")
+
+    fechados = [r for r in recursos if not regras_metadados.eh_formato_aberto(r.formato, abertos)]
+    ref_formatos = f"Formatos abertos (parâmetro da GEDA): {', '.join(abertos)}"
+    return [
+        ("datasets", regras.Secao(
+            "Datasets no portal",
+            ["Dataset", "Criado no CKAN", "Recursos válidos", "Formatos", "Última atualização",
+             "Tipo de base", "Situação no portal"],
+            [[d.titulo, _dia(d.metadata_created), d.recursos_validos, ", ".join(d.formatos),
+              _dia(d.ultima_atualizacao), d.tipo_base, d.situacao] for d in datasets])),
+        ("sem-recurso", regras.Secao(
+            "Datasets sem recurso", ["Dataset", "Criado no CKAN", "ID no CKAN"],
+            [[d.titulo, _dia(d.metadata_created), d.id_ckan] for d in datasets
+             if d.situacao == regras_inventario.SEM_RECURSO])),
+        ("recursos", regras.Secao(
+            "Recursos válidos", ["Dataset", "Recurso", "Formato", "Formato aberto",
+                                 "Última atualização"],
+            [[r.dataset.titulo, r.nome, r.formato or "sem formato",
+              regras_metadados.eh_formato_aberto(r.formato, abertos), ultima(r)]
+             for r in recursos], ref_formatos)),
+        ("formatos", regras.Secao(
+            "Recursos em formato fechado", ["Dataset", "Recurso", "Formato", "Última atualização"],
+            [[r.dataset.titulo, r.nome, r.formato or "sem formato", ultima(r)] for r in fechados],
+            ref_formatos)),
+    ]
+
+
+def _secao_lgpd(db: Session, user: UsuarioAtual, orgao: int) -> regras.Secao:
+    """Achados ainda em aberto (aguardando revisão ou confirmados): onde estão e de que tipo.
+    Nunca o valor encontrado (o banco também não o guarda)."""
+    achados = [a for a in lgpd.listar_achados(db, user, orgao=str(orgao)).achados
+               if a.status in regras_lgpd.EM_ABERTO]
+    return regras.Secao(
+        "Possíveis dados pessoais em aberto",
+        ["Prioridade", "Dataset", "Arquivo", "Tipo", "Coluna", "Primeira linha", "Células",
+         "Situação"],
+        [[a.prioridade, a.dataset_titulo, a.recurso_nome, a.tipo_rotulo, a.coluna, a.linha,
+          a.ocorrencias, regras_lgpd.STATUS.get(a.status, a.status)] for a in achados])
+
+
+def _secoes_do_orgao(db: Session, orgao: int,
+                     user: UsuarioAtual) -> tuple[OrgaoOpcaoOut, list[tuple[str, regras.Secao]]]:
+    """Valida o órgão (escopo do usuário) e monta o relatório detalhado: o resumo e, para cada
+    número dele, a lista do que ele conta. Seção sem a permissão do módulo de origem fica fora."""
     orgs = RelatoriosDao.de(db, user).organizacoes_visiveis(user)
     if orgao not in orgs:
         raise NaoEncontrado("Órgão não encontrado.")
-    escolhidos = {r.strip() for r in relatorios if r and r.strip()}
-    for nome in escolhidos:
-        _definicao(nome, user)  # 404 desconhecido, 403 sem permissão de origem
-    resumo = [RESUMO] if RESUMO in escolhidos else []
-    ordem = resumo + [d.id for d in regras.CATALOGO if d.id in escolhidos - {RESUMO}]
-    if not ordem:
-        raise Invalido("Escolha ao menos um relatório.")
-    return OrgaoOpcaoOut(id=orgao, nome=_rotulo_orgao(orgs[orgao])), ordem
+    secoes: list[tuple[str, regras.Secao]] = []
+    if user.pode(P.PAINEL_ACESSAR):
+        _, tabela = montar(db, "orgaos", user, orgao)
+        secoes.append(("resumo", regras.Secao("Resumo do órgão", tabela.colunas, tabela.linhas,
+                                              tabela.referencia)))
+    if user.pode(P.PDA_ACESSAR):
+        secoes += _secoes_pda(db, user, orgao)
+    if user.pode(P.ATUALIZACOES_ACESSAR):
+        secoes.append(("atualizacao", _secao_atualizacao(db, user, orgao)))
+    if user.pode(P.INVENTARIO_ACESSAR):
+        secoes += _secoes_portal(db, user, orgao)
+    if user.pode(P.LGPD_ACESSAR):
+        secoes.append(("dados-pessoais", _secao_lgpd(db, user, orgao)))
+    if not secoes:
+        raise SemPermissao("Sem acesso aos módulos que compõem o relatório do órgão.")
+    return OrgaoOpcaoOut(id=orgao, nome=_rotulo_orgao(orgs[orgao])), secoes
 
 
-def _secao_do_orgao(db: Session, nome: str, user: UsuarioAtual,
-                    orgao: int) -> tuple[regras.Definicao, Tabela]:
-    """Seção do documento do órgão; o relatório por órgão leva o título "Resumo do órgão"."""
-    definicao, tabela = montar(db, nome, user, orgao)
-    if nome == RESUMO:
-        definicao = replace(definicao, titulo=TITULO_RESUMO)
-    return definicao, tabela
-
-
-def previa_orgao(db: Session, orgao: int, relatorios: list[str], user: UsuarioAtual,
+def previa_orgao(db: Session, orgao: int, user: UsuarioAtual,
                  limite: int = PREVIA_LINHAS) -> RelatorioOrgaoOut:
-    """Prévia do relatório de um órgão: uma seção por item escolhido (resumo primeiro)."""
-    escolhido, nomes = _orgao_e_relatorios(db, orgao, relatorios, user)
-    secoes = [_previa_out(*_secao_do_orgao(db, nome, user, orgao), limite) for nome in nomes]
-    return RelatorioOrgaoOut(orgao=escolhido, hoje=pda.hoje_local(), secoes=secoes)
+    """Prévia do relatório detalhado de um órgão: as primeiras linhas de cada seção."""
+    escolhido, secoes = _secoes_do_orgao(db, orgao, user)
+    hoje = pda.hoje_local()
+    return RelatorioOrgaoOut(orgao=escolhido, hoje=hoje, secoes=[
+        PreviaOut(id=id_, titulo=s.titulo, referencia=s.referencia, hoje=hoje, colunas=s.colunas,
+                  linhas=[[regras.texto(v) for v in linha] for linha in s.linhas[:limite]],
+                  total=len(s.linhas)) for id_, s in secoes])
 
 
-def exportar_orgao(db: Session, orgao: int, relatorios: list[str], formato: str,
+def exportar_orgao(db: Session, orgao: int, formato: str,
                    user: UsuarioAtual) -> tuple[bytes, str, str]:
-    """Arquivo do relatório de um órgão: (conteúdo, media type, nome do arquivo)."""
+    """Arquivo do relatório detalhado de um órgão: (conteúdo, media type, nome do arquivo)."""
     if formato not in regras.FORMATOS:
         raise Invalido(f"Formato inválido: use {', '.join(regras.FORMATOS)}.")
-    escolhido, nomes = _orgao_e_relatorios(db, orgao, relatorios, user)
-    secoes = []
-    for nome in nomes:
-        definicao, tabela = _secao_do_orgao(db, nome, user, orgao)
-        secoes.append(regras.Secao(definicao.titulo, tabela.colunas, tabela.linhas,
-                                   tabela.referencia))
+    escolhido, pares = _secoes_do_orgao(db, orgao, user)
+    secoes = [s for _, s in pares]
     titulo = f"Relatório do órgão — {escolhido.nome}"
     if formato == "xlsx":
         conteudo = regras.gerar_xlsx_secoes(secoes)
     elif formato == "pdf":
-        conteudo = regras.gerar_pdf_secoes(
-            titulo, secoes, subtitulo=None, gerado_em=_agora_local())
+        conteudo = regras.gerar_pdf_secoes(titulo, secoes, subtitulo=None,
+                                           gerado_em=_agora_local())
     else:
         conteudo = regras.gerar_csv_secoes(titulo, secoes)
     return conteudo, regras.MIME[formato], regras.nome_arquivo_orgao(
