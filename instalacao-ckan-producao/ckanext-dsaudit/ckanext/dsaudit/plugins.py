@@ -7,7 +7,8 @@ So captura e armazena; nao ha telas. Registra:
   * DataStore: linhas inseridas/alteradas/removidas com valor anterior -> novo
     (datastore_create / datastore_upsert / datastore_delete);
   * metadados do dataset e dos recursos campo a campo, inclusive de datasets
-    privados (package_create / package_update / package_delete);
+    privados (package_create / package_update / package_patch /
+    package_delete);
   * arquivos enviados (upload): cada versao guardada em disco e diff linha a
     linha de CSV/TSV/TXT/XLSX (IResourceController).
 
@@ -34,7 +35,13 @@ class DSAuditPlugin(p.SingletonPlugin):
 
     # --- arquivos enviados (upload) pela interface ou API ------------------
 
+    def before_create(self, context, resource):
+        if versions.has_new_file(resource):
+            self._check_storage(None)
+
     def before_update(self, context, current, resource):
+        if versions.has_new_file(resource):
+            self._check_storage((current or {}).get('id'))
         # o CKAN sobrescreve o arquivo no mesmo caminho: guarda o atual antes
         try:
             versions.ensure_baseline(current)
@@ -44,6 +51,21 @@ class DSAuditPlugin(p.SingletonPlugin):
                 raise p.toolkit.ValidationError({'dsaudit': [
                     'Nao foi possivel guardar a versao atual do arquivo '
                     'antes da substituicao. Nenhuma alteracao foi aplicada '
+                    '(ckanext.dsaudit.strict).']})
+
+    def _check_storage(self, resource_id):
+        # sem isto, um diretorio de versoes sem permissao de escrita deixava o
+        # upload passar e so registrava a falha no log (after_* roda depois
+        # do commit)
+        try:
+            versions.check_writable(resource_id)
+        except Exception:
+            log.exception('dsaudit: diretorio de versoes sem permissao de '
+                          'escrita')
+            if versions.strict():
+                raise p.toolkit.ValidationError({'dsaudit': [
+                    'Nao foi possivel gravar no diretorio de versoes de '
+                    'arquivos da auditoria. Nenhuma alteracao foi aplicada '
                     '(ckanext.dsaudit.strict).']})
 
     def after_create(self, context, resource):
@@ -78,6 +100,7 @@ class DSAuditPlugin(p.SingletonPlugin):
             'datastore_upsert': actions.datastore_upsert,
             'datastore_delete': actions.datastore_delete,
             'package_update': actions.package_update,
+            'package_patch': actions.package_patch,
             'package_create': actions.package_create,
             'package_delete': actions.package_delete,
             'dsaudit_activity_list': actions.dsaudit_activity_list,
