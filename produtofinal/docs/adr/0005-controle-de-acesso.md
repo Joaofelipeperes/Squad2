@@ -65,3 +65,4 @@ Validar com a Paloma a distribuição dos papéis padrão (matriz em `docs/modul
 | 30/09/2026 | Módulo `auth` renomeado para `acesso`; CLI passa a usar `--papel` | Victor |
 | 30/09/2026 | Assistente passa a respeitar o escopo de órgão ao montar o contexto (falha encontrada na revisão) | Victor |
 | 07/10/2026 | Reescrita no modelo de ADR com prós e contras por opção | Victor |
+| 20/10/2026 | Auditoria de segurança: fora de dev a API não inicia com `GDA_SECRET_KEY` padrão, de exemplo ou com menos de 32 bytes, nem sem `GDA_ENCRYPTION_KEY` (`core/config.py`). Com a chave padrão, pública no repositório, qualquer um forjaria um JWT de administrador. `produtofinal/.env` deixa de ser versionado | Victor |

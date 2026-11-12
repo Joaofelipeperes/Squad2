@@ -4,3 +4,7 @@
 *.html text eol=lf
 Dockerfile text eol=lf
 *.yml text eol=lf
+# Arquivos lidos dentro de containers Linux (ADR-0030): sempre LF, inclusive no git archive
+*.conf text eol=lf
+*.example text eol=lf
+.dockerignore text eol=lf

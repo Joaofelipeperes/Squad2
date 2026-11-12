@@ -5,6 +5,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from pydantic import ValidationError
 
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
@@ -13,7 +14,10 @@ from app.modules.pda.schemas import (
     BaseIn,
     BaseOut,
     BasesOut,
+    ConfigImportacaoIn,
+    DatasetOpcaoOut,
     FormularioOut,
+    IdsCkanOut,
     ImportacaoResumoOut,
     PlanoIn,
     PlanoOut,
@@ -41,8 +45,31 @@ def _data_form(valor: str | None, campo: str) -> date | None:
         raise HTTPException(422, f"{campo}: use o formato aaaa-mm-dd.") from None
 
 
+def _config_form(valor: str | None) -> regras.ConfigLeitura:
+    """Campo `config` do formulário (JSON) → configuração validada da leitura."""
+    if valor is None or not valor.strip():
+        return regras.SEM_CONFIG
+    try:
+        dados = ConfigImportacaoIn.model_validate_json(valor)
+        return regras.config_leitura(dados.colunas, dados.linha_cabecalho, dados.delimitador)
+    except ValidationError:
+        raise HTTPException(422, "Configuração da importação inválida.") from None
+    except regras.PlanilhaInvalida as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
 def _vazio(valor: str | None) -> str | None:
     return (valor.strip() or None) if valor is not None else None
+
+
+def _conteudo(arquivo: UploadFile, o_que: str = "a planilha do PDA") -> bytes:
+    """Arquivo enviado (.xlsx ou .csv, até 5 MB) → bytes; 422 formato, 413 tamanho."""
+    if regras.extensao_valida(arquivo.filename) is None:
+        raise HTTPException(422, f"Formato não suportado: envie {o_que} em .xlsx ou .csv.")
+    conteudo = arquivo.file.read(regras.TAMANHO_MAXIMO + 1)
+    if len(conteudo) > regras.TAMANHO_MAXIMO:
+        raise HTTPException(413, "Arquivo maior que 5 MB.")
+    return conteudo
 
 
 # ------------------------------------------------------------------ planos (PDAs)
@@ -62,8 +89,11 @@ def importar_plano(
     vigencia_inicio: Annotated[str | None, Form()] = None,
     vigencia_fim: Annotated[str | None, Form()] = None,
     definir_vigente: Annotated[bool, Form()] = False,
+    config: Annotated[str | None, Form()] = None,
 ):
-    """PBI-12 — importa a planilha de um PDA (.xlsx ou .csv, até 5 MB). multipart/form-data."""
+    """PBI-12 — importa a planilha de um PDA (.xlsx ou .csv, até 5 MB). multipart/form-data.
+    `config` (opcional): JSON de `ConfigImportacaoIn` — colunas do arquivo, linha do cabeçalho e
+    delimitador (aba Configuração do modal)."""
     if regras.extensao_valida(arquivo.filename) is None:
         raise HTTPException(422, "Formato não suportado: envie a planilha do PDA em .xlsx ou .csv.")
     conteudo = arquivo.file.read(regras.TAMANHO_MAXIMO + 1)
@@ -71,11 +101,12 @@ def importar_plano(
         raise HTTPException(413, "Arquivo maior que 5 MB.")
     inicio = _data_form(vigencia_inicio, "Início da vigência")
     fim = _data_form(vigencia_fim, "Fim da vigência")
+    leitura = _config_form(config)
     with _erros_http():
         return service.importar_plano(
             db, nome=nome, vigencia_inicio=inicio, vigencia_fim=fim,
             definir_vigente=definir_vigente, arquivo_nome=arquivo.filename or "",
-            conteudo=conteudo, importado_por=user.nome)
+            conteudo=conteudo, importado_por=user.nome, user=user, config=leitura)
 
 
 @router.post("/planos/manual", response_model=PlanoOut, status_code=status.HTTP_201_CREATED)
@@ -83,7 +114,7 @@ def criar_plano(dados: PlanoIn, db: DbSession,
                 user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Cria um PDA vazio, sem planilha (as bases são incluídas uma a uma). JSON."""
     with _erros_http():
-        return service.criar_plano(db, dados, criado_por=user.nome)
+        return service.criar_plano(db, dados, criado_por=user.nome, user=user)
 
 
 @router.get("/planos/{plano_id}", response_model=PlanoOut)
@@ -94,37 +125,55 @@ def obter_plano(plano_id: int, db: DbSession,
         return service.obter_plano(db, plano_id, user)
 
 
-@router.put("/planos/{plano_id}", response_model=PlanoOut,
-            dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def atualizar_plano(plano_id: int, dados: PlanoIn, db: DbSession):
+@router.put("/planos/{plano_id}", response_model=PlanoOut)
+def atualizar_plano(plano_id: int, dados: PlanoIn, db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Edita nome e vigência do PDA (o vigente é trocado em /vigente)."""
     with _erros_http():
-        return service.atualizar_plano(db, plano_id, dados)
+        return service.atualizar_plano(db, plano_id, dados, user)
 
 
-@router.put("/planos/{plano_id}/vigente", response_model=PlanoOut,
-            dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def definir_vigente(plano_id: int, db: DbSession):
+@router.put("/planos/{plano_id}/vigente", response_model=PlanoOut)
+def definir_vigente(plano_id: int, db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Define o PDA vigente (rege a tela e os indicadores de gestão)."""
     with _erros_http():
-        return service.definir_vigente(db, plano_id)
+        return service.definir_vigente(db, plano_id, user)
 
 
 @router.delete("/planos/{plano_id}", status_code=status.HTTP_204_NO_CONTENT,
-               response_class=Response, dependencies=[Depends(require(P.PDA_GERENCIAR_PLANOS))])
-def excluir_plano(plano_id: int, db: DbSession):
-    """Exclui um PDA e suas bases (o vigente só quando é o único PDA)."""
+               response_class=Response)
+def excluir_plano(plano_id: int, db: DbSession,
+                  user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
+    """Exclui (exclusão lógica) um PDA e suas bases (o vigente só quando é o único PDA)."""
     with _erros_http():
-        service.excluir_plano(db, plano_id)
+        service.excluir_plano(db, plano_id, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/planos/{plano_id}/vincular", response_model=VinculosOut,
-             dependencies=[Depends(require(P.PDA_EDITAR_VINCULOS))])
-def vincular(plano_id: int, db: DbSession):
+@router.post("/planos/{plano_id}/vincular", response_model=VinculosOut)
+def vincular(plano_id: int, db: DbSession,
+             user: Annotated[UsuarioAtual, Depends(require(P.PDA_EDITAR_VINCULOS))]):
     """PBI-12/13 — tenta resolver de novo os vínculos pendentes do PDA."""
     with _erros_http():
-        return service.resolver_vinculos_pendentes(db, plano_id)
+        return service.resolver_vinculos_pendentes(db, plano_id, user)
+
+
+@router.post("/planos/{plano_id}/ids-ckan", response_model=IdsCkanOut)
+def importar_ids_ckan(
+    plano_id: int,
+    db: DbSession,
+    arquivo: Annotated[UploadFile, File()],
+    user: Annotated[UsuarioAtual, Depends(require(P.PDA_EDITAR_VINCULOS))],
+    aplicar: Annotated[bool, Form()] = False,
+    sobrescrever: Annotated[bool, Form()] = False,
+):
+    """Importa o ID do CKAN de cada base (CSV SIGLA, NOME_PDA, NOME_DATASET, ID_DATASET).
+    `aplicar=false` só analisa; `sobrescrever=true` troca IDs diferentes já gravados."""
+    conteudo = _conteudo(arquivo, "o arquivo de IDs")
+    with _erros_http():
+        return service.importar_ids_ckan(db, plano_id, conteudo, arquivo.filename or "", user,
+                                         aplicar=aplicar, sobrescrever=sobrescrever)
 
 
 # ------------------------------------------------------------------ bases previstas
@@ -161,7 +210,7 @@ def obter_base(base_id: int, db: DbSession,
 
 
 @router.get("/datasets/{dataset_id}/bases", response_model=list[BaseOut])
-def bases_do_dataset(dataset_id: str, db: DbSession,
+def bases_do_dataset(dataset_id: int, db: DbSession,
                      user: Annotated[UsuarioAtual, Depends(require(P.PDA_ACESSAR))]):
     """Bases previstas vinculadas a um dataset do portal (vigente primeiro) — tela Datasets."""
     return [BaseOut.model_validate(b) for b in service.bases_do_dataset(db, dataset_id, user)]
@@ -172,6 +221,14 @@ def opcoes_formulario(db: DbSession,
                       user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))]):
     """Opções do formulário de base: organizações do portal e periodicidades."""
     return service.opcoes_formulario(db, user)
+
+
+@router.get("/formulario/datasets", response_model=list[DatasetOpcaoOut])
+def buscar_datasets(db: DbSession,
+                    user: Annotated[UsuarioAtual, Depends(require(P.PDA_GERENCIAR_PLANOS))],
+                    busca: str | None = None):
+    """Busca de datasets do inventário para vincular à base (título, name, ID do CKAN ou link)."""
+    return service.buscar_datasets(db, user, busca)
 
 
 @router.post("/planos/{plano_id}/bases", response_model=BaseOut,

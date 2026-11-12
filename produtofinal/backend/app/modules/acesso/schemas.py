@@ -15,7 +15,8 @@ class PapelResumo(BaseModel):
 
 
 class OrgaoResumo(BaseModel):
-    ckan_id: str
+    id: int
+    id_ckan: str | None
     titulo: str
 
 
@@ -47,7 +48,7 @@ class UsuarioIn(BaseModel):
     nome: str = Field(min_length=2, max_length=200)
     senha: str | None = Field(None, min_length=8)  # obrigatória na criação; opcional na edição
     ativo: bool = True
-    orgao_id: str | None = None
+    orgao_id: int | None = None  # organizacao.id
     papel_ids: list[int] = Field(default_factory=list)
 
 
@@ -96,3 +97,15 @@ class LogAcessoOut(BaseModel):
     status_http: int
     ip: str | None
     user_agent: str | None
+
+
+class LogsAcessoOut(BaseModel):
+    """Página do log de acesso (ADR-0028). `ate_id` = maior `id` considerado: as páginas seguintes
+    o repetem para que as requisições novas (inclusive as da própria navegação) não desloquem a
+    lista."""
+
+    total: int
+    pagina: int
+    por_pagina: int
+    ate_id: int | None
+    registros: list[LogAcessoOut]

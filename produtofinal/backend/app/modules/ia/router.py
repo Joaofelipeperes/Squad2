@@ -1,34 +1,44 @@
 """API da página Administração › Modelos de IA. Todas as rotas exigem ia.configurar."""
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
 from app.integrations.ai.base import AIProviderError, ChatMessage, ChatRequest
-from app.integrations.ai.policy import PoliticaIAViolada, TarefaIA
+from app.integrations.ai.policy import TAREFAS, PoliticaIAViolada, TarefaIA
 from app.modules.ia import service
 from app.modules.ia.gateway import AIGateway, IANaoConfigurada
-from app.modules.ia.models import PerfilProvedorIA, UsoIA, VinculoTarefaIA
+from app.modules.ia.models import PerfilProvedorIA
 from app.modules.ia.schemas import (
-    PerfilIn, PerfilOut, PlaygroundIn, PlaygroundOut, TarefaOut, TesteConexaoIn,
-    TesteConexaoOut, TipoProvedorOut, UsoOut, VinculoIn,
+    PerfilIn,
+    PerfilOut,
+    PlaygroundIn,
+    PlaygroundOut,
+    TarefaOut,
+    TesteConexaoIn,
+    TesteConexaoOut,
+    TipoProvedorOut,
+    UsoOut,
+    VinculoIn,
 )
 
 router = APIRouter(dependencies=[Depends(require(P.IA_CONFIGURAR))])
+# Quem age (auditoria `created_id`/`changed_id`); a permissão já é exigida no router
+Configurador = Annotated[UsuarioAtual, Depends(require(P.IA_CONFIGURAR))]
 
 
 def _get(db, perfil_id: int) -> PerfilProvedorIA:
-    p = db.get(PerfilProvedorIA, perfil_id)
+    p = service.perfil_por_id(db, perfil_id)
     if not p:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Perfil não encontrado.")
     return p
 
 
-def _salvar(db, body: PerfilIn, atual: PerfilProvedorIA | None = None):
+def _salvar(db, body: PerfilIn, user: UsuarioAtual, atual: PerfilProvedorIA | None = None):
     try:
-        return service.to_out(service.salvar_perfil(db, body, atual))
+        return service.to_out(service.salvar_perfil(db, body, atual, usuario_id=user.id))
     except (service.ErroConfiguracaoIA, AIProviderError) as exc:
-        db.rollback()
         raise HTTPException(422, str(exc))
 
 
@@ -39,32 +49,28 @@ def tipos():
 
 @router.get("/perfis", response_model=list[PerfilOut])
 def listar(db: DbSession):
-    return [service.to_out(p) for p in
-            db.scalars(select(PerfilProvedorIA).order_by(PerfilProvedorIA.nome)).all()]
+    return service.listar_perfis(db)
 
 
 @router.post("/perfis", response_model=PerfilOut, status_code=201)
-def criar(body: PerfilIn, db: DbSession):
-    if db.scalar(select(PerfilProvedorIA).where(PerfilProvedorIA.nome == body.nome.strip())):
+def criar(body: PerfilIn, db: DbSession, user: Configurador):
+    if service.perfil_por_nome(db, body.nome.strip()):
         raise HTTPException(status.HTTP_409_CONFLICT, "Já existe um perfil com este nome.")
-    return _salvar(db, body)
+    return _salvar(db, body, user)
 
 
 @router.put("/perfis/{perfil_id}", response_model=PerfilOut)
-def atualizar(perfil_id: int, body: PerfilIn, db: DbSession):
-    return _salvar(db, body, _get(db, perfil_id))
+def atualizar(perfil_id: int, body: PerfilIn, db: DbSession, user: Configurador):
+    return _salvar(db, body, user, _get(db, perfil_id))
 
 
 @router.delete("/perfis/{perfil_id}", status_code=204)
-def excluir(perfil_id: int, db: DbSession):
-    p = _get(db, perfil_id)
-    em_uso = db.scalar(select(VinculoTarefaIA).where(
-        (VinculoTarefaIA.perfil_id == p.id) | (VinculoTarefaIA.perfil_fallback_id == p.id)))
-    if em_uso:
-        raise HTTPException(status.HTTP_409_CONFLICT,
-                            "Perfil vinculado a uma tarefa. Troque o vínculo antes de excluir.")
-    db.delete(p)
-    db.commit()
+def excluir(perfil_id: int, db: DbSession, user: Configurador):
+    """Exclusão lógica (ADR-0019); perfil vinculado a uma tarefa → 409."""
+    try:
+        service.excluir_perfil(db, _get(db, perfil_id), usuario_id=user.id)
+    except service.ErroConfiguracaoIA as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
 
 
 @router.post("/testar-conexao", response_model=TesteConexaoOut)
@@ -83,10 +89,9 @@ def tarefas(db: DbSession):
 
 
 @router.put("/tarefas/{tarefa}", response_model=list[TarefaOut])
-def vincular(tarefa: TarefaIA, body: VinculoIn, db: DbSession,
-             user: UsuarioAtual = Depends(require(P.IA_CONFIGURAR))):
+def vincular(tarefa: TarefaIA, body: VinculoIn, db: DbSession, user: Configurador):
     try:
-        service.vincular(db, tarefa, body, user.email)
+        service.vincular(db, tarefa, body, user.email, usuario_id=user.id)
     except service.ErroConfiguracaoIA as exc:
         raise HTTPException(422, str(exc))
     return service.listar_tarefas(db)
@@ -94,11 +99,14 @@ def vincular(tarefa: TarefaIA, body: VinculoIn, db: DbSession,
 
 @router.get("/uso", response_model=list[UsoOut])
 def uso(db: DbSession, limite: int = 50):
-    return db.scalars(select(UsoIA).order_by(UsoIA.momento.desc()).limit(min(limite, 500))).all()
+    return service.listar_usos(db, min(limite, 500))
 
 
 @router.post("/playground", response_model=PlaygroundOut)
 def playground(body: PlaygroundIn, db: DbSession):
+    if TAREFAS[body.tarefa].tipo != "chat":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Tarefa de embeddings: use o botão Testar do "
+                                                      "perfil vinculado a ela.")
     try:
         resp, perfil, fb = AIGateway(db).chat(body.tarefa, ChatRequest(
             messages=[ChatMessage(role="user", content=body.mensagem)]))

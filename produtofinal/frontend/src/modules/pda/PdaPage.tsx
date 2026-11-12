@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { BasePda, BasesPda, FiltrosPda, ImportacaoResumo, Opcao, PlanoPda } from "./api";
@@ -8,12 +8,30 @@ import { BaseDetalheModal } from "./BaseDetalheModal";
 import { BaseFormModal } from "./BaseFormModal";
 import { ConfirmarModal } from "./ConfirmarModal";
 import { abreviarId, fmtData, fmtDataHora, plural } from "./formato";
+import { ImportarIdsModal } from "./ImportarIdsModal";
 import { ImportarPdaModal } from "./ImportarPdaModal";
 import { PlanoFormModal } from "./PlanoFormModal";
 import { SituacaoBadge } from "./SituacaoBadge";
 import { Pode } from "@/shared/acesso/Pode";
+import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
+import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
 import { PageLede } from "@/shared/ui/PageLede";
 import { useToast } from "@/shared/ui/Toast";
+import type { Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
+
+type ColunaBase = "orgao" | "nome" | "dataset" | "id_ckan" | "prazo" | "periodicidade" | "atualizado" | "situacao";
+
+const ORDENADORES_BASE: Ordenadores<BasePda, ColunaBase> = {
+  orgao: (b) => b.orgao_sigla,
+  nome: (b) => b.nome_previsto,
+  dataset: (b) => b.dataset_titulo ?? b.dataset_name ?? b.dataset_name_planilha ?? b.dataset_id_ckan_planilha,
+  id_ckan: (b) => b.dataset_id_ckan,
+  prazo: (b) => b.prazo_abertura,
+  periodicidade: (b) => b.periodicidade,
+  atualizado: (b) => dataOrdenavel(b.ultima_atualizacao),
+  situacao: (b) => b.situacao,
+};
 
 /**
  * Tela "Monitoramento do PDA" (US6, US7, US8) — referência visual: #screen-pda do Protótipo V1.
@@ -25,11 +43,13 @@ export default function PdaPage() {
   const toast = useToast();
   const planos = useQuery({ queryKey: ["pda", "planos"], queryFn: pdaApi.planos });
   const [planoSel, setPlanoSel] = useState<number | null>(null);
-  // "?orgao=<chave>" vem do botão "Ver bases no PDA" da tela Organizações
+  // "?orgao=<chave>" vem do botão "Ver bases no PDA" da tela Organizações;
+  // "?situacao=<situação>" vem dos indicadores da Visão Geral
   const [params] = useSearchParams();
   const [filtros, setFiltros] = useState<FiltrosPda>(
-    () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "" }));
+    () => ({ ...FILTROS_VAZIOS, orgao: params.get("orgao") ?? "", situacao: params.get("situacao") ?? "" }));
   const [importarAberto, setImportarAberto] = useState(false);
+  const [idsAberto, setIdsAberto] = useState(false);
   const [confirmacao, setConfirmacao] = useState<"vigente" | "excluir" | null>(null);
   const [detalhe, setDetalhe] = useState<BasePda | null>(null);
   // Formulários do CRUD manual: PDA (novo/editar) e base (null = incluir; BasePda = editar)
@@ -53,6 +73,8 @@ export default function PdaPage() {
   });
 
   const recarregar = () => qc.invalidateQueries({ queryKey: ["pda"] });
+  const tabela = useTabela(bases.data?.bases, ORDENADORES_BASE);
+  const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
 
   function trocarPlano(id: number | null) {
     setPlanoSel(id);
@@ -151,28 +173,31 @@ export default function PdaPage() {
             onNovo={() => setPlanoForm("novo")} onEditar={() => setPlanoForm("editar")}
             onDefinirVigente={() => setConfirmacao("vigente")}
             onExcluir={() => setConfirmacao("excluir")}
-            onVincular={() => vincular.mutate(plano)} vinculando={vincular.isPending} />
+            onVincular={() => vincular.mutate(plano)} vinculando={vincular.isPending}
+            onImportarIds={() => setIdsAberto(true)}
+            onIncluirBase={() => setBaseForm({ base: null })} />
 
           <div className="panel">
-            <Filtros filtros={filtros} onMudar={setFiltros} dados={bases.data} />
-            <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 0 }}>
-              <div className="sub" style={{ fontSize: 12.5 }} aria-live="polite">
-                {bases.data
-                  ? `${bases.data.bases.length} base(s) encontrada(s) de ${bases.data.total_previstas} previstas`
-                  : bases.isError ? "" : "Carregando…"}
-                {bases.isPlaceholderData && " · atualizando…"}
-              </div>
-              <Pode permissao="pda.gerenciar_planos">
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => setBaseForm({ base: null })}>
-                  <i className="fa-solid fa-plus" />Incluir base
-                </button>
-              </Pode>
-            </div>
+            <Filtros filtros={filtros} onMudar={setFiltros} dados={bases.data}
+              exportar={
+                <ExportarTabela titulo="Monitoramento do PDA" colunas={EXPORTACAO_BASES} linhas={tabela.todas}
+                  filtros={descreverFiltros([
+                    ["PDA", plano.nome], ["Órgão", rotuloDe(bases.data?.opcoes.orgaos, filtros.orgao)],
+                    ["Situação", filtros.situacao], ["Periodicidade", filtros.periodicidade],
+                    ["Ano", filtros.ano], ["Prazo", filtros.prazo === "vencido" ? "Vencido"
+                      : filtros.prazo === "proximo" ? "Próximo do prazo" : filtros.prazo]])} />
+              } />
             <div className="table-scroll">
               <table>
                 <thead><tr>
-                  <th>Órgão</th><th>Base prevista (PDA)</th><th>Dataset CKAN</th><th>ID CKAN</th>
-                  <th>Prazo</th><th>Periodicidade</th><th>Última atualização</th><th>Situação</th>
+                  <ColunaOrdenavel coluna="orgao" {...col}>Órgão</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="nome" {...col}>Base prevista (PDA)</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="dataset" {...col}>Dataset CKAN</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="id_ckan" {...col}>ID CKAN</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="prazo" {...col}>Prazo</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="periodicidade" {...col}>Periodicidade</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="atualizado" primeira="desc" {...col}>Última atualização</ColunaOrdenavel>
+                  <ColunaOrdenavel coluna="situacao" {...col}>Situação</ColunaOrdenavel>
                 </tr></thead>
                 <tbody>
                   {bases.isError ? (
@@ -189,11 +214,15 @@ export default function PdaPage() {
                       Nenhuma base encontrada para os filtros selecionados.
                     </td></tr>
                   ) : (
-                    bases.data.bases.map((b) => <LinhaBase key={b.id} base={b} onAbrir={setDetalhe} />)
+                    tabela.itens.map((b) => <LinhaBase key={b.id} base={b} onAbrir={setDetalhe} />)
                   )}
                 </tbody>
               </table>
             </div>
+            {bases.data && (
+              <Paginacao id="pda" {...tabela.paginacao} carregando={bases.isPlaceholderData}
+                resumo={<><strong>{bases.data.bases.length}</strong> base(s) encontrada(s) de {bases.data.total_previstas} previstas</>} />
+            )}
           </div>
 
           <ConfirmarModal aberto={confirmacao === "vigente"} titulo="Definir PDA vigente"
@@ -235,6 +264,8 @@ export default function PdaPage() {
             primeiro={false} onFechar={() => setPlanoForm(null)} onSalvo={aoSalvarPlano} />
           <BaseFormModal aberto={baseForm != null} plano={plano} base={baseForm?.base ?? null}
             onFechar={() => setBaseForm(null)} onSalva={aoSalvarBase} />
+          <ImportarIdsModal aberto={idsAberto} plano={plano} onFechar={() => setIdsAberto(false)}
+            onGravado={(r) => { toast(`IDs do CKAN gravados em ${r.atualizadas} base(s).`); recarregar(); }} />
         </>
       )}
 
@@ -290,26 +321,16 @@ interface PainelPlanoProps {
   onExcluir: () => void;
   onVincular: () => void;
   vinculando: boolean;
-}
-
-function vigencia(p: PlanoPda): string | null {
-  if (p.vigencia_inicio && p.vigencia_fim) return `vigência ${fmtData(p.vigencia_inicio)} a ${fmtData(p.vigencia_fim)}`;
-  if (p.vigencia_inicio) return `vigência a partir de ${fmtData(p.vigencia_inicio)}`;
-  if (p.vigencia_fim) return `vigência até ${fmtData(p.vigencia_fim)}`;
-  return null;
+  onImportarIds: () => void;
+  onIncluirBase: () => void;
 }
 
 function PainelPlano({
   planos, plano, onTrocar, onImportar, onNovo, onEditar, onDefinirVigente, onExcluir, onVincular, vinculando,
+  onImportarIds, onIncluirBase,
 }: PainelPlanoProps) {
-  const origem = plano.arquivo_nome ? "importado" : "criado manualmente";
   // O vigente só pode ser excluído quando é o único PDA (regra do backend)
   const podeExcluir = !plano.vigente || planos.length === 1;
-  const info = [
-    plural(plano.total_bases, "base prevista", "bases previstas"),
-    `${origem} em ${fmtDataHora(plano.importado_em)}${plano.importado_por ? ` por ${plano.importado_por}` : ""}`,
-    vigencia(plano),
-  ].filter(Boolean).join(" · ");
 
   return (
     <div className="panel">
@@ -336,8 +357,15 @@ function PainelPlano({
                   : `Atualizar vínculos (${plural(plano.vinculos_pendentes, "pendente", "pendentes")})`}
               </button>
             )}
+            <button type="button" className="btn btn-outline btn-sm" onClick={onImportarIds}
+              title="Grava o ID do dataset no CKAN nas bases deste PDA a partir de um CSV">
+              <i className="fa-solid fa-fingerprint" />Importar IDs do CKAN
+            </button>
           </Pode>
           <Pode permissao="pda.gerenciar_planos">
+            <button type="button" className="btn btn-outline btn-sm" onClick={onIncluirBase}>
+              <i className="fa-solid fa-plus" />Incluir base
+            </button>
             {!plano.vigente && (
               <button type="button" className="btn btn-outline btn-sm" onClick={onDefinirVigente}>
                 <i className="fa-solid fa-star" />Definir como vigente
@@ -358,11 +386,6 @@ function PainelPlano({
               <i className="fa-solid fa-file-import" />Importar PDA
             </button>
           </Pode>
-        </div>
-      </div>
-      <div className="panel-head" style={{ borderBottom: "none" }}>
-        <div className="sub" style={{ fontSize: 12.5 }}>
-          {info}{plano.arquivo_nome && <span title="Arquivo de origem"> · {plano.arquivo_nome}</span>}
         </div>
       </div>
     </div>
@@ -388,8 +411,8 @@ function Filtro({ id, rotulo, todos, valor, opcoes, onMudar, classe }: {
 
 const simples = (v: string): Opcao => ({ valor: v, rotulo: v });
 
-function Filtros({ filtros, onMudar, dados }: {
-  filtros: FiltrosPda; onMudar: (f: FiltrosPda) => void; dados: BasesPda | undefined;
+function Filtros({ filtros, onMudar, dados, exportar }: {
+  filtros: FiltrosPda; onMudar: (f: FiltrosPda) => void; dados: BasesPda | undefined; exportar?: ReactNode;
 }) {
   const set = (campo: keyof FiltrosPda) => (valor: string) => onMudar({ ...filtros, [campo]: valor });
   const janela = dados?.janela_alerta_dias;
@@ -413,6 +436,7 @@ function Filtros({ filtros, onMudar, dados }: {
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => onMudar(FILTROS_VAZIOS)}>
           Limpar filtros
         </button>
+        {exportar}
       </div>
     </div>
   );
@@ -420,11 +444,35 @@ function Filtros({ filtros, onMudar, dados }: {
 
 /* ------------------------------------------------------------------ Tabela */
 
+/** Dataset do CKAN na exportação: título do vinculado, ou o informado na planilha (vínculo pendente). */
+function datasetExportado(b: BasePda): string {
+  if (b.vinculo === "resolvido") {
+    return (b.dataset_titulo ?? b.dataset_name ?? "—") + (b.dataset_ativo === false ? " (fora do portal)" : "");
+  }
+  if (b.vinculo === "pendente") {
+    return `${b.dataset_name_planilha ?? b.dataset_id_ckan_planilha ?? "—"} (vínculo pendente)`;
+  }
+  return "—";
+}
+
+/** Colunas do Excel/PDF: as mesmas da tabela (ID do CKAN completo), com os valores como a tela mostra. */
+const EXPORTACAO_BASES: ColunaExportacao<BasePda>[] = [
+  { titulo: "Órgão", valor: (b) => b.orgao_sigla },
+  { titulo: "Base prevista (PDA)", valor: (b) => b.nome_previsto },
+  { titulo: "Dataset CKAN", valor: datasetExportado },
+  { titulo: "ID CKAN", valor: (b) => b.dataset_id_ckan },
+  { titulo: "Prazo", valor: (b) => fmtData(b.prazo_abertura) },
+  { titulo: "Periodicidade", valor: (b) => b.periodicidade },
+  { titulo: "Última atualização",
+    valor: (b) => fmtDataHora(b.ultima_atualizacao) + (b.ultima_atualizacao && b.ultima_atualizacao_estimada ? " (est.)" : "") },
+  { titulo: "Situação", valor: (b) => b.situacao },
+];
+
 function CelulaDataset({ b }: { b: BasePda }) {
   if (b.vinculo === "resolvido") {
     return (
       <>
-        <span title={b.dataset_titulo ?? undefined}>{b.dataset_name ?? "—"}</span>
+        <span>{b.dataset_titulo ?? b.dataset_name ?? "—"}</span>
         {b.dataset_ativo === false && (
           <>{" "}<span className="badge badge-red" title="Dataset vinculado não está mais visível no portal">fora do portal</span></>
         )}
@@ -434,7 +482,9 @@ function CelulaDataset({ b }: { b: BasePda }) {
   if (b.vinculo === "pendente") {
     return (
       <>
-        <span className="cell-muted">{b.dataset_name_planilha}</span>{" "}
+        <span className="cell-muted" title={b.dataset_id_ckan_planilha ?? undefined}>
+          {b.dataset_name_planilha ?? (b.dataset_id_ckan_planilha && abreviarId(b.dataset_id_ckan_planilha))}
+        </span>{" "}
         <span className="badge badge-amber">vínculo pendente</span>
       </>
     );
@@ -454,7 +504,7 @@ function LinhaBase({ base: b, onAbrir }: { base: BasePda; onAbrir: (b: BasePda) 
       <td title={b.orgao_nome ?? undefined}>{b.orgao_sigla}</td>
       <td className="cell-strong">{b.nome_previsto}</td>
       <td><CelulaDataset b={b} /></td>
-      <td className="mono cell-muted" title={b.dataset_id ?? undefined}>{b.dataset_id ? abreviarId(b.dataset_id) : "—"}</td>
+      <td className="mono cell-muted" title={b.dataset_id_ckan ?? undefined}>{b.dataset_id_ckan ? abreviarId(b.dataset_id_ckan) : "—"}</td>
       <td className="cell-muted">{fmtData(b.prazo_abertura)}</td>
       <td title={periodicidadeOriginal}>{b.periodicidade}</td>
       <td className="cell-muted">

@@ -9,6 +9,24 @@ import { Pode } from "@/shared/acesso/Pode";
 import type { Usuario } from "@/shared/types";
 import { PageLede } from "@/shared/ui/PageLede";
 import { useToast } from "@/shared/ui/Toast";
+import type { Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
+
+const ORDENADORES_USUARIO: Ordenadores<Usuario, "nome" | "email" | "papeis" | "orgao" | "acesso" | "status"> = {
+  nome: (u) => u.nome,
+  email: (u) => u.email,
+  papeis: (u) => u.papeis.map((p) => p.nome).join(", "),
+  orgao: (u) => u.orgao?.titulo ?? "Todos",
+  acesso: (u) => dataOrdenavel(u.ultimo_acesso),
+  status: (u) => (u.ativo ? "Ativo" : "Inativo"),
+};
+
+const ORDENADORES_PAPEL: Ordenadores<Papel, "nome" | "permissoes" | "usuarios" | "escopo"> = {
+  nome: (p) => p.nome,
+  permissoes: (p) => (p.todas ? Number.MAX_SAFE_INTEGER : p.permissoes.length),
+  usuarios: (p) => p.total_usuarios,
+  escopo: (p) => (p.exige_orgao ? "Próprio órgão" : "Estadual"),
+};
 
 const fmt = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Nunca";
@@ -22,6 +40,10 @@ export default function UsuariosPage() {
   const catalogo = useQuery({ queryKey: ["acesso", "catalogo"], queryFn: acessoApi.catalogo });
   const [formUsuario, setFormUsuario] = useState<{ aberto: boolean; u: Usuario | null }>({ aberto: false, u: null });
   const [formPapel, setFormPapel] = useState<{ aberto: boolean; p: Papel | null }>({ aberto: false, p: null });
+  const tabUsuarios = useTabela(usuarios.data, ORDENADORES_USUARIO);
+  const tabPapeis = useTabela(papeis.data, ORDENADORES_PAPEL);
+  const colU = { ordem: tabUsuarios.ordem, onOrdenar: tabUsuarios.ordenarPor };
+  const colP = { ordem: tabPapeis.ordem, onOrdenar: tabPapeis.ordenarPor };
 
   const atualizar = () => {
     qc.invalidateQueries({ queryKey: ["acesso"] });
@@ -42,16 +64,24 @@ export default function UsuariosPage() {
 
       <div className="panel">
         <div className="panel-head">
-          <div><h3>Usuários</h3><div className="sub">{usuarios.data?.length ?? 0} cadastrados</div></div>
+          <div><h3>Usuários</h3></div>
           <button className="btn btn-primary btn-sm" onClick={() => setFormUsuario({ aberto: true, u: null })}>
             <i className="fa-solid fa-user-plus" />Novo usuário
           </button>
         </div>
         <div className="table-scroll">
           <table>
-            <thead><tr><th>Nome</th><th>E-mail</th><th>Papéis</th><th>Órgão</th><th>Último acesso</th><th>Status</th><th /></tr></thead>
+            <thead><tr>
+              <ColunaOrdenavel coluna="nome" {...colU}>Nome</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="email" {...colU}>E-mail</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="papeis" {...colU}>Papéis</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="orgao" {...colU}>Órgão</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="acesso" primeira="desc" {...colU}>Último acesso</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="status" {...colU}>Status</ColunaOrdenavel>
+              <th />
+            </tr></thead>
             <tbody>
-              {usuarios.data?.map((u) => (
+              {tabUsuarios.itens.map((u) => (
                 <tr key={u.id}>
                   <td className="cell-strong">{u.nome}</td>
                   <td>{u.email}</td>
@@ -69,6 +99,10 @@ export default function UsuariosPage() {
             </tbody>
           </table>
         </div>
+        {usuarios.data && (
+          <Paginacao id="usuarios" {...tabUsuarios.paginacao}
+            resumo={<><strong>{usuarios.data.length}</strong> usuário(s) cadastrado(s)</>} />
+        )}
       </div>
 
       <div className="panel">
@@ -82,9 +116,15 @@ export default function UsuariosPage() {
         </div>
         <div className="table-scroll">
           <table>
-            <thead><tr><th>Papel</th><th>Permissões</th><th>Usuários</th><th>Escopo</th><th /></tr></thead>
+            <thead><tr>
+              <ColunaOrdenavel coluna="nome" {...colP}>Papel</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="permissoes" primeira="desc" {...colP}>Permissões</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="usuarios" primeira="desc" {...colP}>Usuários</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="escopo" {...colP}>Escopo</ColunaOrdenavel>
+              <th />
+            </tr></thead>
             <tbody>
-              {papeis.data?.map((p) => (
+              {tabPapeis.itens.map((p) => (
                 <tr key={p.id}>
                   <td style={{ maxWidth: 360 }}>
                     <div className="cell-strong">{p.nome} {p.sistema && <span className="badge badge-gray">sistema</span>}</div>
@@ -111,6 +151,10 @@ export default function UsuariosPage() {
             </tbody>
           </table>
         </div>
+        {papeis.data && (
+          <Paginacao id="papeis" {...tabPapeis.paginacao}
+            resumo={<><strong>{papeis.data.length}</strong> papel(éis)</>} />
+        )}
       </div>
 
       <UsuarioForm aberto={formUsuario.aberto} usuario={formUsuario.u} papeis={papeis.data ?? []}

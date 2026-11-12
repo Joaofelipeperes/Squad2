@@ -1,7 +1,7 @@
 import type { Permissao } from "@/shared/acesso/permissoes.gen";
 
 export interface PapelResumo { id: number; codigo: string; nome: string }
-export interface OrgaoResumo { ckan_id: string; titulo: string }
+export interface OrgaoResumo { id: number; id_ckan: string | null; titulo: string }
 
 export interface Usuario {
   id: number;

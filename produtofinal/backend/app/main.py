@@ -40,13 +40,15 @@ def verificar_controle_de_acesso(modulos: list[BackendModule]) -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from app.core.db import SessionLocal
-    from app.modules.acesso.service import sincronizar_papeis_padrao
+    from app.instalacao import preparar
 
     try:
         with SessionLocal() as db:
-            sincronizar_papeis_padrao(db)
+            # Papéis, administrador inicial, CKAN e IA local da 1ª subida (ADR-0032)
+            preparar(db)
     except Exception:  # noqa: BLE001 — banco ainda sem migração: não impede a subida
-        logging.getLogger(__name__).warning("Papéis padrão não sincronizados (rode o alembic).")
+        logging.getLogger(__name__).exception(
+            "Preparação inicial não concluída (o banco está migrado? rode o alembic).")
     yield
 
 
@@ -58,6 +60,16 @@ def create_app() -> FastAPI:
                        allow_methods=["*"], allow_headers=["*"])
 
     rota_completa: dict = {}  # endpoint → /api/v1/<modulo>/...; scope["route"] vem sem o prefixo
+
+    @app.middleware("http")
+    async def sem_cache_na_api(request: Request, call_next):
+        """Respostas da API não ficam em cache do navegador nem de proxy (ADR-0029): depois de
+        "Atualizar dados" a tela precisa ler o banco, nunca uma cópia guardada."""
+        resposta = await call_next(request)
+        if request.url.path.startswith(s.api_prefix):
+            resposta.headers.setdefault("Cache-Control", "no-store, max-age=0")
+            resposta.headers.setdefault("Pragma", "no-cache")
+        return resposta
 
     @app.middleware("http")
     async def log_de_acesso(request: Request, call_next):
@@ -91,7 +103,7 @@ def create_app() -> FastAPI:
 
     @app.get(f"{s.api_prefix}/saude", tags=["Sistema"], dependencies=[Depends(publico)])
     def saude():
-        return {"status": "ok", "ambiente": s.environment,
+        return {"status": "ok", "ambiente": s.environment, "ckan": s.ckan_base_url,
                 "modulos": [{"nome": m.name, "user_stories": m.user_stories} for m in modulos]}
 
     return app

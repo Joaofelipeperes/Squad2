@@ -170,6 +170,8 @@ filtrar_por_orgao(...)             <Pode permissao="..."> nos botões
   expira em 8 h; senhas com bcrypt; segredos de IA cifrados; o sistema impede ficar sem administrador.
 - A escrita no CKAN exige três condições simultâneas: `GDA_CKAN_WRITE_ENABLED=true`, token da GEDA
   e recurso do tipo *upload* — além da permissão `lgpd.aprovar_correcao`.
+- A leitura da auditoria do CKAN (rastreabilidade, ADR-0009) usa um token separado,
+  `GDA_CKAN_AUDITORIA_API_TOKEN`, de um usuário **editor** (não sysadmin); só leitura.
 
 ## 7. Pendências que afetam a arquitetura
 

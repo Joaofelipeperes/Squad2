@@ -24,7 +24,8 @@ async function executar<T>(method: string, path: string, body?: BodyInit, conten
   if (contentType) headers["Content-Type"] = contentType;
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const resp = await fetch(`${BASE}${path}`, { method, headers, body });
+  // no-store: nunca reaproveita resposta guardada pelo navegador (ADR-0029)
+  const resp = await fetch(`${BASE}${path}`, { method, headers, body, cache: "no-store" });
   if (resp.status === 401) {
     tokenStore.clear();
     window.dispatchEvent(new Event("gda:sessao-expirada"));
@@ -47,6 +48,36 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   return executar<T>(method, path, body === undefined ? undefined : JSON.stringify(body), "application/json");
 }
 
+/** Baixa um arquivo da API (com token). Devolve o blob e o nome sugerido pelo servidor.
+ *  Com `body`, é um POST com JSON (ex.: a tabela da tela para virar PDF/Excel — ADR-0031). */
+async function baixar(path: string, body?: unknown): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const token = tokenStore.get();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const resp = await fetch(`${BASE}${path}`, {
+    method: body === undefined ? "GET" : "POST", headers, cache: "no-store",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (resp.status === 401) {
+    tokenStore.clear();
+    window.dispatchEvent(new Event("gda:sessao-expirada"));
+  }
+  if (!resp.ok) {
+    let msg = `Erro ${resp.status}`;
+    try {
+      const data = await resp.json();
+      if (typeof data.detail === "string") msg = data.detail;
+    } catch {
+      /* resposta sem JSON */
+    }
+    throw new ApiError(resp.status, msg);
+  }
+  const disposicao = resp.headers.get("Content-Disposition") ?? "";
+  const achado = /filename="?([^"]+)"?/.exec(disposicao);
+  return { blob: await resp.blob(), filename: achado?.[1] ?? "download" };
+}
+
 export const api = {
   get: <T>(p: string) => request<T>("GET", p),
   post: <T>(p: string, b?: unknown) => request<T>("POST", p, b),
@@ -54,4 +85,8 @@ export const api = {
   del: <T>(p: string) => request<T>("DELETE", p),
   /** POST multipart/form-data (envio de arquivo). Não define Content-Type: o navegador põe o boundary. */
   upload: <T>(p: string, form: FormData) => executar<T>("POST", p, form),
+  /** GET de um arquivo para download (com token). Devolve o blob e o nome do servidor. */
+  download: (p: string) => baixar(p),
+  /** POST com JSON que devolve um arquivo para download. */
+  downloadPost: (p: string, b: unknown) => baixar(p, b),
 };

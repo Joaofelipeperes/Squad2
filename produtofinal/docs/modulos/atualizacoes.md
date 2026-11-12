@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| **Status** | Parcial: última atualização real implementada (PBI-23 a PBI-25); tela, API e situação por periodicidade em esqueleto |
+| **Status** | Parcial: última atualização real (PBI-23 a PBI-25), situação por periodicidade (PBI-27/28, ADR-0023) e a tela Monitoramento de Atualizações (API + frontend, PBI-81) implementadas; faltam recurso parcial (PBI-78) e correções por anonimização (PBI-79) |
 | **Responsável** | Humberto (Eixo 1) |
 | **User stories** | US9 (PBI-23 a PBI-26, PBI-78, PBI-79, PBI-81), US10 (PBI-27 a PBI-30) |
 | **Backend** | `backend/app/modules/atualizacoes/` |
 | **Frontend** | `frontend/src/modules/atualizacoes/` |
-| **Última atualização** | 18/10/2026 |
+| **Última atualização** | 06/11/2026 |
 
 ## Propósito
 Indica se cada dataset está de fato sendo atualizado conforme a periodicidade declarada, usando a
@@ -16,14 +16,18 @@ data do recurso e não a do metadado — eliminando as "falsas atualizações".
 ## Telas
 | Tela | Rota | Permissão para ver | Ações na tela (permissão) |
 |---|---|---|---|
-| Monitoramento de Atualizações | `/atualizacoes` | `atualizacoes.acessar` | Filtros por órgão, periodicidade e situação (PBI-81) |
+| Monitoramento de Atualizações | `/atualizacoes` | `atualizacoes.acessar` | Filtros por dataset (busca), órgão, periodicidade e situação (PBI-81); ordenação por coluna e paginação com total no rodapé (ADR-0028); clicar na linha abre o detalhe do dataset (modal da tela Datasets); **Excel** e **PDF** da tabela como está na tela — filtros, ordem e todas as páginas (`relatorios.exportar`, ADR-0031) |
 
-Referência visual: `#screen-updates` do Protótipo V1, incluindo o aviso sobre `last_modified`.
+Referência visual: `#screen-updates` do Protótipo V1. O aviso do protótipo sobre `last_modified` saiu da tela (06/11, termo técnico para o usuário da GEDA); a regra continua a mesma. Os filtros **dataset** e **órgão** são adicionais ao protótipo. A lista traz os datasets vinculados às bases do **PDA vigente** (a periodicidade vem do PDA, ADR-0023); base sem vínculo não aparece. Os cartões contam todas as linhas do escopo, sem os filtros.
 
 ## API
-Nenhum endpoint ainda. Previsto: `GET /api/v1/atualizacoes/datasets` (`atualizacoes.acessar`).
+- `GET /api/v1/atualizacoes/datasets` (`atualizacoes.acessar`) — query `orgao` (chave do órgão), `periodicidade`, `situacao`, `dataset` (trecho do título/name, sem acento nem caixa). Devolve `plano_nome`, `hoje`, `total`, `resumo` (cartões), `opcoes` e `datasets` (linhas: dataset, órgão, periodicidade, última atualização, dias, prazo esperado, situação). Escopo de órgão do usuário aplicado por `pda.bases_do_plano`.
 
 ## Serviços e métodos
+Sem acesso ao banco próprio (não tem `dao.py`): `regras.py` é de funções puras e `listagem.py` lê as bases já calculadas por `pda.bases_do_plano`.
+
+`listagem.py` — `listar(db, user, orgao, periodicidade, situacao, dataset) -> AtualizacoesOut` (tela). Fica fora de `service.py` e é importado de forma tardia pelo router porque o módulo pda importa `atualizacoes.service` (evita importação circular). Dataset fora do portal → "Sem informação", como no Dashboard. `schemas.py` guarda o contrato JSON.
+
 `regras.py` (funções puras, reaproveitáveis numa extensão CKAN):
 - `ultima_atualizacao_real(recursos) -> UltimaAtualizacao` — PBI-23 a PBI-25.
   `UltimaAtualizacao(data: datetime | None, estimada: bool)` (NamedTuple). Considera só recursos
@@ -34,8 +38,16 @@ Nenhum endpoint ainda. Previsto: `GET /api/v1/atualizacoes/datasets` (`atualizac
 
 `service.py` (ponto de uso pelos outros módulos):
 - `ultima_atualizacao_real(recursos) -> UltimaAtualizacao` — delega para `regras`.
-- `situacao_periodicidade(periodicidade, ultima, hoje) -> str` — contrato (`NotImplementedError`):
-  "Atualizado" | "Próximo do vencimento" | "Atrasado" | "Sem informação" (PBI-27/28).
+- `situacao_periodicidade(periodicidade, ultima, hoje, original=None) -> str` — PBI-27/28
+  (ADR-0023), delega para `regras.situacao_periodicidade`: "Atualizado" | "Próximo do vencimento" |
+  "Atrasado" | "Sem informação" | "Sem periodicidade definida".
+
+`regras.py` (funções puras): `DIAS_POR_PERIODICIDADE` (Mensal 30, Anual 365…), `prazo_em_dias(
+periodicidade, original)` (Múltipla = menor periodicidade citada no texto original),
+`vencimento_atualizacao(periodicidade, ultima, original)` e `situacao_periodicidade`: `d` = dias
+desde a última atualização real; `d > prazo` → Atrasado; `d ≥ 80% do prazo` (`FRACAO_ALERTA`) →
+Próximo do vencimento; senão Atualizado. Eventual/Estática → Sem periodicidade definida; sem prazo
+ou sem data → Sem informação. Testes em `tests/test_atualizacoes_periodicidade.py`.
 
 Recomendação: implementar `situacao_periodicidade` também em `regras.py`.
 
@@ -52,16 +64,21 @@ Sem tabelas próprias: lê `dataset` e `recurso` do inventário.
 |---|---|---|
 | consome | inventario | `Recurso.last_modified`, `Recurso.eh_dicionario_dados`, `Dataset.periodicidade_declarada` |
 | consome | lgpd | `CorrecaoPublicada` — correção por anonimização não conta como atualização (PBI-79) |
-| consome | pda | indicador separado PDA × espontânea (PBI-82) |
+| consome | pda | `plano_vigente` + `bases_do_plano` — periodicidade, dataset vinculado e última atualização por base (tela Monitoramento de Atualizações); indicador separado PDA × espontânea (PBI-82, previsto) |
+| consome | inventario | `DatasetDetalheModal` (frontend) — detalhe do dataset ao clicar numa linha |
 | é consumido por | pda | `service.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da base |
 | é consumido por | inventario | `regras.ultima_atualizacao_real` — coluna "Última atualização" e detalhe da tela Datasets |
-| é consumido por | painel, relatorios, assistente | situação de atualização por dataset e órgão |
+| é consumido por | painel, relatorios | situação de atualização por dataset e órgão |
+| é consumido por | assistente | `regras.ultima_atualizacao_real` (já); situação por periodicidade quando implementada |
+| é consumido por | painel | `regras.situacao_periodicidade` e `vencimento_atualizacao` — gráfico "Status das atualizações", cartão "Atualizações em atraso" e alertas do Dashboard; coluna "Atualização" e cartão "Atualizações atrasadas" da tela Organizações |
+| consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
 ## Jobs agendados
 Nenhum.
 
 ## Regras de negócio e decisões
 Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.md).
+- Situação por periodicidade: ver [ADR-0023](../adr/0023-situacao-de-atualizacao-pela-periodicidade-do-pda.md). A periodicidade que vale é a da base no **PDA vigente**; Mensal = 30 dias, **sem tolerância**.
 
 - `metadata_modified` **nunca** é indicador de atualização.
 - Ressalva do recurso parcial (17/09): dataset anual atualizado no meio do ano (PBI-78).
@@ -70,6 +87,8 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 
 ## Pendências
 - Domínio de valores de periodicidade praticado no portal (PBI-27, PBI-29).
+- Situação por periodicidade ainda não considera recurso parcial (PBI-78) nem correções por
+  anonimização (PBI-79); validar a regra da ADR-0023 com a GEDA (tolerância).
 - O PBI-25 pode pedir o fallback por recurso (`created` de cada recurso sem `last_modified`), não
   só quando nenhum tem — validar com a GEDA e o time.
 
@@ -79,3 +98,9 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 30/09/2026 | Esqueleto: contratos e permissão | Victor |
 | 07/10/2026 | `regras.ultima_atualizacao_real` implementada com `UltimaAtualizacao(data, estimada)` (PBI-23 a PBI-25); `service.py` delega e o módulo pda a consome | Humberto |
 | 18/10/2026 | Interações: a tela Datasets (inventario) passa a consumir `regras.ultima_atualizacao_real`; sem mudança de código neste módulo | Humberto |
+| 22/10/2026 | `ultima_atualizacao_real`: a estimativa usa a data de criação no CKAN — `created_ckan` nos objetos do banco (o `created` deles é a auditoria, ADR-0019) e `created` nos payloads/dicts do CKAN | Victor |
+| 23/10/2026 | Interações: o que o Assistente consome deste módulo | Squad 2 |
+| 28/10/2026 | Situação por periodicidade (PBI-27/28, ADR-0023): `regras.situacao_periodicidade`, `prazo_em_dias`, `vencimento_atualizacao`; contrato `service.situacao_periodicidade` implementado; usado pelo Dashboard | Humberto |
+| 30/10/2026 | Tela Monitoramento de Atualizações (US9/US10, PBI-81): `GET /atualizacoes/datasets`, `listagem.py`, `schemas.py`, `AtualizacoesPage` com cartões e filtros dataset, órgão, periodicidade e situação; teste `test_atualizacoes_api.py` | Squad 2 |
+| 05/11/2026 | Tela Monitoramento de Atualizações: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028); contador movido para o rodapé. Sem mudança na API | Victor |
+| 06/11/2026 | Tela: aviso sobre `last_modified`/`metadata_modified` retirado; botões **Excel** e **PDF** da tabela (`ExportarTabela`, ADR-0031) | Humberto |

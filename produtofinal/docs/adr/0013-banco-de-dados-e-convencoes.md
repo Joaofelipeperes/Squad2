@@ -84,3 +84,4 @@ Revisão do time ao criar a primeira tabela do Eixo 1 ou 2 seguindo as convenç�
 | Data | Revisão | Autor |
 |---|---|---|
 | 07/10/2026 | Docstrings acrescentadas aos modelos sem descrição (acesso, inventario, lgpd, parametros) para o dicionário de dados | Victor |
+| 21/10/2026 | §2 das convenções (ID do CKAN como chave primária das tabelas espelhadas) substituído pela [ADR-0018](0018-chave-primaria-propria-e-id-ckan.md): `id` inteiro próprio e ID do CKAN em `id_ckan` | Victor |

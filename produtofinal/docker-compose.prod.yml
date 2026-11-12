@@ -1,0 +1,149 @@
+# Ambiente de SERVIDOR (UFG temporário, CGE-GO definitivo) — ADR-0032.
+#
+# No pacote de entrega (deploy/empacotar.ps1) este arquivo vira o docker-compose.yml, e basta:
+#   docker compose up -d
+# Na primeira subida tudo se prepara sozinho: segredos gerados (serviço `segredos`), banco migrado,
+# papéis Administrador e Gerência de Dados Abertos, usuário administrador com a senha inicial,
+# CKAN lido = portal oficial, perfis de IA local (Ollama) com download dos modelos e a primeira
+# coleta do CKAN. O .env é opcional: só para mudar os padrões abaixo (modelo em .env.example).
+# Atualizar a versão: troque o código, mantenha o .env e rode o mesmo comando (dados e segredos
+# ficam nos volumes). O CKAN local de testes NÃO faz parte deste ambiente.
+#
+#   segredos       gera as chaves e a senha do banco uma única vez e termina
+#   web            nginx: telas + repasse de /api/ (única porta publicada; HTTP ou HTTPS próprio)
+#   api            FastAPI (sem porta publicada; só o web a alcança)
+#   worker         jobs agendados: coleta diária, varredura LGPD, fila (ADR-0012, ADR-0025)
+#   db             PostgreSQL 16 (sem porta publicada)
+#   ollama         IA local para a varredura LGPD (dado pessoal não sai do servidor, ADR-0002)
+#   ollama-modelos baixa os modelos uma vez e termina (de novo só se faltarem)
+name: gda
+
+x-logs: &logs
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+x-backend: &backend
+  build: ./backend
+  image: gda-backend
+  # .env opcional (Docker Compose 2.24+): variáveis GDA_* extras, como os tokens do CKAN
+  env_file: [{ path: .env, required: false }]
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  environment:
+    GDA_ENVIRONMENT: producao
+    GDA_LGPD_ARQUIVOS_DIR: /app/dados_lgpd
+    # Só o nginx (container web, IP fixo) pode informar o IP real do usuário (ADR-0016)
+    FORWARDED_ALLOW_IPS: ${GDA_IP_WEB:-172.31.250.10}
+    # CKAN lido: vazio = portal oficial https://dadosabertos.go.gov.br (ADR-0024)
+    GDA_CKAN_BASE_URL: ${GDA_CKAN_BASE_URL:-}
+    GDA_COLETA_CRON: ${GDA_COLETA_CRON:-0 3 * * *}
+    # Primeira subida (app/instalacao.py): só cria o que ainda não existe
+    GDA_PAPEIS_INICIAIS: '["administrador","gerente_geda"]'
+    GDA_ADMIN_INICIAL_EMAIL: ${GDA_ADMIN_INICIAL_EMAIL:-admin@cge.go.gov.br}
+    GDA_ADMIN_INICIAL_SENHA: ${GDA_ADMIN_INICIAL_SENHA:-12345}
+    GDA_IA_LOCAL_URL: http://ollama:11434
+    GDA_IA_LOCAL_MODELO_CHAT: ${GDA_OLLAMA_MODELO_CHAT:-qwen2.5:7b-instruct}
+    GDA_IA_LOCAL_MODELO_EMBEDDINGS: ${GDA_OLLAMA_MODELO_EMBEDDINGS:-bge-m3}
+    GDA_COLETA_INICIAL: "true"
+  networks: [interna]
+  <<: *logs
+
+services:
+  segredos:
+    <<: *backend
+    # Roda como root só para gravar no volume; os arquivos ficam com o usuário da aplicação
+    entrypoint: ["python", "-m", "app.segredos", "/segredos"]
+    restart: "no"
+    volumes: [segredos:/segredos]
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on: { segredos: { condition: service_completed_successfully } }
+    environment:
+      POSTGRES_USER: gda
+      POSTGRES_DB: gda
+      POSTGRES_PASSWORD_FILE: /segredos/db_senha
+    volumes: [pgdata:/var/lib/postgresql/data, segredos:/segredos:ro]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U gda"], interval: 5s, retries: 20 }
+    networks: [interna]
+    <<: *logs
+
+  api:
+    <<: *backend
+    depends_on:
+      segredos: { condition: service_completed_successfully }
+      db: { condition: service_healthy }
+    # Anonimização LGPD (US26): cópia do original e prévia (dado pessoal; retenção da GEDA, ADR-0008)
+    volumes: [lgpd_arquivos:/app/dados_lgpd, segredos:/segredos:ro]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/saude', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 30
+      start_period: 30s
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "app.worker"]
+    depends_on: { api: { condition: service_healthy } }
+    volumes: [lgpd_arquivos:/app/dados_lgpd, segredos:/segredos:ro]
+
+  web:
+    build: ./frontend
+    image: gda-web
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    depends_on: { api: { condition: service_healthy } }
+    environment:
+      GDA_PROXY_CONFIAVEL: ${GDA_PROXY_CONFIAVEL:-}
+      GDA_PORTA_HTTPS: ${GDA_PORTA_HTTPS:-8443}
+    # GDA_IP_PUBLICACAO: interface do servidor onde a porta abre (0.0.0.0 = todas). Atrás de
+    # proxy, prefira o IP da rede interna pela qual o proxy chega (porta publicada pelo Docker
+    # ignora o firewall do sistema, como o ufw).
+    ports:
+      - "${GDA_IP_PUBLICACAO:-0.0.0.0}:${GDA_PORTA_HTTP:-8080}:80"
+      - "${GDA_IP_PUBLICACAO:-0.0.0.0}:${GDA_PORTA_HTTPS:-8443}:443"
+    # HTTPS próprio: fullchain.pem e privkey.pem nesta pasta (vazia = modo HTTP, atrás de proxy)
+    volumes: ["./deploy/certificados:/etc/nginx/certs:ro"]
+    networks:
+      interna: { ipv4_address: "${GDA_IP_WEB:-172.31.250.10}" }
+    <<: *logs
+
+  ollama:
+    image: ollama/ollama:0.40.14
+    restart: unless-stopped
+    volumes: [ollama:/root/.ollama]
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m   # mantém o modelo carregado entre chamadas da varredura
+    healthcheck: { test: ["CMD", "ollama", "list"], interval: 10s, retries: 30 }
+    networks: [interna]
+    <<: *logs
+
+  ollama-modelos:
+    image: ollama/ollama:0.40.14
+    depends_on: { ollama: { condition: service_healthy } }
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      MODELOS: "${GDA_OLLAMA_MODELO_CHAT:-qwen2.5:7b-instruct} ${GDA_OLLAMA_MODELO_EMBEDDINGS:-bge-m3}"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'for m in $$MODELOS; do ollama show "$$m" >/dev/null 2>&1 && echo "$$m já baixado" || ollama pull "$$m" || exit 1; done; echo "Modelos prontos."'
+    restart: on-failure:5
+    networks: [interna]
+    <<: *logs
+
+networks:
+  interna:
+    ipam:
+      config: [{ subnet: "${GDA_REDE_INTERNA:-172.31.250.0/24}" }]
+
+volumes:
+  pgdata:
+  lgpd_arquivos:
+  ollama:
+  # Chaves e senha do banco geradas na primeira subida. Faça backup junto com o banco: sem a chave
+  # de criptografia, as chaves de IA salvas ficam ilegíveis (deploy/README.md)
+  segredos:

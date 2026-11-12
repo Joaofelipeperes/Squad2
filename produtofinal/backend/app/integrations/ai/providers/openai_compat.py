@@ -4,7 +4,14 @@ Cobre, com um único adaptador: vLLM, LM Studio, llama.cpp server, LocalAI (loca
 serviços comerciais que expõem essa mesma interface. Marque "execução local" no perfil
 quando o servidor estiver na infraestrutura do Estado.
 """
-from app.integrations.ai.base import AIProvider, ChatRequest, ChatResponse, FieldSpec
+from app.integrations.ai.base import (
+    AIProvider,
+    AIProviderError,
+    ChatRequest,
+    ChatResponse,
+    EmbedResponse,
+    FieldSpec,
+)
 from app.integrations.ai.providers._http import get_json, post_json
 from app.integrations.ai.registry import register_provider
 
@@ -51,6 +58,18 @@ class OpenAICompatibleProvider(AIProvider):
             output_tokens=usage.get("completion_tokens"),
             latency_ms=latency,
         )
+
+    def embed(self, textos: list[str]) -> EmbedResponse:
+        data, latency = post_json(f"{self.base_url}/embeddings",
+                                  json={"model": self.config.model, "input": textos},
+                                  headers=self._headers(), timeout=self.config.timeout_s)
+        itens = sorted(data.get("data") or [], key=lambda d: d.get("index", 0))
+        if len(itens) != len(textos):
+            raise AIProviderError(f"O servidor não devolveu embeddings para {self.config.model}.")
+        return EmbedResponse(vectors=[d["embedding"] for d in itens],
+                             model=data.get("model", self.config.model),
+                             input_tokens=(data.get("usage") or {}).get("prompt_tokens"),
+                             latency_ms=latency)
 
     def list_models(self) -> list[str]:
         data = get_json(f"{self.base_url}/models", headers=self._headers(),

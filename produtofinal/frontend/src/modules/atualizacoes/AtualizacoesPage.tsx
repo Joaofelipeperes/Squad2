@@ -1,12 +1,208 @@
-import { EmConstrucao } from "@/shared/ui/EmConstrucao";
+import { useQuery } from "@tanstack/react-query";
+import type { KeyboardEvent } from "react";
+import { useEffect, useState } from "react";
+import type { AtualizacaoLinha, AtualizacoesLista, FiltrosAtualizacoes } from "./api";
+import { FILTROS_VAZIOS, atualizacoesApi } from "./api";
+import { DatasetDetalheModal } from "@/modules/datasets/DatasetDetalheModal";
+import { fmtData, fmtDataHora } from "@/modules/pda/formato";
+import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
+import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
+import { PageLede } from "@/shared/ui/PageLede";
+import type { Ordenadores } from "@/shared/ui/tabela";
+import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
 
-/** Tela "Monitoramento de Atualizações" — referência visual: prototipos/prototipoV1.html. Substituir pelo conteúdo real. */
+type Coluna = "dataset" | "orgao" | "periodicidade" | "atualizado" | "dias" | "prazo" | "situacao";
+
+const ORDENADORES: Ordenadores<AtualizacaoLinha, Coluna> = {
+  dataset: (d) => d.dataset_titulo,
+  orgao: (d) => d.orgao_sigla,
+  periodicidade: (d) => d.periodicidade,
+  atualizado: (d) => dataOrdenavel(d.ultima_atualizacao),
+  dias: (d) => d.dias_desde_atualizacao,
+  prazo: (d) => d.prazo_esperado,
+  situacao: (d) => d.situacao,
+};
+
+/**
+ * Tela "Monitoramento de Atualizações" (US9/US10) — referência visual: #screen-updates do
+ * Protótipo V1. Datasets vinculados às bases do PDA vigente; a situação usa a periodicidade do
+ * PDA e o `last_modified` do RECURSO (ADR-0023), nunca o `metadata_modified` do dataset.
+ */
 export default function AtualizacoesPage() {
+  const [filtros, setFiltros] = useState<FiltrosAtualizacoes>(FILTROS_VAZIOS);
+  const [busca, setBusca] = useState("");
+  const [detalhe, setDetalhe] = useState<number | null>(null);
+
+  // A busca por dataset é enviada ao backend com uma pequena espera, para não consultar a cada tecla.
+  useEffect(() => {
+    const t = setTimeout(() => setFiltros((f) => (f.dataset === busca ? f : { ...f, dataset: busca })), 300);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  const lista = useQuery({
+    queryKey: ["atualizacoes", "datasets", filtros],
+    queryFn: () => atualizacoesApi.lista(filtros),
+    placeholderData: (anterior: AtualizacoesLista | undefined) => anterior,
+  });
+
+  const set = (campo: keyof FiltrosAtualizacoes) => (valor: string) => setFiltros((f) => ({ ...f, [campo]: valor }));
+  const limpar = () => { setBusca(""); setFiltros(FILTROS_VAZIOS); };
+  const dados = lista.data;
+  const tabela = useTabela(dados?.datasets, ORDENADORES);
+  const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
+
   return (
-    <EmConstrucao
-      titulo="Monitoramento de Atualizações"
-      descricao="Avaliação da atualização real do conteúdo dos recursos publicados, pelo last_modified do recurso."
-      userStories={["US9", "US10"]}
-    />
+    <section className="screen">
+      <PageLede titulo="Monitoramento de Atualizações">
+        Avaliação da atualização real do conteúdo dos recursos publicados.
+      </PageLede>
+
+      {dados && dados.plano_nome === null && (
+        <div className="inline-msg err" role="status" style={{ marginBottom: 18 }}>
+          Não há PDA vigente: a periodicidade de cada dataset vem do PDA. Importe ou defina um PDA vigente
+          em "Monitoramento PDA".
+        </div>
+      )}
+
+      <div className="kpi-grid">
+        <Cartao cor="green" icone="fa-check" valor={dados?.resumo.atualizados} rotulo="Atualizados no período" />
+        <Cartao cor="red" icone="fa-triangle-exclamation" valor={dados?.resumo.atrasados} rotulo="Em atraso" />
+        <Cartao cor="amber" icone="fa-hourglass-half" valor={dados?.resumo.proximos_do_vencimento}
+          rotulo="Próximos do vencimento" />
+        <Cartao cor="blue" icone="fa-circle-question" valor={dados?.resumo.sem_informacao}
+          rotulo="Sem periodicidade definida" />
+      </div>
+
+      <div className="panel">
+        <div className="filters-bar">
+          <div className="search-field">
+            <i className="fa-solid fa-magnifying-glass" />
+            <input type="text" className="text-input" aria-label="Buscar por nome do dataset"
+                   placeholder="Buscar por nome do dataset..." value={busca}
+                   onChange={(e) => setBusca(e.target.value)} />
+          </div>
+          <Filtro id="at-filtro-orgao" rotulo="Órgão" valor={filtros.orgao} onMudar={set("orgao")}
+            opcoes={dados?.opcoes.orgaos ?? []} classe="filter-field-limitado" />
+          <Filtro id="at-filtro-periodicidade" rotulo="Periodicidade" valor={filtros.periodicidade}
+            onMudar={set("periodicidade")}
+            opcoes={(dados?.opcoes.periodicidades ?? []).map((p) => ({ valor: p, rotulo: p }))} />
+          <Filtro id="at-filtro-situacao" rotulo="Situação" valor={filtros.situacao} onMudar={set("situacao")}
+            opcoes={(dados?.opcoes.situacoes ?? []).map((s) => ({ valor: s, rotulo: s }))} />
+          <div className="filter-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={limpar}>Limpar filtros</button>
+            <ExportarTabela titulo="Monitoramento de Atualizações" colunas={EXPORTACAO} linhas={tabela.todas}
+              filtros={descreverFiltros([
+                ["PDA", dados?.plano_nome], ["Dataset", filtros.dataset],
+                ["Órgão", rotuloDe(dados?.opcoes.orgaos, filtros.orgao)],
+                ["Periodicidade", filtros.periodicidade], ["Situação", filtros.situacao]])} />
+          </div>
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead><tr>
+              <ColunaOrdenavel coluna="dataset" {...col}>Dataset</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="orgao" {...col}>Órgão</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="periodicidade" {...col}>Periodicidade</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="atualizado" primeira="desc" {...col}>Último recurso atualizado</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="dias" primeira="desc" {...col}>Dias desde atualização</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="prazo" {...col}>Prazo esperado</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="situacao" {...col}>Situação</ColunaOrdenavel>
+            </tr></thead>
+            <tbody>
+              {lista.isError ? (
+                <tr><td colSpan={7} style={{ padding: 18 }}>
+                  <div className="inline-msg err" role="alert">
+                    Não foi possível carregar as atualizações: {lista.error.message}
+                  </div>
+                </td></tr>
+              ) : !dados ? (
+                <tr><td colSpan={7} className="table-empty">Carregando…</td></tr>
+              ) : dados.total === 0 ? (
+                <tr><td colSpan={7} className="table-empty">
+                  <i className="fa-solid fa-inbox" style={{ marginRight: 8 }} />
+                  Nenhum dataset vinculado ao PDA vigente para monitorar.
+                </td></tr>
+              ) : dados.datasets.length === 0 ? (
+                <tr><td colSpan={7} className="table-empty">Nenhum registro para os filtros selecionados.</td></tr>
+              ) : (
+                tabela.itens.map((d) => <Linha key={d.base_id} d={d} onAbrir={setDetalhe} />)
+              )}
+            </tbody>
+          </table>
+        </div>
+        {dados && (
+          <Paginacao id="at" {...tabela.paginacao} carregando={lista.isPlaceholderData}
+            resumo={<><strong>{dados.datasets.length}</strong> dataset(s) encontrado(s) de {dados.total} monitorados
+              {dados.plano_nome ? ` no ${dados.plano_nome}` : ""}</>} />
+        )}
+      </div>
+
+      <DatasetDetalheModal datasetId={detalhe} onFechar={() => setDetalhe(null)} />
+    </section>
+  );
+}
+
+/** Colunas do Excel/PDF: as mesmas da tabela, com os valores como a tela mostra. */
+const EXPORTACAO: ColunaExportacao<AtualizacaoLinha>[] = [
+  { titulo: "Dataset", valor: (d) => d.dataset_titulo },
+  { titulo: "Órgão", valor: (d) => d.orgao_sigla },
+  { titulo: "Periodicidade", valor: (d) => d.periodicidade },
+  { titulo: "Último recurso atualizado",
+    valor: (d) => fmtDataHora(d.ultima_atualizacao) + (d.ultima_atualizacao && d.ultima_atualizacao_estimada ? " (est.)" : "") },
+  { titulo: "Dias desde atualização", valor: (d) => d.dias_desde_atualizacao },
+  { titulo: "Prazo esperado", valor: (d) => fmtData(d.prazo_esperado) },
+  { titulo: "Situação", valor: (d) => d.situacao },
+];
+
+function Cartao({ cor, icone, valor, rotulo }: { cor: string; icone: string; valor?: number; rotulo: string }) {
+  return (
+    <div className="kpi-card">
+      <div className="kpi-top"><div className={`kpi-icon ${cor}`}><i className={`fa-solid ${icone}`} /></div></div>
+      <div className="kpi-value">{valor ?? "—"}</div>
+      <div className="kpi-label">{rotulo}</div>
+    </div>
+  );
+}
+
+function Filtro({ id, rotulo, valor, opcoes, onMudar, classe }: {
+  id: string; rotulo: string; valor: string; opcoes: { valor: string; rotulo: string }[];
+  onMudar: (v: string) => void; classe?: string;
+}) {
+  return (
+    <div className={classe ? `filter-field ${classe}` : "filter-field"}>
+      <label htmlFor={id}>{rotulo}</label>
+      <select id={id} value={valor} onChange={(e) => onMudar(e.target.value)}>
+        <option value="">Todos</option>
+        {opcoes.map((o) => <option key={o.valor} value={o.valor}>{o.rotulo}</option>)}
+      </select>
+    </div>
+  );
+}
+
+const CLASSE_SITUACAO: Record<string, string> = {
+  "Atualizado": "badge-green",
+  "Próximo do vencimento": "badge-amber",
+  "Atrasado": "badge-red",
+};
+
+function Linha({ d, onAbrir }: { d: AtualizacaoLinha; onAbrir: (id: number) => void }) {
+  const teclado = (e: KeyboardEvent<HTMLTableRowElement>) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onAbrir(d.dataset_id); }
+  };
+  return (
+    <tr tabIndex={0} onClick={() => onAbrir(d.dataset_id)} onKeyDown={teclado}>
+      <td className="cell-strong" title={d.dataset_name ?? undefined}>{d.dataset_titulo}</td>
+      <td title={d.orgao_nome ?? undefined}>{d.orgao_sigla}</td>
+      <td>{d.periodicidade}</td>
+      <td className="cell-muted">
+        {fmtDataHora(d.ultima_atualizacao)}
+        {d.ultima_atualizacao && d.ultima_atualizacao_estimada && (
+          <span title="Estimada pela data de criação do recurso (sem last_modified)"> (est.)</span>
+        )}
+      </td>
+      <td className="cell-muted">{d.dias_desde_atualizacao != null ? `${d.dias_desde_atualizacao} dias` : "—"}</td>
+      <td className="cell-muted">{fmtData(d.prazo_esperado)}</td>
+      <td><span className={`badge ${CLASSE_SITUACAO[d.situacao] ?? "badge-gray"}`}>{d.situacao}</span></td>
+    </tr>
   );
 }

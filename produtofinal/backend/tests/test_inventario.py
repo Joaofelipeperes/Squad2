@@ -1,9 +1,10 @@
 import httpx
+from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.integrations.ckan.client import CkanClient
 from app.modules.inventario import regras, service
-from app.modules.inventario.models import Dataset, DatasetSnapshot, Recurso
+from app.modules.inventario.models import Dataset, DatasetSnapshot, Organizacao, Recurso
 
 ORGS = [{"id": "o1", "name": "ses", "title": "Secretaria da Saúde"},
         {"id": "o2", "name": "seduc", "title": "Secretaria da Educação"}]
@@ -23,6 +24,10 @@ def _pkg(i, org):
 
 
 PKGS = [_pkg(1, "o1"), _pkg(2, "o1"), _pkg(3, "o2")]
+
+
+def _por_id_ckan(db, modelo, id_ckan):
+    return db.scalar(select(modelo).where(modelo.id_ckan == id_ckan))
 
 
 def _handler(request: httpx.Request):
@@ -47,11 +52,32 @@ def test_coleta_completa_com_paginacao():
         coleta = service.ultima_coleta(db)
         assert coleta.status == "ok", coleta.erro
         assert (coleta.total_organizacoes, coleta.total_datasets, coleta.total_recursos) == (2, 3, 6)
-        ds = db.get(Dataset, "d1")
+        ds = _por_id_ckan(db, Dataset, "d1")
         assert ds.periodicidade_declarada == "Mensal"
-        assert db.get(Recurso, "r1b").eh_dicionario_dados is True
-        assert db.get(Recurso, "r1a").formato == "CSV"
+        assert ds.organizacao_id == _por_id_ckan(db, Organizacao, "o1").id
+        assert _por_id_ckan(db, Recurso, "r1b").eh_dicionario_dados is True
+        assert _por_id_ckan(db, Recurso, "r1a").formato == "CSV"
+        assert _por_id_ckan(db, Recurso, "r1a").dataset_id == ds.id
         assert db.query(DatasetSnapshot).count() == 3
+        assert db.query(DatasetSnapshot).filter_by(dataset_id=ds.id).count() == 1
+
+
+def test_segunda_coleta_atualiza_pelo_id_ckan():
+    """A coleta casa os registros pelo `id_ckan`: a segunda não duplica nem troca o `id`."""
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler))
+    ids = []
+    for _ in range(2):
+        with SessionLocal() as db:
+            c = service.iniciar(db, origem="manual")
+        service.executar(c.id, client=client)
+        with SessionLocal() as db:
+            ids.append({d.id_ckan: d.id for d in db.query(Dataset)})
+    assert ids[0] == ids[1]
+    with SessionLocal() as db:
+        assert service.ultima_coleta(db).status == "ok"
+        assert db.query(Dataset).count() == 3 and db.query(Recurso).count() == 6
+        assert db.query(Organizacao).filter(Organizacao.id_ckan.in_(["o1", "o2"])).count() == 2
+        assert db.query(DatasetSnapshot).count() == 6
 
 
 def test_organizacoes_paginadas_alem_do_limite_do_ckan():
@@ -83,3 +109,180 @@ def test_periodicidade_usa_extra_atualizacao_do_portal():
     # sem extra: usa o campo do pacote; sem nada: None
     assert regras.periodicidade_declarada({}, {"periodicidade": "Semestral"}) == "Semestral"
     assert regras.periodicidade_declarada({"Fonte": "DGPC"}) is None
+
+
+def test_coleta_preenche_auditoria_e_nao_duplica():
+    """Coleta é ação do sistema: created/changed preenchidos, sem usuário; a segunda coleta só
+    atualiza `changed` (o `created` e o `id` ficam)."""
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler))
+    with SessionLocal() as db:
+        c = service.iniciar(db, origem="manual", solicitante="paloma@cge.go.gov.br", usuario_id=7)
+    assert c.created_id == 7 and c.changed_id == 7  # coleta manual: quem pediu
+    service.executar(c.id, client=client)
+    with SessionLocal() as db:
+        ds = _por_id_ckan(db, Dataset, "d1")
+        rec = _por_id_ckan(db, Recurso, "r1a")
+        criado, alterado = ds.created, ds.changed
+        assert criado is not None and alterado is not None and ds.created_id is None
+        assert rec.created is not None and rec.changed_id is None and rec.deleted is False
+    with SessionLocal() as db:
+        c2 = service.iniciar(db, origem="agendada")
+    service.executar(c2.id, client=client)
+    with SessionLocal() as db:
+        ds2 = _por_id_ckan(db, Dataset, "d1")
+        assert ds2.id == ds.id and ds2.created == criado and ds2.changed >= alterado
+        assert db.query(Dataset).count() == 3 and db.query(Recurso).count() == 6
+
+
+def test_coleta_ignora_registro_excluido_logicamente():
+    """Dataset excluído no nosso sistema não é reaproveitado: a coleta cria um registro ativo
+    novo para o mesmo id_ckan (único só entre os ativos)."""
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(_handler))
+    with SessionLocal() as db:
+        c = service.iniciar(db, origem="manual")
+    service.executar(c.id, client=client)
+    with SessionLocal() as db:
+        antigo = _por_id_ckan(db, Dataset, "d1")
+        antigo.deleted = True
+        db.commit()
+        antigo_id = antigo.id
+    with SessionLocal() as db:
+        c2 = service.iniciar(db, origem="manual")
+    service.executar(c2.id, client=client)
+    with SessionLocal() as db:
+        assert service.ultima_coleta(db).status == "ok"
+        d1 = db.query(Dataset).filter_by(id_ckan="d1").order_by(Dataset.id).all()
+        assert [(d.id == antigo_id, d.deleted) for d in d1] == [(True, True), (False, False)]
+
+
+# ------------------------------------------------------------------ ordem do CKAN e tipo de base
+def _coleta_com(pkgs_por_pagina: list[list[dict]], contagem: int, pedidos: list[str]) -> None:
+    def handler(request: httpx.Request):
+        action = request.url.path.rsplit("/", 1)[-1]
+        if action == "organization_list":
+            return httpx.Response(200, json={"success": True, "result": ORGS})
+        pedidos.append(request.url.params["sort"])
+        pagina = pkgs_por_pagina[min(len(pedidos) - 1, len(pkgs_por_pagina) - 1)]
+        return httpx.Response(200, json={"success": True,
+                                         "result": {"count": contagem, "results": pagina}})
+
+    import app.core.config as cfg
+    anterior = cfg.get_settings().ckan_page_size
+    cfg.get_settings().ckan_page_size = 2
+    try:
+        with SessionLocal() as db:
+            c = service.iniciar(db, origem="manual")
+        service.executar(c.id, client=CkanClient("http://ckan.local",
+                                                 transport=httpx.MockTransport(handler)))
+    finally:
+        cfg.get_settings().ckan_page_size = anterior
+
+
+def _pkg_criado(i: int, mes: int) -> dict:
+    return {**_pkg(i, "o1"), "metadata_created": f"2026-{mes:02d}-01T00:00:00"}
+
+
+def test_coleta_pede_mais_recentes_primeiro_e_ignora_repetido():
+    """package_search ordenado pela criação no CKAN (mais recente primeiro). Dataset criado
+    durante a coleta desloca as páginas: o repetido na página seguinte é ignorado."""
+    d3, d2, d1 = _pkg_criado(3, 3), _pkg_criado(2, 2), _pkg_criado(1, 1)
+    pedidos: list[str] = []
+    _coleta_com([[d3, d2], [d2, d1]], contagem=4, pedidos=pedidos)
+    assert pedidos and set(pedidos) == {"metadata_created desc, id asc"}
+    with SessionLocal() as db:
+        coleta = service.ultima_coleta(db)
+        assert coleta.status == "ok", coleta.erro
+        assert coleta.total_datasets == 3
+        assert db.query(DatasetSnapshot).count() == 3
+
+
+def test_tela_datasets_ordem_por_criacao_e_tipo_de_base(client, gerente):
+    from app.modules.pda.models import BasePrevista, PlanoPda
+
+    _coleta_com([[_pkg_criado(1, 1), _pkg_criado(3, 3)], [_pkg_criado(2, 2)]], contagem=3,
+                pedidos=[])
+    url = "/api/v1/inventario/datasets"
+    corpo = client.get(url, headers=gerente).json()
+    assert [d["id_ckan"] for d in corpo["datasets"]] == ["d3", "d2", "d1"]  # mais recente primeiro
+    assert corpo["datasets"][0]["metadata_created"].startswith("2026-03-01")
+    assert {d["tipo_base"] for d in corpo["datasets"]} == {regras.ESPONTANEA}  # sem PDA vigente
+    assert corpo["opcoes"]["tipos_base"] == [regras.PREVISTA, regras.ESPONTANEA]
+
+    with SessionLocal() as db:
+        plano = PlanoPda(nome="PDA 2025/2027", vigente=True)
+        db.add(plano)
+        db.flush()
+        db.add(BasePrevista(plano_id=plano.id, orgao_sigla="SES", nome_previsto="Base",
+                            dataset_id=_por_id_ckan(db, Dataset, "d1").id))
+        db.commit()
+    corpo = client.get(url, headers=gerente).json()
+    assert {d["id_ckan"]: d["tipo_base"] for d in corpo["datasets"]} == {
+        "d3": regras.ESPONTANEA, "d2": regras.ESPONTANEA, "d1": regras.PREVISTA}
+    prevista = client.get(url, params={"tipo_base": regras.PREVISTA}, headers=gerente).json()
+    assert [d["id_ckan"] for d in prevista["datasets"]] == ["d1"]
+    assert prevista["total"] == 3  # total do inventário, sem filtros
+    espontanea = client.get(url, params={"tipo_base": regras.ESPONTANEA}, headers=gerente).json()
+    assert [d["id_ckan"] for d in espontanea["datasets"]] == ["d3", "d2"]
+
+
+def test_tipo_de_base():
+    assert regras.tipo_de_base(True, True) == regras.PREVISTA
+    assert regras.tipo_de_base(False, True) == regras.PREVISTA  # vinculada, mesmo fora do portal
+    assert regras.tipo_de_base(True, False) == regras.ESPONTANEA
+    assert regras.tipo_de_base(False, False) is None  # fora do portal: não é espontânea
+
+
+def test_coleta_tenta_de_novo_quando_portal_devolve_html(monkeypatch):
+    """Regressão (coleta de 10/11/2026): o firewall do portal devolveu uma página HTML com HTTP 200
+    no `package_search`. A coleta repete a chamada em vez de falhar na primeira resposta ruim."""
+    from app.integrations.ckan import client as ckan
+
+    pausas, html = [], [2]  # as 2 primeiras chamadas ao package_search vêm em HTML
+
+    def handler(request: httpx.Request):
+        if request.url.path.endswith("/package_search") and html[0]:
+            html[0] -= 1
+            return httpx.Response(200, text="<html>Request Rejected</html>",
+                                  headers={"content-type": "text/html"})
+        return _handler(request)
+
+    monkeypatch.setattr(ckan.time, "sleep", pausas.append)
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(handler), max_retries=3)
+    with SessionLocal() as db:
+        c = service.iniciar(db, origem="manual")
+    service.executar(c.id, client=client)
+    with SessionLocal() as db:
+        coleta = service.ultima_coleta(db)
+        assert coleta.status == "ok", coleta.erro
+        assert coleta.total_datasets == 3
+    assert pausas == [1, 2]
+
+
+def test_html_persistente_esgota_tentativas_e_mantem_a_mensagem(monkeypatch):
+    """HTML em todas as tentativas: falha com a mensagem de corpo não-JSON (não 'indisponível'),
+    sem esperar depois da última tentativa. Actions sem `repetir_nao_json` falham na hora."""
+    from app.integrations.ckan import client as ckan
+
+    pausas, chamadas = [], []
+
+    def sempre_html(request: httpx.Request):
+        chamadas.append(request.url.path)
+        return httpx.Response(200, text="<html></html>", headers={"content-type": "text/html"})
+
+    monkeypatch.setattr(ckan.time, "sleep", pausas.append)
+    client = CkanClient("http://ckan.local", transport=httpx.MockTransport(sempre_html),
+                        max_retries=2)
+    try:
+        list(client.iter_datasets())
+    except ckan.CkanError as exc:
+        assert "não-JSON" in str(exc) and exc.status_http == 200
+    else:
+        raise AssertionError("esperava CkanError")
+    assert len(chamadas) == 3 and pausas == [1, 2]
+
+    chamadas.clear()
+    try:
+        client.dataset("d1")  # package_show: HTML não é repetido (ex.: portal sem a extensão)
+    except ckan.CkanError:
+        pass
+    assert len(chamadas) == 1

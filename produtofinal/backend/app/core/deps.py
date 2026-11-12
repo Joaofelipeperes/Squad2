@@ -34,9 +34,13 @@ class UsuarioAtual:
     id: int
     email: str
     nome: str
-    orgao_id: str | None
+    orgao_id: int | None
     papeis: list[str]
     permissoes: frozenset[str] = field(default_factory=frozenset)
+    # Tem o papel Administrador (`Papel.todas`). Só quem é administrador enxerga os outros
+    # administradores e o próprio papel nas telas de acesso. Não use para liberar ações: para
+    # isso, sempre `pode(P.X)`.
+    administrador: bool = False
 
     def pode(self, permissao: P | str) -> bool:
         return str(permissao) in self.permissoes
@@ -120,7 +124,7 @@ def filtrar_por_orgao(stmt, coluna_orgao, user: UsuarioAtual):
     return stmt.where(coluna_orgao == user.orgao_id) if user.restrito_a_orgao else stmt
 
 
-def exigir_mesmo_orgao(user: UsuarioAtual, orgao_id: str | None) -> None:
+def exigir_mesmo_orgao(user: UsuarioAtual, orgao_id: int | None) -> None:
     """Para ações sobre um registro específico (ex.: enviar recurso para o dataset X)."""
     if user.restrito_a_orgao and orgao_id != user.orgao_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Registro de outro órgão.")

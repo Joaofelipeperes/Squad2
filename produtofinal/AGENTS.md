@@ -131,6 +131,10 @@ docs/arquitetura.md               visão geral da arquitetura
   Funções puras em `regras.py` (reaproveitáveis numa extensão CKAN — ADR 0004).
 - Banco: siga `docs/banco/convencoes.md` (nomes, chaves, tipos, privacidade). Mudou tabela →
   docstring no modelo, migração Alembic revisada e `python scripts/gerar_mer.py`, no mesmo commit.
+- **Banco só pelo DAO (ADR-0019).** Toda consulta e gravação fica no `dao.py` do módulo, numa classe
+  que herda de `app/core/dao.py::Dao`; services e routers nunca chamam a sessão (`db.execute`,
+  `db.get`, `db.add`, `db.commit`…). Exclusão é sempre lógica (`delete_generic`); toda tabela tem `id`,
+  `deleted`, `created`/`created_id`, `changed`/`changed_id` (vêm da `Base`) e únicos só entre ativos.
 - Nomes de domínio em português; termos do CKAN em inglês (`last_modified`, `package_search`).
 - Commits: `feat(<modulo>): descrição (PBI-NN)` — ver `docs/padroes.md`.
 - Nunca versionar `.env`, bancos locais, chaves ou cópias de recursos com dados pessoais.

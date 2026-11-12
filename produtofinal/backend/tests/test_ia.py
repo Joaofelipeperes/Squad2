@@ -129,3 +129,20 @@ def test_adaptador_openai_compat(monkeypatch):
                                       base_url="http://vllm:8000/v1", api_key="abc"))
     r = p.chat(ChatRequest(messages=[ChatMessage(role="user", content="x")]))
     assert r.text == "resp" and cap["headers"]["Authorization"] == "Bearer abc"
+
+
+def test_excluir_perfil_e_logico_e_libera_o_nome(client, admin):
+    from app.core.db import SessionLocal
+    from app.modules.ia.models import PerfilProvedorIA
+
+    m = _criar(client, admin, MOCK)
+    assert client.delete(f"/api/v1/ia/perfis/{m['id']}", headers=admin).status_code == 204
+    assert m["id"] not in [p["id"] for p in client.get("/api/v1/ia/perfis", headers=admin).json()]
+    assert client.put(f"/api/v1/ia/perfis/{m['id']}", json=MOCK, headers=admin).status_code == 404
+    novo = _criar(client, admin, MOCK)  # nome de perfil excluído pode ser reutilizado
+    assert novo["id"] != m["id"]
+    admin_id = client.get("/api/v1/acesso/me", headers=admin).json()["usuario"]["id"]
+    with SessionLocal() as db:
+        antigo = db.get(PerfilProvedorIA, m["id"])
+        assert antigo.deleted and antigo.changed_id == admin_id
+        assert db.get(PerfilProvedorIA, novo["id"]).created_id == admin_id

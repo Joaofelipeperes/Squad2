@@ -7,14 +7,15 @@ function iniciais(nome: string) {
   return nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 }
 
-export function Sidebar({ modulos }: { modulos: AppModule[] }) {
+export function Sidebar({ modulos, aberta = false }: { modulos: AppModule[]; aberta?: boolean }) {
   const { usuario, sair } = useAuth();
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${aberta ? " aberta" : ""}`} id="menu-lateral" aria-label="Menu principal">
       <div className="brand">
-        <div className="brand-mark"><i className="fa-solid fa-layer-group" /></div>
+        <div className="brand-mark"><i className="fa-solid fa-layer-group" aria-hidden="true" /></div>
         <div className="brand-text">
-          <h1>Dados Abertos Goiás</h1>
+          {/* O h1 da página é o título na barra superior; a marca não é título. */}
+          <p className="brand-nome">Dados Abertos Goiás</p>
           <span>Monitoramento e Governança</span>
         </div>
       </div>

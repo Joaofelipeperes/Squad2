@@ -25,6 +25,15 @@ class ChatResponse(BaseModel):
     latency_ms: int | None = None
 
 
+class EmbedResponse(BaseModel):
+    """Um vetor por texto, na mesma ordem da entrada."""
+
+    vectors: list[list[float]]
+    model: str
+    input_tokens: int | None = None
+    latency_ms: int | None = None
+
+
 class ProviderConfig(BaseModel):
     """Configuração já decifrada, montada a partir de um perfil salvo no banco."""
 
@@ -73,6 +82,10 @@ class AIProvider(ABC):
 
     @abstractmethod
     def list_models(self) -> list[str]: ...
+
+    def embed(self, textos: list[str]) -> EmbedResponse:
+        """Embeddings (vetores) dos textos. Opcional: só alguns provedores implementam."""
+        raise AIProviderError(f"O provedor {self.label} não gera embeddings.")
 
     @classmethod
     def fields(cls) -> list[FieldSpec]:

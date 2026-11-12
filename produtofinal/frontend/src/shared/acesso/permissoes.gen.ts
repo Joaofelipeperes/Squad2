@@ -12,6 +12,7 @@ export const PERMISSOES = [
   "rastreabilidade.acessar",
   "lgpd.acessar",
   "lgpd.triar",
+  "lgpd.varrer",
   "lgpd.aprovar_correcao",
   "metadados.acessar",
   "relatorios.acessar",
@@ -22,6 +23,7 @@ export const PERMISSOES = [
   "parametros.acessar",
   "parametros.editar",
   "ia.configurar",
+  "ckan_config.gerenciar",
   "acesso.gerenciar_usuarios",
   "acesso.gerenciar_papeis",
   "acesso.ver_logs"
@@ -40,6 +42,7 @@ export const ROTULOS_PERMISSAO: Record<Permissao, string> = {
   "rastreabilidade.acessar": "Ver Rastreabilidade",
   "lgpd.acessar": "Ver Dados Pessoais (LGPD)",
   "lgpd.triar": "Triar achados LGPD",
+  "lgpd.varrer": "Executar varredura LGPD",
   "lgpd.aprovar_correcao": "Aprovar anonimização",
   "metadados.acessar": "Ver conformidade de metadados",
   "relatorios.acessar": "Ver Relatórios",
@@ -50,6 +53,7 @@ export const ROTULOS_PERMISSAO: Record<Permissao, string> = {
   "parametros.acessar": "Ver parâmetros",
   "parametros.editar": "Editar parâmetros",
   "ia.configurar": "Configurar modelos de IA",
+  "ckan_config.gerenciar": "Configurar conexões do CKAN",
   "acesso.gerenciar_usuarios": "Gerenciar usuários",
   "acesso.gerenciar_papeis": "Gerenciar papéis",
   "acesso.ver_logs": "Ver log de acesso"

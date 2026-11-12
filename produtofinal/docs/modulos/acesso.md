@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 15/10/2026 |
+| **Última atualização** | 12/11/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -32,10 +32,10 @@ Usuário ──< papéis >── Papel ──< permissões >── código do ca
 |---|---|---|---|
 | Login | `/login` | pública | — |
 | Sem acesso | qualquer rota, se o usuário não tem nenhuma tela | autenticado | Sair |
-| Usuários e papéis | `/admin/usuarios` | `acesso.gerenciar_usuarios` | Criar/editar usuário (`acesso.gerenciar_usuarios`); criar/editar/excluir papel (`acesso.gerenciar_papeis` — sem ela, papéis aparecem só para leitura) |
-| Log de acesso | `/admin/logs` | `acesso.ver_logs` | Filtrar por usuário (trecho do e-mail), período (hora de Brasília) e limite; exportar CSV gerado no navegador (`;`, UTF-8 com BOM, só as linhas carregadas) |
+| Usuários e papéis | `/admin/usuarios` | `acesso.gerenciar_usuarios` | Ordenação por coluna e paginação nas duas tabelas (ADR-0028); Criar/editar usuário (`acesso.gerenciar_usuarios`); criar/editar/excluir papel (`acesso.gerenciar_papeis` — sem ela, papéis aparecem só para leitura) |
+| Log de acesso | `/admin/logs` | `acesso.ver_logs` | Filtrar por usuário (trecho do e-mail) e período (hora de Brasília); ordenar por qualquer coluna; paginação com total no rodapé (50 por página, até 999); exportar CSV gerado no navegador (`;`, UTF-8 com BOM, até 5.000 linhas com os filtros e a ordem atuais) |
 
-Após o login o usuário cai na **primeira tela permitida** (órgão publicador → `/envio`).
+Após o login o usuário cai na **primeira tela permitida**. Com a tela de envio oculta (ADR-0033), quem só tem o papel Órgão publicador vê a página "Sem acesso": não atribua esse papel enquanto o envio não for pedido.
 
 ## API
 | Método | Rota (`/api/v1/acesso`) | Permissão | Descrição |
@@ -43,32 +43,56 @@ Após o login o usuário cai na **primeira tela permitida** (órgão publicador 
 | POST | `/login` | pública | E-mail + senha → token JWT + sessão (usuário e permissões) |
 | GET | `/me` | autenticado | Sessão atual; o frontend monta menu e botões a partir dela |
 | GET | `/catalogo` | `gerenciar_usuarios` **ou** `gerenciar_papeis` | Permissões agrupadas por módulo |
-| GET | `/orgaos` | `acesso.gerenciar_usuarios` | Órgãos para o vínculo do usuário (lê `inventario`) |
-| GET | `/usuarios` | `acesso.gerenciar_usuarios` | Lista usuários |
+| GET | `/orgaos` | `acesso.gerenciar_usuarios` | Órgãos para o vínculo do usuário (`OrgaoResumo`: `id`, `id_ckan`, `titulo`; lê `inventario`) |
+| GET | `/usuarios` | `acesso.gerenciar_usuarios` | Lista usuários (administradores só para administrador) |
 | POST | `/usuarios` | `acesso.gerenciar_usuarios` | Cria usuário |
-| PUT | `/usuarios/{id}` | `acesso.gerenciar_usuarios` | Edita nome, senha, ativo, órgão e papéis |
-| GET | `/papeis` | `gerenciar_usuarios` **ou** `gerenciar_papeis` | Lista papéis com total de usuários |
+| PUT | `/usuarios/{id}` | `acesso.gerenciar_usuarios` | Edita nome, senha, ativo, órgão e papéis; administrador editado por quem não é administrador → 404 |
+| GET | `/papeis` | `gerenciar_usuarios` **ou** `gerenciar_papeis` | Lista papéis com total de usuários (o Administrador e os usuários administradores só aparecem e só contam para administrador) |
 | POST | `/papeis` | `acesso.gerenciar_papeis` | Cria papel personalizado |
-| PUT | `/papeis/{id}` | `acesso.gerenciar_papeis` | Edita papel (exceto Administrador) |
+| PUT | `/papeis/{id}` | `acesso.gerenciar_papeis` | Edita papel (exceto Administrador; para quem não é administrador, o Administrador dá 404) |
 | DELETE | `/papeis/{id}` | `acesso.gerenciar_papeis` | Exclui papel personalizado sem usuários |
-| GET | `/logs?usuario=&desde=&ate=&limite=200` | `acesso.ver_logs` | Log de acesso, mais recente primeiro; `usuario` filtra por trecho do e-mail; `limite` até 5000 |
+| GET | `/logs?usuario=&desde=&ate=&pagina=1&por_pagina=50&ordenar=ocorrido_em&direcao=desc&ate_id=` | `acesso.ver_logs` | `LogsAcessoOut` (`total`, `pagina`, `por_pagina`, `ate_id`, `registros`), mais recente primeiro por padrão (ADR-0028); `usuario` filtra por trecho do e-mail; `ordenar` = coluna do log; `por_pagina` até 5000; `ate_id` (devolvido na 1ª página) fixa o fim da lista para as requisições novas não deslocarem as páginas seguintes |
 
 ## Serviços e métodos
 Portão (`app/core/deps.py`) — usado por **todos** os módulos:
 - `publico`, `autenticado`, `require(*P)`, `require_qualquer(*P)` — dependências FastAPI; toda rota
   declara uma. O `main.py` recusa subir se alguma rota não tiver (`verificar_controle_de_acesso`).
-- `UsuarioAtual.pode(p)`, `.restrito_a_orgao`.
+- `UsuarioAtual.pode(p)`, `.restrito_a_orgao`, `.administrador` (tem papel com `todas`; usado só para
+  esconder administradores nas telas de acesso, nunca para liberar ação).
 - `filtrar_por_orgao(stmt, coluna_orgao, user)` · `exigir_mesmo_orgao(user, orgao_id)`.
+
+DAO (`modules/acesso/dao.py`, `AcessoDao(Dao)` — ADR-0019): **toda** leitura e gravação do módulo (usuários, papéis,
+vínculos, órgãos para o formulário, log). `definir_papeis(usuario, papeis)` e
+`definir_permissoes(papel, codigos)` excluem logicamente os vínculos que saíram e criam vínculos
+novos (nunca reativam os antigos); `excluir_papel` exclui o papel e seus vínculos.
+`usuarios`, `papeis`, `papeis_por_ids` e `total_usuarios_do_papel` aceitam `incluir_admins`/`incluir_admin=False`
+para deixar de fora o papel Administrador e os usuários que o têm.
 
 Serviço (`modules/acesso/service.py`):
 - `permissoes_de(usuario) -> frozenset[str]` — une as permissões dos papéis; papel com `todas`
   recebe o catálogo inteiro; códigos fora do catálogo são ignorados.
 - `carregar_usuario_atual(db, id) -> UsuarioAtual | None` — chamado pelo portão em cada requisição.
-- `autenticar(db, email, senha)` — valida e registra `ultimo_acesso`.
-- `sincronizar_papeis_padrao(db)` — cria papéis do catálogo que faltam e remove permissões órfãs;
-  não sobrescreve ajustes feitos na tela. Roda na subida da API.
-- `salvar_usuario(db, dados, usuario=None, editor=None)` · `criar_usuario(...)` (CLI/testes).
-- `salvar_papel(db, dados, papel=None)` · `excluir_papel(db, papel)`.
+- `ve_administradores(quem)` — só administrador (ou o sistema, `quem=None`) enxerga o papel
+  Administrador e os usuários que o têm. `listar_usuarios`, `listar_papeis`, `papel_out`,
+  `usuario_por_id` e `papel_por_id` recebem `quem` e escondem esses registros dos demais (por id,
+  devolvem None → 404).
+- `autenticar(db, email, senha)` — valida e registra `ultimo_acesso` (auditoria: o próprio usuário).
+  Usuário excluído não autentica e o token dele deixa de valer.
+- `sincronizar_papeis_padrao(db)` — cria papéis do catálogo que faltam e exclui (logicamente) permissões órfãs;
+  não sobrescreve ajustes feitos na tela. Roda na subida da API. Com `GDA_PAPEIS_INICIAIS` (servidor,
+  ADR-0032) cria só os papéis listados — no servidor, `administrador` e `gerente_geda`; os demais a
+  GEDA cria na tela.
+- `semear_admin_inicial(db)` — com `GDA_ADMIN_INICIAL_EMAIL` e o banco sem nenhum usuário, cria o
+  administrador com `GDA_ADMIN_INICIAL_SENHA` (padrão `12345`; não passa pela regra de 8 caracteres,
+  é provisória). Enquanto a senha não for trocada, cada subida da API registra um aviso no log.
+  Chamado pela preparação da API (`app/instalacao.py`).
+- `salvar_usuario(db, dados, usuario=None, editor=None)` · `excluir_usuario(db, usuario, editor=None)`
+  (exclusão lógica; sem rota na API por ora; bloqueada se for o último administrador ativo) ·
+  `criar_usuario(...)` (CLI/testes) · `orgao_por_referencia(db, id_ckan_ou_name)` (CLI).
+  Na edição, `salvar_usuario` também grava o e-mail (em minúsculas) e recusa e-mail de outro
+  usuário ativo.
+- `salvar_papel(db, dados, papel=None, editor=None)` · `excluir_papel(db, papel, editor=None)`.
+  `editor` vai para `created_id`/`changed_id`.
 - `registrar_acesso(**campos)` — grava uma linha em `acesso_log` em sessão própria; erro no log
   vai para o log da aplicação e não derruba a requisição. Chamado pelo middleware `log_de_acesso`
   (`main.py`), que roda em **toda** requisição exceto `OPTIONS` e `/saude`; o e-mail vem de
@@ -86,11 +110,13 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 
 | Tabela | Colunas relevantes |
 |---|---|
-| `usuario` | email (único), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao`, ultimo_acesso |
-| `acesso_papel` | codigo (único), nome, descricao, sistema, exige_orgao, todas |
-| `acesso_papel_permissao` | papel_id, permissao (código do catálogo) |
-| `acesso_usuario_papel` | usuario_id, papel_id |
+| `usuario` | email (único entre ativos), nome, senha_hash (bcrypt), ativo, `orgao_id` → `organizacao.id` (inteiro, ADR-0018), ultimo_acesso |
+| `acesso_papel` | codigo (único entre ativos), nome, descricao, sistema, exige_orgao, todas |
+| `acesso_papel_permissao` | papel_id, permissao (código do catálogo); par único entre ativos |
+| `acesso_usuario_papel` | usuario_id, papel_id; par único entre ativos (antes PK composta) |
 | `acesso_log` | ocorrido_em, usuario (e-mail, sem FK), metodo, caminho (com query), rota (modelo, ex.: `/api/v1/acesso/papeis/{papel_id}`), acao (função), status_http, ip, user_agent — somente inserção |
+
+Toda tabela também tem `id` (PK), `deleted`, `created`/`created_id` e `changed`/`changed_id` (ADR-0019); únicos valem só entre registros ativos.
 
 ## Permissões
 Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
@@ -107,6 +133,7 @@ Catálogo completo (`app/core/permissoes.py`) e papéis padrão:
 | rastreabilidade.acessar | ✓ | ✓ | ✓ | | |
 | lgpd.acessar | ✓ | ✓ | ✓ | | |
 | lgpd.triar | ✓ | ✓ | | | |
+| lgpd.varrer | ✓ | ✓ | | | |
 | lgpd.aprovar_correcao | ✓ | ✓ | | | |
 | metadados.acessar | ✓ | ✓ | ✓ | | |
 | relatorios.acessar | ✓ | ✓ | ✓ | ✓ | |
@@ -138,14 +165,17 @@ sobrescreve ajustes. Conceda pela tela Usuários e papéis (ex.: `pda.gerenciar_
 | é consumido por | todos | o middleware `log_de_acesso` registra toda requisição de qualquer módulo em `acesso_log` |
 
 ## Jobs agendados
-Nenhum. A sincronização de papéis roda na subida da API (`lifespan` em `main.py`).
+Nenhum. A sincronização de papéis e o administrador inicial rodam na subida da API (`lifespan` em
+`main.py` → `app/instalacao.py`, ADR-0032).
 
 ## Regras de negócio e decisões
 Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-0016](../adr/0016-log-de-acesso-no-banco.md) (log de acesso).
 
 - Toda rota declara controle de acesso; a API não sobe sem isso.
 - O sistema nunca fica sem administrador ativo (bloqueio ao remover/desativar o último).
-- Só quem tem `acesso.gerenciar_papeis` concede o papel Administrador.
+- Só administrador vê e concede o papel Administrador. Para os demais (mesmo com
+  `acesso.gerenciar_usuarios` ou `acesso.gerenciar_papeis`), o papel e os usuários administradores
+  não existem: somem das listas e da contagem de usuários por papel, e o acesso pelo id dá 404.
 - Papel com `exige_orgao` obriga o usuário a ter órgão.
 - Papéis do sistema não são excluídos e não mudam de código; o Administrador não é editável.
 - O token JWT carrega só a identidade (expira em `GDA_JWT_EXPIRE_MINUTES`, padrão 8 h).
@@ -159,6 +189,11 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 - Log de acesso: sem expurgo automático; a tabela cresce
   ~1 linha por minuto por aba aberta só com o polling da Topbar. Prazo de retenção a definir (ADR-0016).
 - Log de acesso fora do Backlog v2: pedido da coordenação em 14/10/2026; validar com a Paloma.
+- **Avaliar login com a conta de e-mail institucional da CGE** (a mesma senha do e-mail, sem senha
+  própria do sistema), como o SIGAA/UFG aceita o Google institucional. Só avaliar a viabilidade
+  (provedor do e-mail da CGE — Google Workspace, Microsoft 365 ou outro —, OAuth/OIDC, restrição ao
+  domínio e como casar com o cadastro e os papéis do usuário). Depende de autorização da CGE/SECTI e
+  teria de virar ADR (ADR-0015); não implementar antes disso. Complementa o item de SSO acima.
 
 ## Histórico de alterações
 | Data | Alteração | Autor |
@@ -169,3 +204,12 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 13/10/2026 | Catálogo: descrição de `pda.gerenciar_planos` passa a cobrir o cadastro manual (criar, editar e excluir PDAs e bases previstas); papéis inalterados | Humberto |
 | 14/10/2026 | Log de acesso: tabela `acesso_log`, middleware em `main.py`, rota `GET /logs` e permissão `acesso.ver_logs` (ADR-0016) | Victor |
 | 15/10/2026 | Tela Log de acesso (`/admin/logs`): filtros, tabela em America/Sao_Paulo e exportação CSV no navegador | Victor |
+| 15/10/2026 | Pendência registrada: avaliar login com a conta de e-mail institucional da CGE; sem mudança de código | Victor |
+| 21/10/2026 | Chave primária própria no inventário (ADR-0018): `usuario.orgao_id` passa a inteiro → `organizacao.id`; `OrgaoResumo` com `id` e `id_ckan`; `UsuarioIn.orgao_id` inteiro; CLI `criar-usuario --orgao` aceita `id_ckan` ou `name` da organização | Victor |
+| 22/10/2026 | Banco só pelo `AcessoDao` (ADR-0019): exclusão lógica de papéis (com vínculos) e de usuários (`excluir_usuario`); vínculos usuário–papel e papel–permissão viram tabelas com `id` e são trocados por exclusão lógica + criação; auditoria `created_id`/`changed_id` com o editor; e-mail e código únicos só entre ativos | Victor |
+| 26/10/2026 | Permissão `lgpd.varrer` (pedir varredura LGPD) para Administrador e Gerência GEDA. Em banco já existente, o papel Gerência não recebe a permissão sozinho: incluir na tela Usuários e papéis | Squad 2 |
+| 05/11/2026 | Log de acesso paginado e ordenado no banco (ADR-0028): `GET /logs` devolve `LogsAcessoOut` (`total`, `pagina`, `por_pagina`, `ate_id`, `registros`) com `pagina`, `por_pagina` (até 999 na tela, 5.000 na exportação), `ordenar`, `direcao` e `ate_id` (fixa o fim da lista entre páginas); o seletor de limite sai da tela. Tela Usuários e papéis: ordenação por qualquer coluna (clique no título) e paginação no rodapé com o total de registros (50 por página, ajustável até 999; `shared/ui/tabela.tsx`, ADR-0028). Middleware `sem_cache_na_api` em `main.py`: toda resposta da API com `Cache-Control: no-store` (ADR-0029) | Victor |
+| 09/11/2026 | Servidor (ADR-0032): `GDA_PAPEIS_INICIAIS` limita os papéis criados na subida (no servidor, só Administrador e Gerência de Dados Abertos); `semear_admin_inicial` cria o administrador inicial (`admin@cge.go.gov.br` / `12345` no compose de produção) quando o banco não tem usuário e avisa no log enquanto a senha inicial não for trocada; `AcessoDao.existe_usuario`. Testes em `test_instalacao.py` | Victor |
+| 09/11/2026 | Tela de envio oculta (ADR-0033): o papel Órgão publicador continua no catálogo, mas sozinho leva à página "Sem acesso" | Victor |
+| 09/11/2026 | Administradores ocultos: o papel Administrador e os usuários que o têm só aparecem para administrador (`UsuarioAtual.administrador`, `service.ve_administradores`, filtros `incluir_admin(s)` no DAO). Para os demais, somem de `/usuarios`, `/papeis` e de `total_usuarios`, e `PUT /usuarios/{id}`, `PUT`/`DELETE /papeis/{id}` dão 404. Conceder o Administrador passa a exigir ser administrador (antes bastava `acesso.gerenciar_papeis`). Testes em `test_acesso.py` | Victor |
+| 12/11/2026 | Correção: editar usuário (`PUT /usuarios/{id}`, botão "Salvar usuário") passa a gravar o e-mail alterado; antes o campo era ignorado em silêncio e só o cadastro o definia. E-mail de outro usuário ativo é recusado (422). Teste `test_editar_usuario_altera_o_email` | Victor |

@@ -35,6 +35,7 @@ class P(StrEnum):
     # Eixo 2
     LGPD_ACESSAR = "lgpd.acessar"
     LGPD_TRIAR = "lgpd.triar"
+    LGPD_VARRER = "lgpd.varrer"
     LGPD_APROVAR_CORRECAO = "lgpd.aprovar_correcao"
     METADADOS_ACESSAR = "metadados.acessar"
     # Saídas
@@ -48,6 +49,7 @@ class P(StrEnum):
     PARAMETROS_ACESSAR = "parametros.acessar"
     PARAMETROS_EDITAR = "parametros.editar"
     IA_CONFIGURAR = "ia.configurar"
+    CKAN_CONFIG_GERENCIAR = "ckan_config.gerenciar"
     ACESSO_GERENCIAR_USUARIOS = "acesso.gerenciar_usuarios"
     ACESSO_GERENCIAR_PAPEIS = "acesso.gerenciar_papeis"
     ACESSO_VER_LOGS = "acesso.ver_logs"
@@ -88,6 +90,9 @@ META: dict[P, MetaPermissao] = {
     P.LGPD_TRIAR: MetaPermissao("lgpd", "Triar achados LGPD",
                                 "Marcar achado como confirmado, falso positivo ou tratado.",
                                 sensivel=True),
+    P.LGPD_VARRER: MetaPermissao("lgpd", "Executar varredura LGPD",
+                                 "Pedir a varredura de recursos em busca de dados pessoais (baixa "
+                                 "os arquivos e usa o modelo local).", sensivel=True),
     P.LGPD_APROVAR_CORRECAO: MetaPermissao("lgpd", "Aprovar anonimização",
                                            "Aprovar a publicação do recurso anonimizado no CKAN "
                                            "de produção.", sensivel=True),
@@ -113,6 +118,10 @@ META: dict[P, MetaPermissao] = {
     P.IA_CONFIGURAR: MetaPermissao("ia", "Configurar modelos de IA",
                                    "Cadastrar provedores, chaves e vincular modelos às tarefas.",
                                    sensivel=True),
+    P.CKAN_CONFIG_GERENCIAR: MetaPermissao("ckan_config", "Configurar conexões do CKAN",
+                                           "Cadastrar perfis de conexão do CKAN (URLs e token da "
+                                           "auditoria) e escolher qual CKAN o sistema usa.",
+                                           sensivel=True),
     P.ACESSO_GERENCIAR_USUARIOS: MetaPermissao("acesso", "Gerenciar usuários",
                                                "Criar usuários, atribuir papéis e órgão."),
     P.ACESSO_GERENCIAR_PAPEIS: MetaPermissao("acesso", "Gerenciar papéis",
@@ -149,7 +158,7 @@ PAPEIS_PADRAO: list[PapelPadrao] = [
     PapelPadrao("gerente_geda", "Gerência de Dados Abertos",
                 "Monitoramento completo, triagem LGPD e aprovação de anonimização.",
                 _VISUALIZACAO_GEDA | {P.INVENTARIO_COLETAR, P.PDA_EDITAR_VINCULOS,
-                                      P.PDA_GERENCIAR_PLANOS, P.LGPD_TRIAR,
+                                      P.PDA_GERENCIAR_PLANOS, P.LGPD_TRIAR, P.LGPD_VARRER,
                                       P.LGPD_APROVAR_CORRECAO, P.RELATORIOS_EXPORTAR,
                                       P.PARAMETROS_EDITAR, P.ACESSO_GERENCIAR_USUARIOS}),
     PapelPadrao("analista_geda", "Equipe GEDA",

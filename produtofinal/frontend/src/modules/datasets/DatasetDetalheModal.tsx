@@ -1,51 +1,39 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 import type { BaseVinculada, DatasetDetalhe, Recurso } from "./api";
 import { datasetsApi } from "./api";
 import { SituacaoPortalBadge, fmtDataHora } from "./formato";
 import { useAuth } from "@/app/auth/AuthContext";
 import { fmtData } from "@/modules/pda/formato";
 import { SituacaoBadge } from "@/modules/pda/SituacaoBadge";
+import { HistoricoRecente } from "@/modules/rastreabilidade/HistoricoRecente";
+import { Campo, Detalhe, Grade, Resumo, Secao, Vazio } from "@/shared/ui/Detalhe";
 import { Modal } from "@/shared/ui/Modal";
 
 const PORTAL = "https://dadosabertos.go.gov.br/dataset/";
 
-function Item({ rotulo, children, mono = false }: { rotulo: string; children: ReactNode; mono?: boolean }) {
-  return (
-    <div className="def-item">
-      <label>{rotulo}</label>
-      <div className={mono ? "val mono" : "val"}>{children}</div>
-    </div>
-  );
-}
-
-/** Nota secundária dentro de um .val (texto cinza, peso normal). */
-const Nota = ({ children }: { children: ReactNode }) => (
-  <div className="cell-muted" style={{ fontWeight: 400 }}>{children}</div>
-);
-
 /**
- * Detalhe do dataset (showDatasetDetails() do protótipo V1). Dados do inventário; prazo,
- * periodicidade e situação do PDA só aparecem quando alguma base prevista está vinculada a este
- * dataset pelo ID (nunca pelo nome).
+ * Detalhe do dataset (showDatasetDetails() do protótipo V1), agrupado em seções: faixa-resumo,
+ * Identificação, Vínculo com o PDA, Atualização, Publicação e recursos, Descrição e Histórico.
+ * Dados do inventário; prazo, periodicidade e situação do PDA só aparecem quando alguma base
+ * prevista está vinculada a este dataset pelo ID (nunca pelo nome).
  */
-export function DatasetDetalheModal({ ckanId, onFechar }: { ckanId: string | null; onFechar: () => void }) {
+export function DatasetDetalheModal({ datasetId, onFechar }: { datasetId: number | null; onFechar: () => void }) {
   const { pode } = useAuth();
   const detalhe = useQuery({
-    queryKey: ["inventario", "dataset", ckanId],
-    queryFn: () => datasetsApi.detalhe(ckanId as string),
-    enabled: ckanId != null,
+    queryKey: ["inventario", "dataset", datasetId],
+    queryFn: () => datasetsApi.detalhe(datasetId as number),
+    enabled: datasetId != null,
   });
   const verPda = pode("pda.acessar");
   const bases = useQuery({
-    queryKey: ["pda", "dataset", ckanId],
-    queryFn: () => datasetsApi.basesPda(ckanId as string),
-    enabled: ckanId != null && verPda,
+    queryKey: ["pda", "dataset", datasetId],
+    queryFn: () => datasetsApi.basesPda(datasetId as number),
+    enabled: datasetId != null && verPda,
   });
 
-  if (ckanId == null) return null;
+  if (datasetId == null) return null;
   const d = detalhe.data;
-  const linkPortal = d && d.situacao !== "Fora do portal" ? `${PORTAL}${encodeURIComponent(d.ckan_id)}` : null;
+  const linkPortal = d?.id_ckan && d.situacao !== "Fora do portal" ? `${PORTAL}${encodeURIComponent(d.id_ckan)}` : null;
 
   return (
     <Modal aberto titulo={d?.titulo ?? "Dataset"} onFechar={onFechar}
@@ -62,17 +50,20 @@ export function DatasetDetalheModal({ ckanId, onFechar }: { ckanId: string | nul
         <div className="inline-msg err" role="alert">Não foi possível carregar o dataset: {detalhe.error.message}</div>
       )}
       {!d && !detalhe.isError && <p className="cell-muted">Carregando…</p>}
-      {d && <Conteudo d={d} verPda={verPda} bases={bases.data} carregandoBases={bases.isPending && verPda} />}
+      {d && <Conteudo d={d} verPda={verPda} bases={bases.data} carregandoBases={bases.isPending && verPda}
+        onFechar={onFechar} />}
     </Modal>
   );
 }
 
-function Conteudo({ d, verPda, bases, carregandoBases }: {
+function Conteudo({ d, verPda, bases, carregandoBases, onFechar }: {
   d: DatasetDetalhe; verPda: boolean; bases: BaseVinculada[] | undefined; carregandoBases: boolean;
+  onFechar: () => void;
 }) {
   const base = bases?.[0] ?? null; // a do PDA vigente vem primeiro
   const semBase = !carregandoBases && !base;
-  const notaSemBase = <Nota>Nenhuma base do PDA vinculada a este dataset</Nota>;
+  const notaSemBase = "Nenhuma base do PDA vinculada a este dataset";
+  const atualizacao = fmtDataHora(d.ultima_atualizacao);
 
   return (
     <>
@@ -82,76 +73,92 @@ function Conteudo({ d, verPda, bases, carregandoBases }: {
           Dataset não está mais visível no portal (excluído ou privado).
         </div>
       )}
-      <div className="def-grid">
-        <Item rotulo="Nome da base">{d.titulo}</Item>
-        <Item rotulo="Órgão responsável">{d.orgao_nome ?? "—"}</Item>
-        <Item rotulo="ID do dataset (CKAN)" mono>
-          <span style={{ wordBreak: "break-all" }}>{d.ckan_id}</span>
-        </Item>
-        <Item rotulo="Name no portal" mono>
-          <span style={{ wordBreak: "break-all" }}>{d.name}</span>
-        </Item>
+      <Detalhe>
+        <Resumo
+          selos={<>
+            <SituacaoPortalBadge situacao={d.situacao} />
+            {d.tipo_base && <span className={`badge ${d.tipo_base === "Espontânea" ? "badge-amber" : "badge-blue"}`}>{d.tipo_base}</span>}
+            {verPda && base && <SituacaoBadge situacao={base.situacao} />}
+            {verPda && semBase && <span className="badge badge-gray">Sem base do PDA vinculada</span>}
+          </>}
+          fatos={[
+            { valor: atualizacao, rotulo: "Última atualização real" },
+            { valor: d.recursos_validos, rotulo: d.recursos_validos === 1 ? "Recurso" : "Recursos" },
+            { valor: d.formatos.length ? d.formatos.join(", ") : "—", rotulo: d.formatos.length > 1 ? "Formatos" : "Formato" },
+          ]} />
+
+        <Secao titulo="Identificação">
+          <Grade>
+            <Campo rotulo="Nome da base">{d.titulo}</Campo>
+            <Campo rotulo="Órgão responsável">{d.orgao_nome ?? "—"}</Campo>
+            <Campo rotulo="ID do dataset (CKAN)" mono>{d.id_ckan ?? "—"}</Campo>
+            <Campo rotulo="Licença">{d.licenca || <Vazio />}</Campo>
+          </Grade>
+        </Secao>
+
         {verPda && (
-          <Item rotulo="Prazo previsto (PDA)">
-            {base ? <>{fmtData(base.prazo_abertura)}<Nota>{base.plano_nome}</Nota></> : carregandoBases ? "…" : <>—{notaSemBase}</>}
-          </Item>
+          <Secao titulo="Vínculo com o PDA">
+            <Grade>
+              <Campo rotulo="Prazo previsto (PDA)" nota={base ? base.plano_nome : semBase ? notaSemBase : undefined}>
+                {base ? fmtData(base.prazo_abertura) : carregandoBases ? "…" : <Vazio />}
+              </Campo>
+              <Campo rotulo="Situação PDA" nota={semBase ? notaSemBase : undefined}>
+                {base ? <SituacaoBadge situacao={base.situacao} /> : carregandoBases ? "…" : <Vazio />}
+              </Campo>
+            </Grade>
+            {bases && bases.length > 1 && (
+              <p className="help-texto" style={{ margin: "-4px 0 14px" }}>
+                Também vinculado em: {bases.slice(1).map((b) => `${b.plano_nome} (${b.nome_previsto})`).join("; ")}.
+              </p>
+            )}
+          </Secao>
         )}
-        <Item rotulo="Data de publicação">{fmtDataHora(d.metadata_created)}</Item>
-        <Item rotulo="Periodicidade">
-          {base ? base.periodicidade : d.periodicidade_declarada || "—"}
-          {base
-            ? d.periodicidade_declarada && <Nota>declarada no portal: {d.periodicidade_declarada}</Nota>
-            : <Nota>{d.periodicidade_declarada ? "declarada no portal" : "não declarada no portal"}</Nota>}
-        </Item>
-        <Item rotulo="Última atualização real">
-          {fmtDataHora(d.ultima_atualizacao)}
-          {d.ultima_atualizacao && d.ultima_atualizacao_estimada && " (estimada pela criação)"}
-          <Nota>Maior last_modified dos recursos</Nota>
-        </Item>
-        <Item rotulo="Última alteração de metadados">
-          {fmtDataHora(d.metadata_modified)}
-          <Nota>Data exibida pelo CKAN; não indica atualização dos dados</Nota>
-        </Item>
-        <Item rotulo="Formato">{d.formatos.length ? d.formatos.join(", ") : "—"}</Item>
-        <Item rotulo="Recursos">
-          {d.recursos_validos}
-          <Nota>Dicionário de dados não entra na contagem</Nota>
-        </Item>
-        <Item rotulo="Status no portal"><SituacaoPortalBadge situacao={d.situacao} /></Item>
-        {verPda && (
-          <Item rotulo="Situação PDA">
-            {base ? <SituacaoBadge situacao={base.situacao} /> : carregandoBases ? "…" : <>—{semBase && notaSemBase}</>}
-          </Item>
-        )}
-        <Item rotulo="Situação de atualização">
-          —<Nota>Regra por periodicidade ainda não definida (módulo Atualizações)</Nota>
-        </Item>
-        <Item rotulo="Licença">{d.licenca || "—"}</Item>
-      </div>
-      <div className="def-item full" style={{ marginTop: 14 }}>
-        <label>Descrição</label>
-        <div className="val" style={{ fontWeight: 400, whiteSpace: "pre-line" }}>
-          {d.descricao || "—"}
-        </div>
-      </div>
-      <TabelaRecursos recursos={d.recursos} removidos={d.recursos_removidos} />
-      {bases && bases.length > 1 && (
-        <p className="help-texto" style={{ marginTop: 10 }}>
-          Também vinculado em: {bases.slice(1).map((b) => `${b.plano_nome} (${b.nome_previsto})`).join("; ")}.
-        </p>
-      )}
-      <div className="mini-history">
-        <h4>Histórico recente</h4>
-        <div className="hist-row"><span>Disponível quando a rastreabilidade for implementada.</span></div>
-      </div>
+
+        <Secao titulo="Atualização">
+          <Grade>
+            <Campo rotulo="Periodicidade"
+              nota={base
+                ? d.periodicidade_declarada && `declarada no portal: ${d.periodicidade_declarada}`
+                : d.periodicidade_declarada ? "declarada no portal" : "não declarada no portal"}>
+              {base ? base.periodicidade : d.periodicidade_declarada || <Vazio />}
+            </Campo>
+            <Campo rotulo="Situação de atualização" nota="Regra por periodicidade ainda não definida (módulo Atualizações)">
+              <Vazio />
+            </Campo>
+            <Campo rotulo="Última atualização real" nota="Maior last_modified dos recursos">
+              {atualizacao}
+              {d.ultima_atualizacao && d.ultima_atualizacao_estimada && " (estimada pela criação)"}
+            </Campo>
+            <Campo rotulo="Última alteração de metadados" nota="Data exibida pelo CKAN; não indica atualização dos dados">
+              {fmtDataHora(d.metadata_modified)}
+            </Campo>
+          </Grade>
+        </Secao>
+
+        <Secao titulo="Publicação e recursos">
+          <Grade>
+            <Campo rotulo="Data de publicação">{fmtDataHora(d.metadata_created)}</Campo>
+            <Campo rotulo="Formato">{d.formatos.length ? d.formatos.join(", ") : "—"}</Campo>
+            <Campo rotulo="Recursos" nota="Dicionário de dados não entra na contagem">{d.recursos_validos}</Campo>
+          </Grade>
+          <TabelaRecursos recursos={d.recursos} removidos={d.recursos_removidos} />
+        </Secao>
+
+        <Secao titulo="Descrição">
+          <p className="det-valor leve" style={{ lineHeight: 1.5, marginBottom: 14 }}>{d.descricao || "—"}</p>
+        </Secao>
+
+        <Secao titulo="Histórico recente">
+          <HistoricoRecente titulo="Histórico recente" dataset={d.id_ckan} onSair={onFechar} />
+        </Secao>
+      </Detalhe>
     </>
   );
 }
 
 function TabelaRecursos({ recursos, removidos }: { recursos: Recurso[]; removidos: number }) {
   return (
-    <div style={{ marginTop: 16 }}>
-      <h4 style={{ fontSize: 13, margin: "0 0 8px" }}>Recursos no portal ({recursos.length})</h4>
+    <div style={{ marginBottom: 14 }}>
       {recursos.length === 0 ? (
         <p className="cell-muted">Nenhum recurso publicado.</p>
       ) : (
@@ -160,7 +167,7 @@ function TabelaRecursos({ recursos, removidos }: { recursos: Recurso[]; removido
             <thead><tr><th>Recurso</th><th>Formato</th><th>Última atualização</th><th /></tr></thead>
             <tbody>
               {recursos.map((r) => (
-                <tr key={r.ckan_id}>
+                <tr key={r.id}>
                   <td>
                     {r.nome || <span className="cell-muted">(sem nome)</span>}
                     {r.eh_dicionario_dados && <>{" "}<span className="badge badge-gray">dicionário de dados</span></>}

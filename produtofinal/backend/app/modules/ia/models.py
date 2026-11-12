@@ -4,17 +4,17 @@ from datetime import datetime
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.db import Base, TimestampMixin, utcnow
+from app.core.db import Base, unico_entre_ativos, utcnow
 
 
-class PerfilProvedorIA(TimestampMixin, Base):
+class PerfilProvedorIA(Base):
     """Uma configuração nomeada de provedor+modelo. Ex.: 'Gemini SECTI', 'Qwen local'."""
 
     __tablename__ = "ia_perfil_provedor"
+    __table_args__ = (unico_entre_ativos("ia_perfil_provedor", "nome"),)
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    nome: Mapped[str] = mapped_column(String(120), unique=True)
-    tipo: Mapped[str] = mapped_column(String(40))            # gemini | ollama | openai_compat | mock
+    nome: Mapped[str] = mapped_column(String(120))
+    tipo: Mapped[str] = mapped_column(String(40))            # anthropic | gemini | ollama | openai_compat | mock
     modelo: Mapped[str] = mapped_column(String(200))
     base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     api_key_cifrada: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -27,12 +27,13 @@ class PerfilProvedorIA(TimestampMixin, Base):
     ativo: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
-class VinculoTarefaIA(TimestampMixin, Base):
+class VinculoTarefaIA(Base):
     """Qual perfil atende cada tarefa de IA (e qual assume se o principal falhar)."""
 
     __tablename__ = "ia_vinculo_tarefa"
+    __table_args__ = (unico_entre_ativos("ia_vinculo_tarefa", "tarefa"),)
 
-    tarefa: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tarefa: Mapped[str] = mapped_column(String(40))
     perfil_id: Mapped[int | None] = mapped_column(ForeignKey("ia_perfil_provedor.id",
                                                              ondelete="SET NULL"), nullable=True)
     perfil_fallback_id: Mapped[int | None] = mapped_column(
@@ -45,7 +46,6 @@ class UsoIA(Base):
 
     __tablename__ = "ia_uso"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     momento: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
     tarefa: Mapped[str] = mapped_column(String(40))
     perfil_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

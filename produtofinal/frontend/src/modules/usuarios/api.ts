@@ -9,7 +9,7 @@ export interface Papel {
 }
 export interface UsuarioIn {
   email: string; nome: string; senha?: string | null; ativo: boolean;
-  orgao_id: string | null; papel_ids: number[];
+  orgao_id: number | null; papel_ids: number[];
 }
 export interface PapelIn {
   codigo: string; nome: string; descricao: string | null; exige_orgao: boolean; permissoes: string[];

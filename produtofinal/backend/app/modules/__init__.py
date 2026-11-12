@@ -17,6 +17,8 @@ INSTALLED_MODULES: list[str] = [
     "envio",           # área do órgão publicador (NÃO comprometido — ver docs/modulos/envio.md)
     "ia",              # configuração de provedores e modelos de IA
     "parametros",      # parâmetros de negócio editáveis pela GEDA
+    "ckan_config",     # ADR-0024 — perfis de conexão do CKAN e troca do CKAN em uso
+    "backup",          # ADR-0034 — backups internos diário e mensal do banco (sem tela)
 ]
 
 

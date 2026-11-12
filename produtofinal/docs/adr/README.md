@@ -28,7 +28,7 @@ a fonte.
 | 22/09/2026 | D3 — Eixos 1 e 2 em paralelo; João assume a base comum; Victor coordena | Processo | Aceita | Backlog v2, aba Alterações v1→v2 |
 | 22/09/2026 | D4 — Metadados obrigatórios (US16), login (US24) e Assistente (US28) viram compromisso | Escopo | Aceita | Backlog v2, aba Alterações v1→v2 |
 | 22/09/2026 | D5 — Protótipo V1 é a referência das telas | Escopo | Aceita | [ADR-0007](0007-prototipo-v1-referencia-das-telas.md) |
-| 22/09/2026 | Abrir a definição da fonte da rastreabilidade (US29) após incompatibilidade da extensão de auditoria | Técnica | Em análise | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 22/09/2026 | Abrir a definição da fonte da rastreabilidade (US29) após incompatibilidade da extensão de auditoria | Técnica | Decidida em 21/10 (opção A) | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
 | 30/09/2026 | Monólito modular com FastAPI e React | Técnica | Aceita | [ADR-0001](0001-monolito-modular.md) |
 | 30/09/2026 | Gateway de IA com provedores plugáveis e política de dados sensíveis | Técnica | Aceita | [ADR-0002](0002-camada-ia-plugavel.md) |
 | 30/09/2026 | Frontend em React reaproveitando o CSS do protótipo | Técnica | Aceita | [ADR-0003](0003-frontend-modular.md) |
@@ -44,19 +44,54 @@ a fonte.
 | 01/10/2026 | Registrar toda decisão técnica como ADR numa linha do tempo | Processo | Aceita | [ADR-0015](0015-registro-de-decisoes.md) |
 | 07/10/2026 | Convenções de modelagem formalizadas e MER gerado do código | Técnica | Revisão da ADR-0013 | [ADR-0013](0013-banco-de-dados-e-convencoes.md) |
 | 14/10/2026 | Log de acesso: toda requisição à API gravada em `acesso_log` por middleware | Técnica | Aceita | [ADR-0016](0016-log-de-acesso-no-banco.md) |
+| 21/10/2026 | Modo desenvolvimento no Docker: código montado do computador e recarga automática (`docker-compose.dev.yml`) | Técnica | Aceita | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
+| 21/10/2026 | Chave primária própria (`id`) nas tabelas espelhadas do CKAN, com o ID do CKAN em `id_ckan` | Técnica | Aceita | [ADR-0018](0018-chave-primaria-propria-e-id-ckan.md) |
+| 21/10/2026 | Fonte da rastreabilidade: auditoria da extensão `ckanext-dsaudit`, lida com token de editor (opção A) | Técnica | Aceita | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 22/10/2026 | Banco só por DAOs (classe-pai `Dao`), `id` em toda tabela, exclusão lógica (`deleted`) e auditoria (`created`/`changed` + usuário) | Técnica | Aceita | [ADR-0019](0019-dao-exclusao-logica-e-auditoria.md) |
+| 22/10/2026 | Diff de arquivos lido do CKAN sob demanda, sem gravar valores; privação como evento próprio | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Cadastro dos órgãos rastreado por comparação entre coletas (a extensão não audita órgãos) | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Autoria das mudanças em órgãos lida das atividades nativas do CKAN | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Ações em lote e outras fora da edição auditada detectadas pelas atividades nativas do CKAN sem par na extensão | Técnica | Revisão da ADR-0009 | [ADR-0009](0009-fonte-da-rastreabilidade.md) |
+| 23/10/2026 | Contexto do Assistente identifica datasets e arquivos citados e usa histórico curto da conversa | Técnica | Revisão da ADR-0011 | [ADR-0011](0011-assistente-sem-banco-vetorial.md) |
+| 23/10/2026 | Claude Haiku como modelo principal do Assistente (adaptador `anthropic` já disponível) | Técnica | Em análise | [ADR-0020](0020-claude-haiku-no-assistente.md) |
+| 23/10/2026 | Importação do PDA vinculando pelo ID do CKAN da planilha (`ID_UNICO`), com leitura configurável (colunas, linha do cabeçalho, delimitador) guardada no navegador | Técnica | Aceita | [ADR-0022](0022-importacao-do-pda-configuravel-com-id-do-ckan.md) |
+| 26/10/2026 | Varredura LGPD com o motor do detector3 portado para o backend, IA (chat e embeddings) pelo gateway | Técnica | Proposta | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
+| 26/10/2026 | Embeddings no contrato de IA e Qwen3 sem raciocínio no Ollama | Técnica | Revisão da ADR-0002 | [ADR-0002](0002-camada-ia-plugavel.md) |
+| 28/10/2026 | Situação de atualização pela periodicidade do PDA vigente: Mensal = 30 dias sem tolerância, "próximo do vencimento" a partir de 80% do prazo; Eventual/Estática sem prazo; Múltipla = menor periodicidade | Negócio | Aceita (validar com a GEDA) | [ADR-0023](0023-situacao-de-atualizacao-pela-periodicidade-do-pda.md) |
+| 28/10/2026 | CKAN lido escolhido pelo `GDA_ENVIRONMENT` (produção = portal oficial; homologação e dev = CKAN local do Docker), `GDA_CKAN_BASE_URL` opcional para forçar outro | Técnica | Aceita | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
+| 29/10/2026 | Fila da varredura LGPD executada pelo worker (a API só enfileira; interrompida volta à fila uma vez) e downloads espaçados por host, com espera no HTTP 429 do portal | Técnica | Aceita | [ADR-0025](0025-fila-da-varredura-lgpd-executada-pelo-worker.md) |
+| 29/10/2026 | Varredura deixa de rodar em segundo plano na API (desdobramento revisto pela ADR-0025) | Técnica | Revisão da ADR-0021 | [ADR-0021](0021-varredura-lgpd-com-motor-do-detector3.md) |
+| 29/10/2026 | Worker passa a executar também a fila da varredura LGPD, a cada minuto | Técnica | Revisão da ADR-0012 | [ADR-0012](0012-agendamento-em-worker-proprio.md) |
+| 30/10/2026 | Base espontânea = dataset ativo no portal sem vínculo pelo ID com o PDA vigente, calculada a partir do inventário | Negócio | Aceita (validar com a GEDA) | [ADR-0026](0026-base-espontanea-dataset-sem-vinculo-no-pda-vigente.md) |
+| 30/10/2026 | PDF dos relatórios gerado no backend com reportlab (A4 paisagem, cabeçalho repetido por página), na mesma rota de exportação do XLSX/CSV | Técnica | Aceita | [ADR-0027](0027-exportacao-pdf-com-reportlab.md) |
+| 05/11/2026 | Tabelas ordenadas e paginadas no navegador (50 por página, até 999, total no rodapé); rastreabilidade e log de acesso paginados no banco | Técnica | Proposta | [ADR-0028](0028-ordenacao-e-paginacao-das-tabelas.md) |
+| 05/11/2026 | API com `Cache-Control: no-store`, telas recarregadas ao fim da coleta e rastreabilidade acompanhando a sincronização; `index.html` sem cache no nginx | Técnica | Proposta | [ADR-0029](0029-api-sem-cache-e-telas-recarregadas-apos-a-coleta.md) |
+| 05/11/2026 | Tela Datasets mostra e filtra o tipo de base (prevista × espontânea) | Negócio | Revisão da ADR-0026 | [ADR-0026](0026-base-espontanea-dataset-sem-vinculo-no-pda-vigente.md) |
+| 05/11/2026 | Índice de atenção por órgão = média ponderada do risco LGPD (% dos recursos varridos com achado em aberto) e do atraso de atualização, pesos 70/30 e faixas 25/50 em Parâmetros | Negócio | Aceita (validar com a GEDA) | [ADR-0030](0030-indice-de-atencao-por-media-ponderada.md) |
+| 06/11/2026 | Tabelas das telas (PDA, Atualizações, Organizações, Datasets) exportadas para Excel e PDF pelo backend, a partir das linhas que a tela mostra (`POST /relatorios/tabela/exportar`) | Técnica | Proposta | [ADR-0031](0031-exportacao-das-tabelas-das-telas.md) |
+| 05/11/2026 | IP real no log só do nginx do container (API) e do proxy configurado (nginx); IP forjado chamando a API direto deixa de ser aceito | Técnica | Revisão da ADR-0016 | [ADR-0016](0016-log-de-acesso-no-banco.md) |
+| 09/11/2026 | Entrega em servidor (VM da UFG e SECTI/CGE-GO) como código-fonte com `docker-compose.prod.yml` que se prepara sozinho no `docker compose up -d`: segredos gerados num volume, papéis Administrador e Gerência de Dados Abertos, admin inicial com senha padrão, portal oficial, IA local do Ollama e primeira coleta; API só alcançável pelo nginx; HTTPS por proxy ou certificado próprio | Técnica | Aceita | [ADR-0032](0032-entrega-por-codigo-fonte-com-subida-automatica.md) |
+| 09/11/2026 | Em produção, a 1ª subida grava o perfil "Portal de Dados Abertos GO" (portal oficial) em uso na tela Configurações CKAN | Técnica | Revisão da ADR-0024 | [ADR-0024](0024-ckan-lido-escolhido-pelo-ambiente.md) |
+| 09/11/2026 | API e worker do modo desenvolvimento com `restart: unless-stopped` (vigia de arquivos cai com erro passageiro da pasta montada do Windows) | Técnica | Revisão da ADR-0017 | [ADR-0017](0017-modo-desenvolvimento-com-codigo-montado.md) |
+| 09/11/2026 | Tela "Envio de dados do órgão" oculta (fora do menu e das rotas): não vai para produção porque a CGE-GO não a pediu; arquivos do módulo `envio` mantidos para implementação futura | Escopo | Aceita | [ADR-0033](0033-tela-de-envio-oculta.md) |
+| 10/11/2026 | Backups internos do banco: diário (00:00, 7 dias) e mensal (00:00 do dia 1, cobre o mês que terminou, 1 ano), gerados com `pg_dump -Fc` e guardados cifrados na tabela `backup_copia` do próprio banco, sem tela; vencidos têm o conteúdo liberado (exclusão lógica) | Técnica | Aceita | [ADR-0034](0034-backups-internos-do-banco-com-pg-dump.md) |
+| 10/11/2026 | Worker passa a executar também os backups internos do banco (diário, mensal e limpeza) | Técnica | Revisão da ADR-0012 | [ADR-0012](0012-agendamento-em-worker-proprio.md) |
+| 11/11/2026 | Servidor recebe só versões da `main` marcadas com tag `vX.Y.Z`, publicadas por `deploy/publicar.ps1` (pacote + `scp` + build ao lado da versão no ar + troca de pasta, com volta para a anterior) | Processo | Aceita | [ADR-0035](0035-publicacao-por-versao-da-main.md) |
 
 ## Decisões em aberto
 
 | Tema | Opções | Quem decide | Onde |
 |---|---|---|---|
 | Forma de entrega final | Extensão do CKAN × aplicação acessada pelo portal | Paloma / Júnior, com a SECTI | ADR-0004, PBI-102 |
-| Fonte da rastreabilidade | Extensão de auditoria × activity stream × diff entre coletas | João, com a SECTI | ADR-0009, PBI-70 (prazo previsto 28/09) |
-| Modelo local para classificar dados pessoais | Qwen ajustado do LIGO × modelos testados pela Luiza × classificador especializado | Luiza | ADR-0010 |
-| Chave de modelo comercial para o Assistente | Gemini via SECTI/LIGO × modelo local | SECTI/LIGO via Paloma (limite 19/10) | ADR-0002 |
+| Instalação da extensão de auditoria no portal oficial | Instalar `ckanext-dsaudit` (pacote em `instalacao-ckan-producao/`) × manter a rastreabilidade só no CKAN local | SECTI, via Paloma | ADR-0009 |
+| Modelo local para classificar dados pessoais | qwen2.5:7b-instruct × qwen3 × qwen3.5 (versões médias) × Qwen ajustado do LIGO × classificador especializado | Luiza | ADR-0010, ADR-0021 |
+| Prioridade e tipos dos achados LGPD | Regra proposta (CPF sempre Alta; confiança ≥90/≥70) e inclusão de CNPJ/CEP × regra da GEDA | Paloma, com a Luiza | docs/modulos/lgpd.md |
+| Modelo do Assistente | Gemini via SECTI/LIGO × Claude Haiku (custo próprio) × modelo local | Paloma, com SECTI/LIGO | ADR-0002, ADR-0020 |
 | Hospedagem do protótipo navegável | Oracle Cloud (camada gratuita, conta do coordenador) × OpenShift da TI Central | Victor, com a Paloma | Sugestão do orientador (01/10) |
 | Distribuição dos papéis padrão | Matriz atual × ajustes da GEDA | Paloma | ADR-0005 |
-| Envio de recursos pelos órgãos | Incluir no escopo × manter fora | Paloma / Júnior, com a SECTI | docs/modulos/envio.md |
+| Envio de recursos pelos órgãos | Incluir no escopo × manter fora (hoje: tela oculta, ADR-0033) | Paloma / Júnior, com a SECTI | docs/modulos/envio.md, ADR-0033 |
 | Retenção do log de acesso | Prazo de guarda (ex.: 6 meses, Marco Civil) e expurgo automático × guarda indefinida | Paloma, com a coordenação | ADR-0016 |
+| Destino externo dos backups do banco | Só a tabela `backup_copia` (hoje) × volume separado × armazenamento da SECTI; e a retenção (7 dias / 1 ano) | Paloma, com a SECTI (Wagner) | ADR-0034 |
 
 ## Pendências de validação com a CGE-GO
 

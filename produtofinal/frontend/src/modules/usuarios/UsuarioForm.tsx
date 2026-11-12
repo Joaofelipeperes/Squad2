@@ -20,7 +20,7 @@ export function UsuarioForm({ aberto, usuario, papeis, onFechar, onSalvo }: Prop
     if (!aberto) return;
     setF(usuario
       ? { email: usuario.email, nome: usuario.nome, ativo: usuario.ativo,
-          orgao_id: usuario.orgao?.ckan_id ?? null, papel_ids: usuario.papeis.map((p) => p.id) }
+          orgao_id: usuario.orgao?.id ?? null, papel_ids: usuario.papeis.map((p) => p.id) }
       : { email: "", nome: "", ativo: true, orgao_id: null, papel_ids: [] });
     setSenha("");
     setErro(null);
@@ -65,9 +65,9 @@ export function UsuarioForm({ aberto, usuario, papeis, onFechar, onSalvo }: Prop
         </div>
         <div className="form-field">
           <label htmlFor="us-orgao">Órgão {exigeOrgao ? "(obrigatório)" : "(opcional)"}</label>
-          <select id="us-orgao" value={f.orgao_id ?? ""} onChange={(e) => setF({ ...f, orgao_id: e.target.value || null })}>
+          <select id="us-orgao" value={f.orgao_id ?? ""} onChange={(e) => setF({ ...f, orgao_id: e.target.value ? Number(e.target.value) : null })}>
             <option value="">Todos os órgãos (equipe CGE-GO)</option>
-            {orgaos.data?.map((o) => <option key={o.ckan_id} value={o.ckan_id}>{o.titulo}</option>)}
+            {orgaos.data?.map((o) => <option key={o.id} value={o.id}>{o.titulo}</option>)}
           </select>
           <span className="help">Com órgão definido, o usuário só enxerga dados daquele órgão.</span>
         </div>

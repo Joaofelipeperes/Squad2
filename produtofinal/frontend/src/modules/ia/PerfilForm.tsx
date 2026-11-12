@@ -14,8 +14,9 @@ interface Props {
 
 const VAZIO: PerfilIn = {
   nome: "", tipo: "ollama", modelo: "", base_url: "", execucao_local: true,
-  temperatura: 0.2, max_tokens: 1024, timeout_s: 60, ativo: true,
+  temperatura: 0.2, max_tokens: 1024, timeout_s: 60, ativo: true, extra: {},
 };
+const CAMPOS_PADRAO = ["base_url", "model", "api_key"];
 
 export function PerfilForm({ aberto, tipos, perfil, onFechar, onSalvo }: Props) {
   const [f, setF] = useState<PerfilIn>(VAZIO);
@@ -25,7 +26,7 @@ export function PerfilForm({ aberto, tipos, perfil, onFechar, onSalvo }: Props) 
 
   useEffect(() => {
     if (!aberto) return;
-    setF(perfil ? { ...perfil, base_url: perfil.base_url ?? "" } : VAZIO);
+    setF(perfil ? { ...perfil, base_url: perfil.base_url ?? "", extra: { ...(perfil.extra ?? {}) } } : VAZIO);
     setApiKey("");
     setTeste(null);
     setErro(null);
@@ -33,19 +34,21 @@ export function PerfilForm({ aberto, tipos, perfil, onFechar, onSalvo }: Props) 
 
   const tipo = useMemo(() => tipos.find((t) => t.tipo === f.tipo), [tipos, f.tipo]);
   const campo = (n: string) => tipo?.campos.find((c) => c.name === n);
+  const adicionais = (tipo?.campos ?? []).filter((c) => !CAMPOS_PADRAO.includes(c.name) && !c.secret);
+  const setExtra = (k: string, v: string) => setF((s) => ({ ...s, extra: { ...s.extra, [k]: v } }));
   const modelosLista = teste?.modelos.length ? teste.modelos : (tipo?.modelos_sugeridos ?? []);
   const set = <K extends keyof PerfilIn>(k: K, v: PerfilIn[K]) => setF((s) => ({ ...s, [k]: v }));
 
   function trocarTipo(novo: string) {
     const t = tipos.find((x) => x.tipo === novo);
-    setF((s) => ({ ...s, tipo: novo, base_url: "", modelo: t?.modelos_sugeridos[0] ?? "",
+    setF((s) => ({ ...s, tipo: novo, base_url: "", extra: {}, modelo: t?.modelos_sugeridos[0] ?? "",
                    execucao_local: t?.local_por_padrao ?? false }));
     setTeste(null);
   }
 
   const testar = useMutation({
     mutationFn: () => iaApi.testarConexao({ tipo: f.tipo, modelo: f.modelo || "teste",
-      base_url: f.base_url || null, api_key: apiKey || null, perfil_id: perfil?.id }),
+      base_url: f.base_url || null, api_key: apiKey || null, perfil_id: perfil?.id, extra: f.extra }),
     onSuccess: setTeste,
     onError: (e: Error) => setTeste({ ok: false, mensagem: e.message, latencia_ms: null, modelos: [] }),
   });
@@ -112,6 +115,15 @@ export function PerfilForm({ aberto, tipos, perfil, onFechar, onSalvo }: Props) 
             <span className="help">Armazenada cifrada. Nunca é exibida de volta.</span>
           </div>
         )}
+        {adicionais.map((c) => (
+          <div className="form-field" key={c.name}>
+            <label htmlFor={`pf-x-${c.name}`}>{c.label}</label>
+            <input id={`pf-x-${c.name}`} className="text-input mono" value={f.extra[c.name] ?? ""}
+                   placeholder={c.placeholder ?? (c.required ? "" : "Opcional")}
+                   onChange={(e) => setExtra(c.name, e.target.value)} />
+            {c.help && <span className="help">{c.help}</span>}
+          </div>
+        ))}
 
         <label className="check-line full">
           <input type="checkbox" checked={f.execucao_local}

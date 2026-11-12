@@ -5,9 +5,9 @@
  */
 import { atualizacoesModule } from "@/modules/atualizacoes";
 import { assistenteWidget } from "@/modules/assistente";
+import { ckanModule } from "@/modules/ckan";
 import { dashboardModule } from "@/modules/dashboard";
 import { datasetsModule } from "@/modules/datasets";
-import { envioModule } from "@/modules/envio";
 import { iaModule } from "@/modules/ia";
 import { lgpdModule } from "@/modules/lgpd";
 import { logsAcessoModule } from "@/modules/logs-acesso";
@@ -28,11 +28,13 @@ export const MODULOS: AppModule[] = [
   datasetsModule,
   rastreabilidadeModule,
   relatoriosModule,
-  envioModule,
+  // envioModule (@/modules/envio) — tela OCULTA (ADR-0033): não vai para produção; os arquivos
+  // ficam para uma futura implementação. Para reativar, volte a importá-la e incluí-la aqui.
   iaModule,
   parametrosModule,
   usuariosModule,
   logsAcessoModule,
+  ckanModule,  // Administração · Configurações CKAN (ADR-0024) — último item
 ];
 
 export const WIDGETS: AppWidget[] = [assistenteWidget];

@@ -6,7 +6,7 @@ def datasets_do_orgao(db, user):
     raise NotImplementedError
 
 
-def enviar_recurso(db, user, dataset_id: str, arquivo) -> None:
+def enviar_recurso(db, user, dataset_id: int, arquivo) -> None:
     """Exige envio.enviar_recurso + exigir_mesmo_orgao(user, dataset.organizacao_id).
     Escreve no CKAN — depende de credencial, autorização e alteração de escopo do PGP."""
     raise NotImplementedError

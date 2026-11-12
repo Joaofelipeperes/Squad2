@@ -24,6 +24,9 @@ def main() -> None:
                           id=f"{m.name}.{job.id}", max_instances=1, coalesce=True,
                           misfire_grace_time=3600)
             log.info("Job agendado: %s.%s (%s)", m.name, job.id, job.cron)
+        for tarefa in m.ao_iniciar_worker:  # uma vez, logo que o agendador começa (ADR-0032)
+            sched.add_job(tarefa, id=f"{m.name}.{tarefa.__name__}", max_instances=1,
+                          misfire_grace_time=None)
     sched.start()
 
 
