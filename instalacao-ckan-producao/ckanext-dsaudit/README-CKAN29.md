@@ -29,8 +29,13 @@ acrescentado o `MANIFEST.in`; `setup.cfg`, `i18n/` e as licenças (`COPYING*`) s
 * Não cria tabelas nem exige migração de banco: grava na tabela `activity` do próprio CKAN.
 
 ```bash
-pip install -e /caminho/ckanext-dsaudit      # ou: pip install /caminho/ckanext-dsaudit
+pip install /caminho/ckanext-dsaudit         # produção: sem -e
+pip install -e /caminho/ckanext-dsaudit      # desenvolvimento (a pasta precisa continuar no lugar)
 ```
+
+O `-e` grava `ckanext-dsaudit-nspkg.pth` no `site-packages`, e o `pip uninstall` não remove esse
+arquivo. Se a pasta de origem for apagada depois, todo `python`/`pip` do ambiente passa a mostrar
+`AttributeError: 'NoneType' object has no attribute 'loader'`. A solução é apagar o arquivo.
 
 No `ckan.ini`, acrescente `dsaudit` em `ckan.plugins` (depois de `datastore`) e reinicie o CKAN.
 
@@ -41,7 +46,7 @@ No `ckan.ini`, acrescente `dsaudit` em `ckan.plugins` (depois de `datastore`) e 
 | `created datastore` | `datastore_create` | estrutura da tabela (campos, tipos, chave) |
 | `changed datastore` | `datastore_create` / `datastore_upsert` | linhas enviadas; em `update`/`upsert`, `changes` com cada campo valor anterior → novo |
 | `deleted datastore` | `datastore_delete` | filtros e todas as linhas removidas (ou a tabela inteira, com `capture_drop`) |
-| `changed metadata` | `package_create` / `package_update` / `package_delete` | campos do dataset e dos recursos alterados (antes → depois), inclusive datasets privados |
+| `changed metadata` | `package_create` / `package_update` / `package_patch` / `package_delete` | campos do dataset e dos recursos alterados (antes → depois), inclusive datasets privados |
 | `changed resource file` | upload de arquivo (interface ou API) | versão nova e anterior (nome, tamanho, sha256) e diff linha a linha do conteúdo |
 
 Versões dos arquivos: `<ckan.storage_path>/dsaudit_versions/<resource_id>/` (no Docker deste
@@ -79,6 +84,9 @@ sobre `file_key_columns`.
    `datastore_info` sem `fields`, `LazyJSONObject` não serializável, `rval['method']` inexistente.
 2. Captura do valor anterior das linhas em `upsert`/`update`, modo estrito e captura de exclusões.
 3. Auditoria de metadados (`changed metadata`) e de arquivos enviados (`changed resource file`).
+   O `package_patch` é encadeado à parte, porque no 2.9 ele chama o `package_update` do core
+   direto. No modo estrito, envios de arquivo são recusados antes do commit se o diretório de
+   versões não aceitar escrita.
 4. Action `dsaudit_activity_list` e correção do `activity_diff` (página nativa "Changes").
 5. Removido: páginas, exportação CSV, templates, helpers e o encadeamento de
    `package_activity_list` (só servia para a tela).

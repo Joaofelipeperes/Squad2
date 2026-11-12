@@ -29,6 +29,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 
 from ckan.plugins.toolkit import config, asbool
 
@@ -358,6 +359,23 @@ def diff_tables(old, new, resource=None):
 
 def strict():
     return asbool(config.get('ckanext.dsaudit.strict', True))
+
+
+def has_new_file(resource):
+    """True se a chamada traz um arquivo enviado (upload)."""
+    return bool(getattr((resource or {}).get('upload'), 'filename', None))
+
+
+def check_writable(resource_id=None):
+    """before_create / before_update: confirma, antes do commit, que da para
+    gravar as versoes. Os ganchos after_* rodam depois do commit e ja nao
+    podem recusar a alteracao. Levanta OSError se nao for possivel."""
+    d = _rdir(resource_id) if resource_id else _root()
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix='.dsaudit-teste-', dir=d)
+    os.close(fd)
+    os.remove(tmp)
+    return d
 
 
 def ensure_baseline(current):

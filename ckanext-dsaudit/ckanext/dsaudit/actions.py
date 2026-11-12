@@ -618,6 +618,30 @@ def _run_deferred(context, original_action, data_dict):
 
 @chained_action
 def package_update(original_action, context, data_dict):
+    return _audited_package_update(original_action, context, data_dict)
+
+
+@chained_action
+def package_patch(original_action, context, data_dict):
+    # no 2.9 o package_patch chama o package_update do core direto
+    # (ckan/logic/action/patch.py), sem passar pelas actions encadeadas:
+    # sem este encadeamento a alteracao nao era auditada
+    return _audited_package_update(original_action, context, data_dict)
+
+
+def _audited_package_update(original_action, context, data_dict):
+    # uma unica auditoria por chamada, mesmo que a action original acabe
+    # chamando package_update encadeado com o mesmo context
+    if context.get('_dsaudit_meta'):
+        return original_action(context, data_dict)
+    context['_dsaudit_meta'] = True
+    try:
+        return _package_update_audit(original_action, context, data_dict)
+    finally:
+        context.pop('_dsaudit_meta', None)
+
+
+def _package_update_audit(original_action, context, data_dict):
     ident = data_dict.get('id') or data_dict.get('name')
     try:
         before = _package_snapshot(context, ident)

@@ -65,15 +65,31 @@ cd /opt/instalacao-ckan-producao
 
 ### 5.2 Instalar o pacote no ambiente virtual do CKAN
 
+Se já houve uma tentativa anterior com `pip install -e` (ou `python setup.py develop`), apague
+antes o arquivo que ela deixou. O `pip uninstall` não o remove. Ele aponta para a pasta usada
+naquela instalação e, se a pasta não existir mais, todo comando `python`/`pip` do ambiente mostra
+`AttributeError: 'NoneType' object has no attribute 'loader'`:
+
+```bash
+rm -f /usr/lib/ckan/default/lib/python3.8/site-packages/ckanext-dsaudit-nspkg.pth
+```
+
+Instale **sem `-e`**. O `-e` faz o CKAN depender de a pasta de origem continuar no lugar. Instalada
+sem `-e`, a extensão fica toda no ambiente virtual e esta pasta pode ser apagada depois:
+
 ```bash
 . /usr/lib/ckan/default/bin/activate
 
 # servidor COM acesso à internet:
-pip install ./ckanext-dsaudit
+pip install --upgrade ./ckanext-dsaudit
 
 # servidor SEM acesso à internet (usa as dependências da pasta pacotes/):
-pip install --no-index --find-links ./pacotes --no-build-isolation ./ckanext-dsaudit
+pip install --upgrade --no-index --find-links ./pacotes --no-build-isolation ./ckanext-dsaudit
 ```
+
+Com `pip` antigo, a saída pode mostrar `error: invalid command 'bdist_wheel'` seguido de
+`Running setup.py install for ckanext-dsaudit ... done`. **Não é falha:** sem o pacote `wheel`, o
+`pip` instala pelo método antigo. Para não ver a mensagem, rode antes `pip install wheel`.
 
 Confira:
 
@@ -101,6 +117,12 @@ use os nomes da coluna "Variável de ambiente" da seção 6.
 # padrão: <ckan.storage_path>/dsaudit_versions (a extensão cria a pasta se tiver permissão)
 sudo -u www-data mkdir -p /var/lib/ckan/default/dsaudit_versions   # ajuste usuário e caminho
 ```
+
+A pasta precisa pertencer ao **usuário que executa o CKAN** (o do uWSGI), e não ao `root`. Sem
+permissão de escrita e com `strict = true`, todo envio ou troca de arquivo é **recusado** com a
+mensagem "Nao foi possivel gravar no diretorio de versoes de arquivos da auditoria". Recursos por
+link, metadados e DataStore continuam funcionando. Com `strict = false` o envio passa, mas sem
+auditoria do arquivo (só fica o erro no log).
 
 ### 5.5 Reiniciar o CKAN
 
@@ -146,8 +168,23 @@ CKAN_API_KEY=<token de um usuário que edita o dataset> \
 ./verificar_instalacao.sh <nome-ou-id-de-um-dataset>
 ```
 
-O script confere a versão do CKAN, se os plugins `dsaudit` e `datastore` estão carregados e se a
+O script confere se a extensão importa no ambiente virtual, se sobrou o arquivo `.pth` de uma
+instalação antiga, a versão do CKAN, se os plugins `dsaudit` e `datastore` estão carregados e se a
 API da extensão responde. Ele **não altera nada**.
+
+Sem `CKAN_URL`, o script usa o `ckan.site_url` de `/etc/ckan/default/ckan.ini` (outro arquivo:
+`CKAN_INI=...`). **A porta 5000 só existe no servidor de desenvolvimento (`ckan run`).** Com uWSGI,
+use o endereço público ou a porta da linha `http =` do `ckan-uwsgi.ini` (na instalação padrão do
+2.9, `http://127.0.0.1:8080`).
+
+Se o CKAN não responder depois do reinício, o problema está na subida do serviço, não na API. Para
+achar a causa:
+
+```bash
+supervisorctl status
+tail -n 50 /var/log/ckan/ckan-uwsgi.stderr.log      # ajuste ao caminho usado no servidor
+ckan -c /etc/ckan/default/ckan.ini plugin-info     # carrega os plugins e mostra o erro, se houver
+```
 
 ### 7.2 Teste funcional (em homologação)
 
