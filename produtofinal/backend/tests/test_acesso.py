@@ -272,6 +272,27 @@ def test_auditoria_registra_quem_criou_e_quem_alterou(client, admin, gerente):
         assert vinculo.created_id == ids["admin"]
 
 
+def test_editar_usuario_altera_o_email(client, admin):
+    pid = _papel_id(client, admin, "analista_geda")
+    u = client.post(f"{API}/usuarios", headers=admin, json={
+        "email": "antigo@cge.go.gov.br", "nome": "Troca", "senha": SENHA, "papel_ids": [pid]}).json()
+    client.post(f"{API}/usuarios", headers=admin, json={
+        "email": "ocupado@cge.go.gov.br", "nome": "Outro", "senha": SENHA, "papel_ids": [pid]})
+
+    r = client.put(f"{API}/usuarios/{u['id']}", headers=admin, json={
+        "email": "Novo.Email@cge.go.gov.br", "nome": "Troca", "papel_ids": [pid]})
+    assert r.status_code == 200 and r.json()["email"] == "novo.email@cge.go.gov.br"
+    login(client, "novo.email@cge.go.gov.br")  # entra com o e-mail novo
+    assert client.post(f"{API}/login", json={
+        "email": "antigo@cge.go.gov.br", "senha": SENHA}).status_code == 401
+    # salvar sem mudar o e-mail continua permitido; usar o e-mail de outro usuário, não
+    assert client.put(f"{API}/usuarios/{u['id']}", headers=admin, json={
+        "email": "novo.email@cge.go.gov.br", "nome": "Troca 2", "papel_ids": [pid]}).status_code == 200
+    r = client.put(f"{API}/usuarios/{u['id']}", headers=admin, json={
+        "email": "ocupado@cge.go.gov.br", "nome": "Troca", "papel_ids": [pid]})
+    assert r.status_code == 422 and "e-mail" in r.json()["detail"]
+
+
 def test_usuario_excluido_some_e_libera_o_email(client, admin):
     from app.core.db import SessionLocal
     from app.modules.acesso import service

@@ -202,15 +202,18 @@ def salvar_usuario(db: Session, dados: UsuarioIn, usuario: Usuario | None = None
         raise ErroAcesso(f"O papel {nomes} exige vincular o usuário a um órgão.")
 
     era_admin_ativo = bool(usuario and usuario.ativo and any(p.todas for p in usuario.papeis))
+    email = dados.email.lower()
+    dono_do_email = dao.usuario_por_email(email)
+    if dono_do_email and (usuario is None or dono_do_email.id != usuario.id):
+        raise ErroAcesso("Já existe um usuário com este e-mail.")
     if usuario is None:
         if not dados.senha:
             raise ErroAcesso("Informe uma senha inicial (mínimo 8 caracteres).")
-        if dao.usuario_por_email(dados.email):
-            raise ErroAcesso("Já existe um usuário com este e-mail.")
-        usuario = Usuario(email=dados.email.lower(), senha_hash=hash_password(dados.senha))
+        usuario = Usuario(email=email, senha_hash=hash_password(dados.senha))
     elif dados.senha:
         usuario.senha_hash = hash_password(dados.senha)
 
+    usuario.email = email
     usuario.nome, usuario.ativo = dados.nome, dados.ativo
     usuario.orgao_id = dados.orgao_id or None
     dao.save_generic(usuario)

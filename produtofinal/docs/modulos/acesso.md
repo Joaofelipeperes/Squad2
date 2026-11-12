@@ -7,7 +7,7 @@
 | **User stories** | US24 (PBI-73) |
 | **Backend** | `backend/app/modules/acesso/` · catálogo em `backend/app/core/permissoes.py` · portão em `backend/app/core/deps.py` |
 | **Frontend** | `frontend/src/app/auth/` · `frontend/src/modules/usuarios/` · `frontend/src/modules/logs-acesso/` · `frontend/src/shared/acesso/` |
-| **Última atualização** | 09/11/2026 |
+| **Última atualização** | 12/11/2026 |
 
 ## Propósito
 Garante que cada pessoa veja apenas as telas e execute apenas as ações liberadas para ela, e que
@@ -89,6 +89,8 @@ Serviço (`modules/acesso/service.py`):
 - `salvar_usuario(db, dados, usuario=None, editor=None)` · `excluir_usuario(db, usuario, editor=None)`
   (exclusão lógica; sem rota na API por ora; bloqueada se for o último administrador ativo) ·
   `criar_usuario(...)` (CLI/testes) · `orgao_por_referencia(db, id_ckan_ou_name)` (CLI).
+  Na edição, `salvar_usuario` também grava o e-mail (em minúsculas) e recusa e-mail de outro
+  usuário ativo.
 - `salvar_papel(db, dados, papel=None, editor=None)` · `excluir_papel(db, papel, editor=None)`.
   `editor` vai para `created_id`/`changed_id`.
 - `registrar_acesso(**campos)` — grava uma linha em `acesso_log` em sessão própria; erro no log
@@ -210,3 +212,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 09/11/2026 | Servidor (ADR-0032): `GDA_PAPEIS_INICIAIS` limita os papéis criados na subida (no servidor, só Administrador e Gerência de Dados Abertos); `semear_admin_inicial` cria o administrador inicial (`admin@cge.go.gov.br` / `12345` no compose de produção) quando o banco não tem usuário e avisa no log enquanto a senha inicial não for trocada; `AcessoDao.existe_usuario`. Testes em `test_instalacao.py` | Victor |
 | 09/11/2026 | Tela de envio oculta (ADR-0033): o papel Órgão publicador continua no catálogo, mas sozinho leva à página "Sem acesso" | Victor |
 | 09/11/2026 | Administradores ocultos: o papel Administrador e os usuários que o têm só aparecem para administrador (`UsuarioAtual.administrador`, `service.ve_administradores`, filtros `incluir_admin(s)` no DAO). Para os demais, somem de `/usuarios`, `/papeis` e de `total_usuarios`, e `PUT /usuarios/{id}`, `PUT`/`DELETE /papeis/{id}` dão 404. Conceder o Administrador passa a exigir ser administrador (antes bastava `acesso.gerenciar_papeis`). Testes em `test_acesso.py` | Victor |
+| 12/11/2026 | Correção: editar usuário (`PUT /usuarios/{id}`, botão "Salvar usuário") passa a gravar o e-mail alterado; antes o campo era ignorado em silêncio e só o cadastro o definia. E-mail de outro usuário ativo é recusado (422). Teste `test_editar_usuario_altera_o_email` | Victor |
