@@ -87,18 +87,25 @@ tudo sozinha, sem perguntas:
 | Segredos | O serviço `segredos` gera chave JWT, chave de criptografia, sal da anonimização e senha do banco no volume `gda_segredos`, uma única vez. Nada disso fica em arquivo na pasta do código. |
 | Banco | Migrações aplicadas pela API a cada subida. |
 | Papéis | Só **Administrador** e **Gerência de Dados Abertos**. Os demais a GEDA cria na tela **Usuários e papéis**. |
-| Usuário inicial | `admin@cge.go.gov.br`, senha `12345`, papel Administrador (só se o banco não tiver nenhum usuário). |
+| Usuário inicial | `admin@cge.go.gov.br`, papel Administrador, com **senha aleatória mostrada uma vez no log da API** (só se o banco não tiver nenhum usuário; ADR-0036). |
 | CKAN lido | Perfil **Portal de Dados Abertos GO** (`https://dadosabertos.go.gov.br`) em uso, na tela **Configurações CKAN**. |
 | IA local | Perfis do Ollama `qwen2.5:7b-instruct` (classificação) e `bge-m3` (embeddings), vinculados às tarefas da varredura LGPD. O serviço `ollama-modelos` baixa os modelos em segundo plano. |
 | IA externa | O **Assistente** (modelo pago, com chave de API) fica sem perfil: configure na tela **Modelos de IA**. |
 | Parâmetros | Valores padrão do catálogo, ajustáveis na tela **Parâmetros**. |
 | Coleta | O worker faz a primeira coleta do CKAN assim que sobe; depois, todo dia às 03:00. |
 
-> **Logo após subir, entre com `admin@cge.go.gov.br` / `12345` e troque a senha** (tela **Usuários e
-> papéis** → editar o administrador → Nova senha). O sistema fica na internet com essa senha até a
-> troca; enquanto isso, o log da API registra um aviso a cada subida. Para começar com outra senha
-> ou outro e-mail, defina `GDA_ADMIN_INICIAL_SENHA` / `GDA_ADMIN_INICIAL_EMAIL` no `.env` **antes**
-> da primeira subida.
+> **Logo após subir, leia a senha do administrador no log da API** e troque-a no primeiro acesso
+> (botão da chave, ao lado do nome do usuário, na barra lateral):
+>
+> ```bash
+> docker compose logs api | grep "Senha gerada"
+> ```
+>
+> A senha aparece só nessa primeira subida. Para escolher a senha ou o e-mail, defina
+> `GDA_ADMIN_INICIAL_SENHA` / `GDA_ADMIN_INICIAL_EMAIL` no `.env` **antes** da primeira subida; a
+> senha precisa de 8 caracteres ou mais, com letras e números (senha fraca é ignorada e a aleatória
+> é usada no lugar). A documentação da API (`/api/v1/docs`) fica desligada no servidor; para ligá-la
+> num ambiente de teste, `GDA_API_DOCS=true`.
 
 Acompanhe com `docker compose ps` e `docker compose logs -f api worker ollama-modelos`. A varredura
 LGPD que usa IA só funciona depois que o `ollama-modelos` terminar ("Modelos prontos.").

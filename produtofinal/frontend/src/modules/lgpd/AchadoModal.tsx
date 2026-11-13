@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { urlSegura } from "@/shared/ui/url";
 import { useEffect, useState } from "react";
 import type { StatusAchado } from "./api";
 import { ROTULO_STATUS, lgpdApi } from "./api";
@@ -88,8 +89,8 @@ export function AchadoModal({ id, onFechar, onDecidido, onAnonimizar }: {
               <Campo rotulo="Dataset">{a.dataset_titulo}</Campo>
               <Campo rotulo="Órgão">{a.orgao_nome ?? "—"}</Campo>
               <Campo rotulo="Recurso" mono>
-                {a.recurso_url
-                  ? <a href={a.recurso_url} target="_blank" rel="noreferrer">{a.recurso_nome ?? a.recurso_id}</a>
+                {urlSegura(a.recurso_url)
+                  ? <a href={urlSegura(a.recurso_url)!} target="_blank" rel="noopener noreferrer">{a.recurso_nome ?? a.recurso_id}</a>
                   : (a.recurso_nome ?? a.recurso_id)}
               </Campo>
               <Campo rotulo="Coluna" mono>{a.coluna}</Campo>

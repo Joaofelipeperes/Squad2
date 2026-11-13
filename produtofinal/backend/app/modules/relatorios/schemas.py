@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,11 @@ class RelatorioOrgaoOut(BaseModel):
 
 
 LINHAS_MAXIMO_TABELA = 20000  # o inventário inteiro tem ~3 mil recursos; folga para crescer
+# Tetos da exportação de tabela (ADR-0036): o PDF custa CPU e memória por célula, e o pedido vem
+# do navegador — sem teto, um único pedido ocupava a API por minutos.
+CELULA_MAXIMO = 2000            # caracteres por célula
+LINHAS_MAXIMO_PDF = 5000
+CARACTERES_MAXIMO_PDF = 1_500_000  # soma do texto de todas as células
 
 
 class TabelaExportarIn(BaseModel):
@@ -49,6 +54,7 @@ class TabelaExportarIn(BaseModel):
 
     titulo: str = Field(min_length=1, max_length=120)
     filtros: str | None = Field(default=None, max_length=500)  # ex.: "Órgão: SES · Situação: Atrasado"
-    colunas: list[str] = Field(min_length=1, max_length=30)
-    linhas: list[list[str | int | float | None]] = Field(max_length=LINHAS_MAXIMO_TABELA)
+    colunas: list[Annotated[str, Field(max_length=200)]] = Field(min_length=1, max_length=30)
+    linhas: list[list[Annotated[str, Field(max_length=CELULA_MAXIMO)] | int | float | None]] = (
+        Field(max_length=LINHAS_MAXIMO_TABELA))
     formato: Literal["pdf", "xlsx"]

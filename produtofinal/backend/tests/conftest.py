@@ -9,6 +9,7 @@ os.environ["GDA_CKAN_DOWNLOAD_INTERVALO_S"] = "0"  # sem espera entre downloads 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.core import rede  # noqa: E402
 from app.core.db import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.modules import import_all_models  # noqa: E402
@@ -16,7 +17,7 @@ from app.modules.acesso.service import criar_usuario  # noqa: E402
 from app.modules.inventario.models import Organizacao  # noqa: E402
 
 import_all_models()
-SENHA = "senha12345"
+SENHA = "Geda-teste-2026"  # cumpre a regra de senha (ADR-0036)
 SEDUC, SES = 1, 2  # `id` próprio das organizações criadas em `_db`
 
 
@@ -36,6 +37,15 @@ def _db():
         criar_usuario(db, "servidor@seduc.go.gov.br", "Servidor SEDUC", SENHA,
                       ["orgao_publicador"], orgao_id=SEDUC)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _sem_dns(monkeypatch):
+    """Os servidores dos testes são fictícios: a verificação de destino (app/core/rede.py) não
+    consulta o DNS (nome que não resolve = não é da rede interna; IP literal é conferido)."""
+    def nao_resolve(*_a, **_k):
+        raise OSError("sem DNS nos testes")
+    monkeypatch.setattr(rede, "_resolver", nao_resolve)
 
 
 @pytest.fixture

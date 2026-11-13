@@ -1,7 +1,8 @@
 """Regras do módulo acesso: autenticação, permissões, administração de papéis e log de acesso.
 O banco só é acessado pelo `AcessoDao` (ADR-0019)."""
 import logging
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
@@ -9,7 +10,9 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
 from app.core.permissoes import PAPEIS_PADRAO, P
-from app.core.security import hash_password, verify_password
+from app.core.security import (
+    SENHA_MAX_BYTES, marca_da_senha, gastar_tempo_de_verificacao, hash_password, verify_password,
+)
 from app.modules.acesso.dao import AcessoDao
 from app.modules.acesso.models import Papel, Usuario
 from app.modules.acesso.schemas import (
@@ -33,10 +36,13 @@ def permissoes_de(usuario: Usuario) -> frozenset[str]:
                      if pp.permissao in CODIGOS_VALIDOS)
 
 
-def carregar_usuario_atual(db: Session, user_id: int) -> UsuarioAtual | None:
-    """Usuário excluído (lógico) ou inativo → None (o token deixa de valer)."""
+def carregar_usuario_atual(db: Session, user_id: int,
+                           marca_senha: str | None = None) -> UsuarioAtual | None:
+    """Usuário excluído (lógico) ou inativo → None (o token deixa de valer). O mesmo vale quando a
+    marca da senha do token (`pwd`) não é a da senha atual: senha trocada encerra as sessões
+    abertas (ADR-0036)."""
     u = AcessoDao(db).usuario(user_id)
-    if u is None or not u.ativo:
+    if u is None or not u.ativo or marca_senha != marca_da_senha(u.senha_hash):
         return None
     return UsuarioAtual(id=u.id, email=u.email, nome=u.nome, orgao_id=u.orgao_id,
                         papeis=[p.codigo for p in u.papeis], permissoes=permissoes_de(u),
@@ -55,9 +61,23 @@ def ve_administradores(quem: UsuarioAtual | None) -> bool:
     return quem is None or quem.administrador
 
 
+def login_bloqueado(db: Session, email: str) -> bool:
+    """Muitas senhas erradas seguidas para este e-mail (exista ou não a conta) dentro da janela
+    (`GDA_LOGIN_MAX_FALHAS` em `GDA_LOGIN_JANELA_MINUTOS`, ADR-0036). Conta as linhas do log de
+    acesso depois do último login bem-sucedido; passada a janela, libera sozinho."""
+    s = get_settings()
+    if s.login_max_falhas <= 0:
+        return False
+    desde = utcnow() - timedelta(minutes=s.login_janela_minutos)
+    return AcessoDao(db).falhas_de_login(email.lower(), desde) >= s.login_max_falhas
+
+
 def autenticar(db: Session, email: str, senha: str) -> Usuario | None:
     u = AcessoDao(db).usuario_por_email(email)
-    if u and u.ativo and verify_password(senha, u.senha_hash):
+    if u is None or not u.ativo:
+        gastar_tempo_de_verificacao(senha)  # mesmo tempo de resposta de uma conta existente
+        return None
+    if verify_password(senha, u.senha_hash):
         dao = AcessoDao(db, u.id)  # o próprio usuário registra o último acesso
         u.ultimo_acesso = utcnow()
         dao.save_generic(u)
@@ -115,6 +135,77 @@ def papel_out(db: Session, p: Papel, quem: UsuarioAtual | None = None) -> PapelO
                     permissoes=perms, total_usuarios=total)
 
 
+# ------------------------------------------------------------------ senha (ADR-0036)
+SENHA_MIN = 8
+# Senhas que cumprem "letra e número" mas estão em toda lista de ataque
+SENHAS_COMUNS = frozenset({
+    "senha123", "senha1234", "senha12345", "senha123456", "admin123", "admin1234", "admin12345",
+    "abc12345", "abcd1234", "a1b2c3d4", "1q2w3e4r", "1q2w3e4r5t", "q1w2e3r4", "qwerty123",
+    "qwert123", "password1", "password123", "mudar123", "mudar1234", "trocar123", "teste123",
+    "teste1234", "goias123", "goias2025", "goias2026", "cge12345", "geda1234", "brasil123",
+})
+
+
+def problema_da_senha(senha: str, email: str | None = None) -> str | None:
+    """Por que a senha não serve (None = serve): de 8 caracteres a 72 bytes, com letra e número,
+    fora da lista de senhas comuns e sem repetir o e-mail."""
+    if len(senha) < SENHA_MIN:
+        return f"A senha precisa de pelo menos {SENHA_MIN} caracteres."
+    if len(senha.encode()) > SENHA_MAX_BYTES:
+        return f"A senha pode ter no máximo {SENHA_MAX_BYTES} bytes."
+    if not (any(c.isalpha() for c in senha) and any(c.isdigit() for c in senha)):
+        return "A senha precisa ter letras e números."
+    minuscula = senha.lower()
+    if minuscula in SENHAS_COMUNS or len(set(minuscula)) < 4:
+        return "Senha muito comum ou repetitiva: escolha outra."
+    nome_email = (email or "").split("@")[0].lower()
+    if len(nome_email) >= 4 and nome_email in minuscula:
+        return "A senha não pode conter o seu e-mail."
+    return None
+
+
+def _exigir_senha_valida(senha: str, email: str | None) -> None:
+    problema = problema_da_senha(senha, email)
+    if problema:
+        raise ErroAcesso(problema)
+
+
+def trocar_propria_senha(db: Session, user: UsuarioAtual, senha_atual: str,
+                         senha_nova: str) -> Usuario:
+    """O próprio usuário troca a senha (precisa informar a atual). As sessões abertas com a senha
+    antiga deixam de valer; quem chama emite um token novo."""
+    dao = AcessoDao.de(db, user)
+    u = dao.usuario(user.id)
+    if u is None or not verify_password(senha_atual, u.senha_hash):
+        raise ErroAcesso("Senha atual incorreta.")
+    if senha_nova == senha_atual:
+        raise ErroAcesso("A nova senha deve ser diferente da atual.")
+    _exigir_senha_valida(senha_nova, u.email)
+    u.senha_hash = hash_password(senha_nova)
+    dao.save_generic(u)
+    dao.commit()
+    dao.recarregar(u)
+    return u
+
+
+# ------------------------------------------------------------------ limites de quem não é admin
+# Quem gerencia usuários ou papéis sem ser administrador não pode usar isso para ganhar acesso
+# (ADR-0036): não mexe nos próprios papéis, não concede nem altera papel personalizado com
+# permissão que não tem, não altera papel do sistema nem um papel que ele mesmo possui.
+def _limitado(editor: UsuarioAtual | None) -> bool:
+    return editor is not None and not editor.administrador
+
+
+def _pode_conceder(editor: UsuarioAtual | None, papel: Papel) -> bool:
+    """Papéis do sistema (definidos pelo catálogo e só alteráveis por administrador) qualquer
+    gestor de usuários concede; um papel personalizado, só quem tem todas as permissões dele."""
+    if not _limitado(editor):
+        return True
+    if papel.todas:
+        return False
+    return papel.sistema or {pp.permissao for pp in papel.permissoes} <= editor.permissoes
+
+
 # ------------------------------------------------------------------ papéis
 def sincronizar_papeis_padrao(db: Session) -> None:
     """Cria os papéis do catálogo que ainda não existem. Não sobrescreve ajustes feitos na tela,
@@ -161,6 +252,15 @@ def salvar_papel(db: Session, dados: PapelIn, papel: Papel | None = None,
     dao = AcessoDao.de(db, editor)
     if papel is not None and papel.todas:
         raise ErroAcesso("O papel Administrador sempre tem todas as permissões.")
+    if _limitado(editor):
+        if papel is not None and papel.sistema:
+            raise ErroAcesso("Papéis do sistema só podem ser alterados por um administrador.")
+        if papel is not None and papel.codigo in editor.papeis:
+            raise ErroAcesso("Você não pode alterar um papel que você mesmo possui.")
+        alem = sorted(set(dados.permissoes) & CODIGOS_VALIDOS - editor.permissoes)
+        if alem:
+            raise ErroAcesso("Você não pode incluir permissões que não possui: "
+                             + ", ".join(alem) + ".")
     if papel is None:
         if dao.papel_por_codigo(dados.codigo):
             raise ErroAcesso("Já existe um papel com este código.")
@@ -181,6 +281,9 @@ def excluir_papel(db: Session, papel: Papel, editor: UsuarioAtual | None = None)
     """Exclusão lógica do papel e dos vínculos (usuários e permissões)."""
     if papel.sistema:
         raise ErroAcesso("Papéis do sistema não podem ser excluídos.")
+    if _limitado(editor) and not _pode_conceder(editor, papel):
+        raise ErroAcesso("Este papel tem permissões que você não possui; só um administrador "
+                         "pode excluí-lo.")
     if papel_out(db, papel).total_usuarios:
         raise ErroAcesso("Há usuários com este papel. Remova-o dos usuários antes de excluir.")
     dao = AcessoDao.de(db, editor)
@@ -200,6 +303,19 @@ def salvar_usuario(db: Session, dados: UsuarioIn, usuario: Usuario | None = None
     if any(p.exige_orgao for p in papeis) and not dados.orgao_id:
         nomes = ", ".join(p.nome for p in papeis if p.exige_orgao)
         raise ErroAcesso(f"O papel {nomes} exige vincular o usuário a um órgão.")
+    if _limitado(editor):
+        if usuario is not None and usuario.id == editor.id and (
+                {p.id for p in papeis} != {p.id for p in usuario.papeis}
+                or (dados.orgao_id or None) != usuario.orgao_id or not dados.ativo):
+            raise ErroAcesso("Você não pode alterar os próprios papéis, órgão ou situação. "
+                             "Peça a um administrador.")
+        if usuario is not None and not all(_pode_conceder(editor, p) for p in usuario.papeis):
+            raise ErroAcesso("Este usuário tem um papel com permissões que você não possui; "
+                             "só um administrador pode alterá-lo.")
+        negados = [p.nome for p in papeis if not _pode_conceder(editor, p)]
+        if negados:
+            raise ErroAcesso(f"Você não pode conceder o papel {', '.join(negados)}: ele tem "
+                             "permissões que você não possui.")
 
     era_admin_ativo = bool(usuario and usuario.ativo and any(p.todas for p in usuario.papeis))
     email = dados.email.lower()
@@ -208,9 +324,12 @@ def salvar_usuario(db: Session, dados: UsuarioIn, usuario: Usuario | None = None
         raise ErroAcesso("Já existe um usuário com este e-mail.")
     if usuario is None:
         if not dados.senha:
-            raise ErroAcesso("Informe uma senha inicial (mínimo 8 caracteres).")
+            raise ErroAcesso("Informe uma senha inicial (mínimo 8 caracteres, com letras e "
+                             "números).")
+        _exigir_senha_valida(dados.senha, email)
         usuario = Usuario(email=email, senha_hash=hash_password(dados.senha))
     elif dados.senha:
+        _exigir_senha_valida(dados.senha, email)
         usuario.senha_hash = hash_password(dados.senha)
 
     usuario.email = email
@@ -250,31 +369,40 @@ def criar_usuario(db: Session, email: str, nome: str, senha: str, papel_codigos:
 
 def semear_admin_inicial(db: Session) -> Usuario | None:
     """Primeira subida no servidor (ADR-0032): com `GDA_ADMIN_INICIAL_EMAIL` preenchido e o banco
-    sem nenhum usuário, cria o administrador com a senha inicial (`GDA_ADMIN_INICIAL_SENHA`).
-    A senha inicial não passa pela regra de 8 caracteres da tela: é provisória, e o administrador
-    a troca no primeiro acesso. Enquanto não trocar, cada subida da API registra um aviso no log.
+    sem nenhum usuário, cria o administrador. A senha é a de `GDA_ADMIN_INICIAL_SENHA`, se ela
+    cumprir a regra de senha; vazia ou fraca, é gerada uma senha aleatória, mostrada UMA vez no log
+    da API (ADR-0036). O administrador a troca no primeiro acesso (menu do usuário › Trocar senha).
+    Com senha configurada, cada subida avisa no log enquanto ela não for trocada.
     Ação do sistema. Devolve o usuário criado, ou None."""
     s = get_settings()
     if not s.admin_inicial_email:
         return None
+    log = logging.getLogger(__name__)
     dao = AcessoDao(db)
-    senha = s.admin_inicial_senha.get_secret_value()
+    email = s.admin_inicial_email.strip().lower()
+    configurada = s.admin_inicial_senha.get_secret_value() if s.admin_inicial_senha else ""
     if dao.existe_usuario():
-        u = dao.usuario_por_email(s.admin_inicial_email)
-        if u and u.ativo and verify_password(senha, u.senha_hash):
-            logging.getLogger(__name__).warning(
-                "O administrador %s ainda usa a senha inicial: troque-a na tela Usuários e papéis.",
-                u.email)
+        u = dao.usuario_por_email(email)
+        if configurada and u and u.ativo and verify_password(configurada, u.senha_hash):
+            log.warning("O administrador %s ainda usa a senha inicial: troque-a no menu do "
+                        "usuário › Trocar senha.", u.email)
         return None
+    gerada = not configurada or problema_da_senha(configurada, email) is not None
+    senha = secrets.token_urlsafe(18) if gerada else configurada
     sincronizar_papeis_padrao(db)
     admin = dao.papel_por_codigo("administrador")
-    usuario = dao.save_generic(Usuario(email=s.admin_inicial_email.strip().lower(),
-                                       nome=s.admin_inicial_nome, senha_hash=hash_password(senha)))
+    usuario = dao.save_generic(Usuario(email=email, nome=s.admin_inicial_nome,
+                                       senha_hash=hash_password(senha)))
     dao.definir_papeis(usuario, [admin])
     dao.commit()
-    logging.getLogger(__name__).warning(
-        "Administrador inicial %s criado com a senha padrão: troque-a no primeiro acesso.",
-        usuario.email)
+    if gerada:
+        if configurada:
+            log.warning("GDA_ADMIN_INICIAL_SENHA ignorada: não cumpre a regra de senha.")
+        log.warning("Administrador inicial %s criado. Senha gerada (aparece só agora; troque-a "
+                    "no primeiro acesso): %s", usuario.email, senha)
+    else:
+        log.warning("Administrador inicial %s criado com a senha de GDA_ADMIN_INICIAL_SENHA: "
+                    "troque-a no primeiro acesso.", usuario.email)
     return usuario
 
 

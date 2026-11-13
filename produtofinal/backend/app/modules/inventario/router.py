@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
 from app.core.deps import CurrentUser, DbSession, UsuarioAtual, require
 from app.core.permissoes import P
@@ -9,15 +9,18 @@ router = APIRouter()
 
 
 @router.get("/coletas/ultima", response_model=ColetaOut | None)
-def ultima(db: DbSession, _: CurrentUser):
+def ultima(db: DbSession, user: CurrentUser):
     """Data/hora da última coleta, exibida na topbar de todas as telas (PBI-58) — por isso
-    basta estar autenticado."""
-    return service.ultima_coleta(db)
+    basta estar autenticado. Quem pediu a coleta só aparece para quem vê o inventário."""
+    coleta = service.ultima_coleta(db)
+    if coleta is None or user.pode(P.INVENTARIO_ACESSAR):
+        return coleta
+    return ColetaOut.model_validate(coleta).model_copy(update={"solicitada_por": None})
 
 
 @router.get("/coletas", response_model=list[ColetaOut],
             dependencies=[Depends(require(P.INVENTARIO_ACESSAR))])
-def historico(db: DbSession, limite: int = 30):
+def historico(db: DbSession, limite: int = Query(30, ge=1, le=500)):
     return service.historico_coletas(db, limite)
 
 

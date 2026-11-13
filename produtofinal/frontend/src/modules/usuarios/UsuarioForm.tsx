@@ -60,7 +60,7 @@ export function UsuarioForm({ aberto, usuario, papeis, onFechar, onSalvo }: Prop
         <div className="form-field">
           <label htmlFor="us-senha">{usuario ? "Nova senha" : "Senha inicial"}</label>
           <input id="us-senha" className="text-input" type="password" autoComplete="new-password" value={senha}
-                 placeholder={usuario ? "Deixe vazio para manter" : "Mínimo 8 caracteres"}
+                 placeholder={usuario ? "Deixe vazio para manter" : "Mínimo 8, com letras e números"}
                  onChange={(e) => setSenha(e.target.value)} />
         </div>
         <div className="form-field">

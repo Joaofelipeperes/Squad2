@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from starlette.concurrency import run_in_threadpool
 
@@ -54,8 +55,11 @@ async def lifespan(_app: FastAPI):
 
 def create_app() -> FastAPI:
     s = get_settings()
-    app = FastAPI(title=s.app_name, version="0.2.0", lifespan=lifespan,
-                  docs_url=f"{s.api_prefix}/docs", openapi_url=f"{s.api_prefix}/openapi.json")
+    # Documentação e mapa da API só onde foram habilitados (dev, ou GDA_API_DOCS=true): ADR-0036
+    docs = s.docs_habilitadas
+    app = FastAPI(title=s.app_name, version="0.2.0", lifespan=lifespan, redoc_url=None,
+                  docs_url=f"{s.api_prefix}/docs" if docs else None,
+                  openapi_url=f"{s.api_prefix}/openapi.json" if docs else None)
     app.add_middleware(CORSMiddleware, allow_origins=s.cors_origins, allow_credentials=True,
                        allow_methods=["*"], allow_headers=["*"])
 
@@ -70,6 +74,14 @@ def create_app() -> FastAPI:
             resposta.headers.setdefault("Cache-Control", "no-store, max-age=0")
             resposta.headers.setdefault("Pragma", "no-cache")
         return resposta
+
+    @app.middleware("http")
+    async def limite_do_corpo(request: Request, call_next):
+        """Recusa corpo maior que o limite antes de ler (o nginx faz o mesmo no servidor)."""
+        tamanho = request.headers.get("content-length")
+        if tamanho and tamanho.isdigit() and int(tamanho) > s.corpo_maximo_bytes:
+            return JSONResponse({"detail": "Requisição grande demais."}, status_code=413)
+        return await call_next(request)
 
     @app.middleware("http")
     async def log_de_acesso(request: Request, call_next):
@@ -103,8 +115,8 @@ def create_app() -> FastAPI:
 
     @app.get(f"{s.api_prefix}/saude", tags=["Sistema"], dependencies=[Depends(publico)])
     def saude():
-        return {"status": "ok", "ambiente": s.environment, "ckan": s.ckan_base_url,
-                "modulos": [{"nome": m.name, "user_stories": m.user_stories} for m in modulos]}
+        """Só diz que a API está de pé: é pública, então não descreve o ambiente (ADR-0036)."""
+        return {"status": "ok"}
 
     return app
 

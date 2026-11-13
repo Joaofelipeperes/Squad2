@@ -9,7 +9,7 @@ from app.core.security import create_access_token
 from app.modules.acesso import service
 from app.modules.acesso.schemas import (
     GrupoPermissoesOut, LoginIn, LogsAcessoOut, OrgaoResumo, PapelIn, PapelOut, PermissaoOut,
-    SessaoOut, TokenOut, UsuarioIn, UsuarioOut,
+    SessaoOut, TokenOut, TrocaSenhaIn, UsuarioIn, UsuarioOut,
 )
 
 router = APIRouter()
@@ -37,15 +37,30 @@ def _papel_ou_404(db, papel_id: int, quem: UsuarioAtual):
 @router.post("/login", response_model=TokenOut, dependencies=[Depends(publico)])
 def login(body: LoginIn, db: DbSession, request: Request):
     request.state.usuario = body.email.lower()  # log de acesso: inclui tentativas que falham
+    if service.login_bloqueado(db, body.email):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            "Muitas tentativas de login. Aguarde alguns minutos e tente de novo.")
     u = service.autenticar(db, body.email, body.senha)
     if not u:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-mail ou senha incorretos.")
-    return TokenOut(access_token=create_access_token(u.id), sessao=service.sessao_out(db, u))
+    return TokenOut(access_token=create_access_token(u.id, u.senha_hash),
+                    sessao=service.sessao_out(db, u))
 
 
 @router.get("/me", response_model=SessaoOut)
 def me(user: CurrentUser, db: DbSession):
     return service.sessao_out(db, service.usuario_por_id(db, user.id))
+
+
+@router.post("/me/senha", response_model=TokenOut)
+def trocar_senha(body: TrocaSenhaIn, user: CurrentUser, db: DbSession):
+    """O próprio usuário troca a senha. As outras sessões dele caem; esta recebe um token novo."""
+    try:
+        u = service.trocar_propria_senha(db, user, body.senha_atual, body.senha_nova)
+    except service.ErroAcesso as exc:
+        _erro(exc)
+    return TokenOut(access_token=create_access_token(u.id, u.senha_hash),
+                    sessao=service.sessao_out(db, u))
 
 
 # ------------------------------------------------------------------ catálogo e órgãos

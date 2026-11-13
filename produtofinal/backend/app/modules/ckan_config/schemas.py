@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PerfilCkanIn(BaseModel):
@@ -9,6 +9,15 @@ class PerfilCkanIn(BaseModel):
     auditoria_base_url: str | None = Field(default=None, max_length=500)
     # None = manter o token atual; "" = remover; texto = substituir.
     auditoria_api_token: str | None = None
+
+    @field_validator("base_url", "auditoria_base_url")
+    @classmethod
+    def _url_http(cls, valor: str | None) -> str | None:
+        """Só http:// ou https:// (ADR-0036)."""
+        url = (valor or "").strip().lower()
+        if url and not url.startswith(("http://", "https://")):
+            raise ValueError("A URL deve começar com http:// ou https://.")
+        return valor
 
 
 class PerfilCkanOut(BaseModel):

@@ -7,7 +7,7 @@
 | **User stories** | US11, US12, US13, US26, US27 (PBI-31 a PBI-42, PBI-86 a PBI-95) |
 | **Backend** | `backend/app/modules/lgpd/` · escrita no CKAN em `backend/app/integrations/ckan/writer.py` |
 | **Frontend** | `frontend/src/modules/lgpd/` |
-| **Última atualização** | 10/11/2026 |
+| **Última atualização** | 12/11/2026 |
 
 ## Propósito
 Varre os recursos publicados em busca de possíveis dados pessoais, prioriza os achados para revisão
@@ -209,3 +209,4 @@ Decisões registradas: [ADR-0008](../adr/0008-anonimizacao-com-publicacao-no-cka
 | 05/11/2026 | `riscos_por_orgao` (contagens por órgão para a tela Organizações e o índice de atenção, ADR-0030), `RiscoLgpdOrgaoOut`, `regras.EM_ABERTO`, `LgpdDao.recursos_analisados_por_orgao` | Humberto |
 | 09/11/2026 | Tela: botões **Excel** e **PDF** da tabela de arquivos com achados (`ExportarTabela`, ADR-0031) — prioridade, órgão, dataset, arquivo, tipos com células, colunas e situação; nenhum valor de dado pessoal | Humberto |
 | 10/11/2026 | Detalhe do achado agrupado em três seções (Onde está, Por que foi sinalizado, Decisão), com faixa-resumo de prioridade, status, método, tipo e confiança (`shared/ui/Detalhe.tsx`). Sem mudança de dados nem de API | João |
+| 12/11/2026 | Segurança (ADR-0036): o download de recurso (varredura e prévia da anonimização) não baixa link que aponta para a rede interna e confere cada redirecionamento, até 5 (`CkanClient._baixar_uma_vez`, `core/rede.py::exigir_url_externa`); o CKAN em uso continua confiável. `limite` de `GET /varreduras` e `GET /correcoes` validado (1 a 200). No detalhe do achado, o link do recurso só é montado para `http`/`https` | Victor |

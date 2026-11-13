@@ -40,8 +40,9 @@ Após o login o usuário cai na **primeira tela permitida**. Com a tela de envio
 ## API
 | Método | Rota (`/api/v1/acesso`) | Permissão | Descrição |
 |---|---|---|---|
-| POST | `/login` | pública | E-mail + senha → token JWT + sessão (usuário e permissões) |
+| POST | `/login` | pública | E-mail + senha → token JWT + sessão (usuário e permissões); 429 após 10 senhas erradas em 15 min para o mesmo e-mail (ADR-0036) |
 | GET | `/me` | autenticado | Sessão atual; o frontend monta menu e botões a partir dela |
+| POST | `/me/senha` | autenticado | Troca a própria senha (`senha_atual`, `senha_nova`); devolve token novo e encerra as outras sessões (ADR-0036) |
 | GET | `/catalogo` | `gerenciar_usuarios` **ou** `gerenciar_papeis` | Permissões agrupadas por módulo |
 | GET | `/orgaos` | `acesso.gerenciar_usuarios` | Órgãos para o vínculo do usuário (`OrgaoResumo`: `id`, `id_ckan`, `titulo`; lê `inventario`) |
 | GET | `/usuarios` | `acesso.gerenciar_usuarios` | Lista usuários (administradores só para administrador) |
@@ -83,8 +84,9 @@ Serviço (`modules/acesso/service.py`):
   ADR-0032) cria só os papéis listados — no servidor, `administrador` e `gerente_geda`; os demais a
   GEDA cria na tela.
 - `semear_admin_inicial(db)` — com `GDA_ADMIN_INICIAL_EMAIL` e o banco sem nenhum usuário, cria o
-  administrador com `GDA_ADMIN_INICIAL_SENHA` (padrão `12345`; não passa pela regra de 8 caracteres,
-  é provisória). Enquanto a senha não for trocada, cada subida da API registra um aviso no log.
+  administrador com `GDA_ADMIN_INICIAL_SENHA`, se ela cumprir a regra de senha; vazia ou fraca, gera
+  uma senha aleatória e a mostra uma vez no log da API (ADR-0036). Com senha configurada, cada
+  subida da API avisa no log enquanto ela não for trocada.
   Chamado pela preparação da API (`app/instalacao.py`).
 - `salvar_usuario(db, dados, usuario=None, editor=None)` · `excluir_usuario(db, usuario, editor=None)`
   (exclusão lógica; sem rota na API por ora; bloqueada se for o último administrador ativo) ·
@@ -213,3 +215,4 @@ Decisões registradas: [ADR-0005](../adr/0005-controle-de-acesso.md) · [ADR-001
 | 09/11/2026 | Tela de envio oculta (ADR-0033): o papel Órgão publicador continua no catálogo, mas sozinho leva à página "Sem acesso" | Victor |
 | 09/11/2026 | Administradores ocultos: o papel Administrador e os usuários que o têm só aparecem para administrador (`UsuarioAtual.administrador`, `service.ve_administradores`, filtros `incluir_admin(s)` no DAO). Para os demais, somem de `/usuarios`, `/papeis` e de `total_usuarios`, e `PUT /usuarios/{id}`, `PUT`/`DELETE /papeis/{id}` dão 404. Conceder o Administrador passa a exigir ser administrador (antes bastava `acesso.gerenciar_papeis`). Testes em `test_acesso.py` | Victor |
 | 12/11/2026 | Correção: editar usuário (`PUT /usuarios/{id}`, botão "Salvar usuário") passa a gravar o e-mail alterado; antes o campo era ignorado em silêncio e só o cadastro o definia. E-mail de outro usuário ativo é recusado (422). Teste `test_editar_usuario_altera_o_email` | Victor |
+| 12/11/2026 | Endurecimento de segurança (ADR-0036). **Login:** bloqueio por e-mail após 10 senhas erradas em 15 min (`login_bloqueado`, `AcessoDao.falhas_de_login`, conta no log de acesso; 429), tempo igual para e-mail inexistente, senha longa dá 401/422 em vez de 500. **Senha:** regra em `problema_da_senha` (8 caracteres a 72 bytes, letras e números, fora da lista de comuns, sem o e-mail) no cadastro, na edição e na troca; `POST /me/senha` (`trocar_propria_senha`) e botão Trocar senha na barra lateral (`TrocarSenhaModal`). **Sessão:** o token leva a marca da senha (`pwd`); senha trocada encerra as sessões abertas. **Gestão de acesso por não administrador:** não altera os próprios papéis, órgão ou situação; não concede, altera nem exclui papel personalizado com permissão que não tem (nem edita usuário que o possua); não altera papel do sistema nem um papel que possui; papéis do sistema seguem concedíveis. **Administrador inicial:** senha aleatória mostrada uma vez no log quando `GDA_ADMIN_INICIAL_SENHA` está vazia ou fraca. `/saude` responde só `{"status": "ok"}`; documentação da API só em dev ou com `GDA_API_DOCS=true`; corpo acima de 6 MB → 413. Testes em `test_seguranca.py` | Victor |

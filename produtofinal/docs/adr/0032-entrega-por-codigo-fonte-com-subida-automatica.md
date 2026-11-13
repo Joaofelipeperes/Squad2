@@ -135,3 +135,4 @@ Desenho:
 ## Revisões
 | Data | Revisão | Autor |
 |---|---|---|
+| 12/11/2026 | A senha inicial `12345` deixa de existir: com `GDA_ADMIN_INICIAL_SENHA` vazia ou fraca, o administrador inicial recebe uma senha aleatória, mostrada uma vez no log da API (ADR-0036) | Victor |

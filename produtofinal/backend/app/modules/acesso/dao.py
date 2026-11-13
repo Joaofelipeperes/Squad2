@@ -132,6 +132,18 @@ class AcessoDao(Dao):
         self.save_generic(LogAcesso(**campos))
         self.commit()
 
+    def falhas_de_login(self, email: str, desde: datetime) -> int:
+        """Logins recusados (401) deste e-mail a partir de `desde`, contados depois do último
+        login bem-sucedido do período (ADR-0036)."""
+        do_email = (LogAcesso.usuario == email, LogAcesso.acao == "login",
+                    LogAcesso.ocorrido_em >= desde)
+        ultimo_ok = self.buscar_valor(select(func.max(LogAcesso.id))
+                                      .where(*do_email, LogAcesso.status_http == 200))
+        stmt = select(func.count(LogAcesso.id)).where(*do_email, LogAcesso.status_http == 401)
+        if ultimo_ok is not None:
+            stmt = stmt.where(LogAcesso.id > ultimo_ok)
+        return self.buscar_valor(stmt) or 0
+
     def maior_id_log(self) -> int | None:
         return self.buscar_valor(select(func.max(LogAcesso.id)))
 

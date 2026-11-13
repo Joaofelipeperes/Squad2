@@ -68,9 +68,14 @@ def get_current_user(
         payload = decode_access_token(cred.credentials)
     except jwt.PyJWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sessão inválida ou expirada.")
-    user = carregar_usuario_atual(db, int(payload["sub"]))
+    try:
+        user_id = int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sessão inválida ou expirada.")
+    # `pwd` = marca da senha no momento do login: senha trocada → token antigo não vale mais
+    user = carregar_usuario_atual(db, user_id, payload.get("pwd"))
     if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuário inativo ou inexistente.")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sessão inválida ou expirada.")
     request.state.usuario = user.email  # autoria no log de acesso (middleware em main.py)
     return user
 

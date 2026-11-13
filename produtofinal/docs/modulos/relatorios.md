@@ -7,7 +7,7 @@
 | **User stories** | US20 (PBI-60, PBI-61, PBI-77) |
 | **Backend** | `backend/app/modules/relatorios/` |
 | **Frontend** | `frontend/src/modules/relatorios/` |
-| **Última atualização** | 09/11/2026 |
+| **Última atualização** | 12/11/2026 |
 
 ## Propósito
 Substitui o controle manual em planilhas da GEDA por relatórios exportáveis com as mesmas colunas.
@@ -156,3 +156,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 06/11/2026 | Relatório Datasets sem Recurso: sai a coluna "Name (CKAN)" (`name` técnico); ficam o título e o ID no CKAN | Humberto |
 | 09/11/2026 | Interações: a tela Riscos de Dados Pessoais (`lgpd`) também usa `POST /tabela/exportar` (sem mudança no código do módulo) | Humberto |
 | 09/11/2026 | **Relatório de um órgão detalhado** (pedido da GEDA): o órgão é escolhido digitando (busca com sugestões) e sai **um** relatório — o resumo e, para cada número, a lista do que ele conta (bases, em atraso, próximas do prazo, atualização, datasets, sem recurso, recursos, formato fechado, dados pessoais em aberto), cada seção conforme a permissão do módulo de origem. Sai a marcação de relatórios (`?relatorios=`) e o `GerarRelatorioOrgaoModal` | Humberto |
+| 12/11/2026 | Segurança (ADR-0036): exportação de tabela com tetos (célula até 2.000 caracteres; PDF até 5.000 linhas e 1,5 milhão de caracteres; acima disso 422) — um pedido grande ocupava a API por minutos; XLSX grava como texto o valor que começa com `=`; CSV antepõe apóstrofo ao texto que começa com `= + - @` (`core/exportacao.py::sem_formula`) | Victor |

@@ -27,6 +27,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.core.exportacao import sem_formula
+
 FORMATOS = ("xlsx", "csv", "pdf")
 MIME = {"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "csv": "text/csv; charset=utf-8", "pdf": "application/pdf"}
@@ -114,12 +116,16 @@ def texto(valor) -> str:
     return str(valor)
 
 
+def _linha_csv(valores) -> list[str]:
+    return [sem_formula(texto(v)) for v in valores]
+
+
 def gerar_csv(colunas: list[str], linhas: list[list]) -> bytes:
     """CSV para o Excel em pt-BR: BOM UTF-8 e ';' como separador (mesmo padrão do log de acesso)."""
     saida = io.StringIO()
     escritor = csv.writer(saida, delimiter=";", lineterminator="\r\n")
-    escritor.writerow(colunas)
-    escritor.writerows([texto(v) for v in linha] for linha in linhas)
+    escritor.writerow(_linha_csv(colunas))
+    escritor.writerows(_linha_csv(linha) for linha in linhas)
     return ("﻿" + saida.getvalue()).encode("utf-8")
 
 
@@ -128,12 +134,13 @@ def gerar_csv_secoes(titulo: str, secoes: Sequence[Secao]) -> bytes:
     o cabeçalho, as linhas e uma linha em branco."""
     saida = io.StringIO()
     escritor = csv.writer(saida, delimiter=";", lineterminator="\r\n")
-    escritor.writerow([titulo])
+    escritor.writerow(_linha_csv([titulo]))
     escritor.writerow([])
     for secao in secoes:
-        escritor.writerow([secao.titulo] + ([secao.referencia] if secao.referencia else []))
-        escritor.writerow(secao.colunas)
-        escritor.writerows([texto(v) for v in linha] for linha in secao.linhas)
+        escritor.writerow(_linha_csv([secao.titulo]
+                                     + ([secao.referencia] if secao.referencia else [])))
+        escritor.writerow(_linha_csv(secao.colunas))
+        escritor.writerows(_linha_csv(linha) for linha in secao.linhas)
         escritor.writerow([])
     return ("﻿" + saida.getvalue()).encode("utf-8")
 
@@ -148,11 +155,14 @@ def _celula(valor):
 
 def _preencher_aba(ws, colunas: list[str], linhas: list[list]) -> None:
     """Cabeçalho em negrito, cabeçalho congelado, filtro, largura ajustada e datas formatadas."""
-    ws.append(colunas)
+    for linha in [colunas, *linhas]:
+        ws.append([_celula(v) for v in linha])
+        # Texto começando com "=" seria gravado como fórmula: força o tipo texto (ADR-0036)
+        for c in ws[ws.max_row]:
+            if c.data_type == "f":
+                c.data_type = "s"
     for c in ws[1]:
         c.font = Font(bold=True)
-    for linha in linhas:
-        ws.append([_celula(v) for v in linha])
     for i, nome in enumerate(colunas, start=1):
         letra = get_column_letter(i)
         maior = max([len(nome), *(len(texto(linha[i - 1])) for linha in linhas)])

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal, utcnow
 from app.core.deps import UsuarioAtual
+from app.core.exportacao import sem_formula
 from app.integrations.ckan.client import CkanAcessoNegado, CkanClient, CkanError, CkanNaoEncontrado
 from app.modules.ckan_config.service import config_ativa
 from app.modules.inventario.regras import chave_texto, contem_texto
@@ -635,10 +636,10 @@ def diff_evento_csv(db: Session, user: UsuarioAtual, evento_id: int,
     for linha in diff.linhas:
         if linha.campos:
             for campo in linha.campos:
-                escritor.writerow([linha.chave, linha.situacao, campo.campo,
-                                   campo.anterior or "", campo.novo or ""])
+                escritor.writerow([sem_formula(str(v or "")) for v in (
+                    linha.chave, linha.situacao, campo.campo, campo.anterior, campo.novo)])
         else:
-            escritor.writerow([linha.chave, linha.situacao, "", "", ""])
+            escritor.writerow([sem_formula(str(linha.chave or "")), linha.situacao, "", "", ""])
     return f"rastreabilidade-diff-evento-{diff.evento_id}.csv", buffer.getvalue()
 
 
