@@ -1,0 +1,3 @@
+# Saída de cada execução do teste (tempos e nomes de recursos públicos)
+resultados/
+__pycache__/
