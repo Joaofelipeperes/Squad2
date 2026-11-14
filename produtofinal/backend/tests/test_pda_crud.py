@@ -31,7 +31,8 @@ def inventario():
         db.add(Dataset(id=FOLHA, id_ckan="ds-folha", name="folha-de-pagamento", titulo="Folha",
                        organizacao_id=ADM, ultima_coleta_id=1))
         db.add(Recurso(id=1, id_ckan="r-1", dataset_id=FOLHA, nome="folha.csv", formato="CSV",
-                       ultima_coleta_id=1, last_modified=datetime(2026, 9, 26, tzinfo=UTC)))
+                       ultima_coleta_id=1, last_modified=datetime(2026, 9, 26, tzinfo=UTC),
+                       created_ckan=datetime(2026, 1, 15, tzinfo=UTC)))
         db.commit()
 
 
@@ -104,7 +105,8 @@ def test_incluir_bases_com_e_sem_vinculo(client, gerente, inventario):
     b = r.json()
     assert b["vinculo"] == "resolvido" and b["dataset_id"] == FOLHA
     assert b["orgao_chave"] == str(ADM)  # órgão do dataset vinculado
-    assert b["situacao"] == "Publicado" and b["recursos_validos"] == 1
+    # 1º recurso em 15/01/2026, depois do prazo de 31/12/2025 (ADR-0038)
+    assert b["situacao"] == "Publicado fora do prazo" and b["recursos_validos"] == 1
 
     # Sem link: SEAD herda a organização pela evidência do vínculo por ID neste PDA
     b2 = client.post(url, headers=gerente, json=_base(
@@ -133,7 +135,7 @@ def test_vinculo_pelo_id_do_ckan(client, gerente, inventario):
     assert b["vinculo"] == "resolvido" and b["dataset_id"] == FOLHA
     assert b["dataset_id_ckan"] == "ds-folha"
     assert b["dataset_name_planilha"] == "folha-pagamento-servidores"
-    assert b["orgao_chave"] == str(ADM) and b["situacao"] == "Publicado"
+    assert b["orgao_chave"] == str(ADM) and b["situacao"] == "Publicado no prazo"  # sem prazo
 
     # Só o ID, sem endereço
     b2 = client.post(url, headers=gerente, json=_base(dataset_id_ckan="ds-folha")).json()

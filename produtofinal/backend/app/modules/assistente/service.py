@@ -274,7 +274,7 @@ def _bloco_orgao(org: Organizacao, dados: _Dados, intencoes: set[str]) -> list[s
             linhas.append("- Bases em atraso ou com prazo vencido:")
             linhas += ["  " + _linha_base(b) for b in atrasadas[:MAX_LISTA]]
         proximas = sorted((b for b in bases if b.prazo_abertura and b.situacao not in
-                           (reg_pda.PUBLICADO, reg_pda.SEM_RECURSO, *_SITUACOES_ATRASO)),
+                           (*reg_pda.PUBLICADAS, reg_pda.SEM_RECURSO, *_SITUACOES_ATRASO)),
                           key=lambda b: b.prazo_abertura)
         if proximas and ("prazo" in intencoes or not atrasadas):
             linhas.append("- Próximos prazos de abertura:")

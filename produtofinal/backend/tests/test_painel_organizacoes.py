@@ -128,25 +128,45 @@ def test_excluidos_nao_contam_no_painel(client, gerente, inventario):
     assert ses["recursos_formato_fechado"] == 0 and ses["formatos_fechados"] == {}
 
 
+def _atualizacao_no_ckan(**por_dataset):
+    """Campo "Atualização" do CKAN nos extras de cada dataset (None = campo ausente)."""
+    with SessionLocal() as db:
+        for ds_id, valor in por_dataset.items():
+            db.get(Dataset, int(ds_id.removeprefix("ds"))).extras = (
+                {} if valor is None else {"Atualização": valor})
+        db.commit()
+
+
 @pytest.mark.parametrize("periodicidade,pct,atrasadas", [
     ("Mensal", 0, 1),     # última atualização em 01/09/2026: 47 dias > 30
     ("Anual", 100, 0),    # 47 dias, bem dentro de 365
-    ("Eventual", None, None),  # sem prazo fixo: não entra no %
+    ("Não possui atualização periódica", None, None),  # declaração válida, sem prazo: fora do %
 ])
-def test_atualizacao_pela_periodicidade_do_pda(client, gerente, inventario, periodicidade, pct,
+def test_atualizacao_pela_periodicidade_do_ckan(client, gerente, inventario, periodicidade, pct,
                                                 atrasadas):
+    """ADR-0037: todas as bases publicadas do órgão entram, sem PDA nem vínculo; leitos sem o
+    campo "Atualização" é "Periodicidade não informada" (fora do %, contada à parte)."""
+    _atualizacao_no_ckan(ds1=periodicidade, ds2=None)
+    corpo = client.get(API, headers=gerente).json()
+    assert corpo["plano"] is None
+    ses = _org(corpo, str(SES))
+    assert ses["atualizacao_pct"] == pct and ses["atualizacoes_atrasadas"] == atrasadas
+    assert ses["atualizacoes_avaliadas"] == (0 if pct is None else 1)
+    assert ses["periodicidade_nao_informada"] == 1
+    seduc = _org(corpo, str(SEDUC))
+    assert seduc["atualizacao_pct"] is None and seduc["atualizacoes_avaliadas"] == 0
+    assert seduc["periodicidade_nao_informada"] == 0
+
+
+def test_atualizacao_ignora_periodicidade_do_pda(client, gerente, inventario):
     texto = ("Orgão;Base de Dados;Atualização;Disponível no Portal\n"
-             f"SES;Indicadores;{periodicidade};{URL}indicadores-saude\n"
-             f"SES;Leitos;Mensal;{URL}leitos\n"  # vinculada, mas sem data de atualização
-             "SES;Vacinas;Mensal;Não\n")         # sem vínculo: não é avaliada
+             f"SES;Indicadores;Mensal;{URL}indicadores-saude\n")
     r = client.post("/api/v1/pda/planos", headers=gerente, data={"nome": "PDA teste"},
                     files={"arquivo": ("pda.csv", texto.encode(), "text/csv")})
     assert r.status_code == 201, r.text
+    _atualizacao_no_ckan(ds1="Anual")  # no CKAN é Anual: 47 dias, em dia
     ses = _org(client.get(API, headers=gerente).json(), str(SES))
-    assert ses["atualizacao_pct"] == pct and ses["atualizacoes_atrasadas"] == atrasadas
-    assert ses["atualizacoes_avaliadas"] == (0 if pct is None else 1)
-    seduc = _org(client.get(API, headers=gerente).json(), str(SEDUC))
-    assert seduc["atualizacao_pct"] is None and seduc["atualizacoes_avaliadas"] == 0
+    assert (ses["atualizacao_pct"], ses["atualizacoes_atrasadas"]) == (100, 0)
 
 
 # ---------------------------------------------------------- riscos LGPD e índice de atenção
@@ -166,13 +186,10 @@ def achados(inventario):
         db.commit()
 
 
-def _pda_mensal(client, gerente):
-    """Indicadores (SES) vinculada, Mensal, atualizada em 01/09/2026: atrasada em 18/10/2026."""
-    texto = ("Orgão;Base de Dados;Atualização;Disponível no Portal\n"
-             f"SES;Indicadores;Mensal;{URL}indicadores-saude\n")
-    r = client.post("/api/v1/pda/planos", headers=gerente, data={"nome": "PDA teste"},
-                    files={"arquivo": ("pda.csv", texto.encode(), "text/csv")})
-    assert r.status_code == 201, r.text
+def _mensal_no_ckan(client, gerente):
+    """Indicadores (SES) "Mensal" no campo Atualização do CKAN, atualizada em 01/09/2026: atrasada
+    em 18/10/2026. Leitos sem o campo não entra no % (ADR-0037)."""
+    _atualizacao_no_ckan(ds1="Mensal", ds2=None)
 
 
 def test_riscos_lgpd_por_orgao(client, gerente, achados):
@@ -185,7 +202,8 @@ def test_riscos_lgpd_por_orgao(client, gerente, achados):
     assert ses["riscos_lgpd"] == 2 and ses["lgpd_recursos_analisados"] == 4
     assert ses["lgpd_aguardando_revisao"] == 2 and ses["lgpd_confirmados"] == 1
     assert ses["risco_lgpd_pct"] == 50
-    # Sem PDA não há atualização avaliada: o índice usa só o risco LGPD (50 = início do Alto)
+    # Sem o campo "Atualização" no CKAN não há atualização avaliada: o índice usa só o risco LGPD
+    # (50 = início do Alto)
     assert (ses["indice_atencao"], ses["indice_atencao_valor"]) == ("Alto", 50)
     assert ses["indice_atencao_componentes"] == ["Risco LGPD"]
     seduc = _org(corpo, str(SEDUC))  # nenhum recurso varrido, nenhuma base: sem índice
@@ -194,7 +212,7 @@ def test_riscos_lgpd_por_orgao(client, gerente, achados):
 
 
 def test_indice_de_atencao_com_pesos_dos_parametros(client, admin, gerente, achados):
-    _pda_mensal(client, gerente)
+    _mensal_no_ckan(client, gerente)
     ses = _org(client.get(API, headers=gerente).json(), str(SES))
     # 0,7 × 50 (risco LGPD) + 0,3 × 100 (a única base avaliada está atrasada) = 65
     assert (ses["indice_atencao"], ses["indice_atencao_valor"]) == ("Alto", 65)
@@ -216,7 +234,7 @@ def test_indice_de_atencao_com_pesos_dos_parametros(client, admin, gerente, acha
 def test_sem_lgpd_acessar_indice_so_com_atualizacao(client, gerente, achados):
     from app.modules.acesso.service import criar_usuario
     from tests.conftest import SENHA, login
-    _pda_mensal(client, gerente)
+    _mensal_no_ckan(client, gerente)
     with SessionLocal() as db:
         criar_usuario(db, "junior@cge.go.gov.br", "Júnior", SENHA, ["superintendencia"])
     corpo = client.get(API, headers=login(client, "junior@cge.go.gov.br")).json()

@@ -148,7 +148,7 @@ class BaseOut(BaseModel):
     dataset_name_planilha: str | None
     dataset_id_ckan_planilha: str | None  # ID do CKAN informado (sem dataset = vínculo pendente)
     dataset_ativo: bool | None
-    data_publicacao: datetime | None  # metadata_created do dataset vinculado e ativo
+    data_publicacao: datetime | None  # criação do 1º recurso válido no CKAN (ADR-0038)
     recursos_validos: int
     formatos: list[str]  # formatos dos recursos válidos (sem dicionário), sem repetição
     ultima_atualizacao: datetime | None

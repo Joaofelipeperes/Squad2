@@ -141,8 +141,10 @@ export default function OrganizacoesPage() {
             saber se a base já está no portal.
           </p>
           <p className="help-texto">
-            Atualização: % das bases vinculadas que estão dentro do prazo da periodicidade do PDA (Mensal = 30
-            dias, sem tolerância). Bases Eventual ou Estática e as sem data de atualização não entram na conta.
+            Atualização: % das bases publicadas do órgão (previstas no PDA ou espontâneas) que estão dentro do
+            prazo da periodicidade declarada no campo “Atualização” do CKAN (Mensal = 30 dias, sem tolerância).
+            Bases “Sem atualização periódica”, com periodicidade não informada ou sem data de atualização não
+            entram no percentual; a periodicidade não informada aparece à parte, como não conformidade.
           </p>
           <p className="help-texto">
             Riscos LGPD: recursos com possível dado pessoal aguardando revisão ou confirmado (falso positivo e
@@ -213,7 +215,8 @@ function exportacao(lgpdVisivel: boolean): ColunaExportacao<Organizacao>[] {
     { titulo: "Em atraso", valor: (o) => (o.bases_em_atraso == null ? "aguardando vínculo" : o.bases_em_atraso) },
     { titulo: "Atualização (% no prazo)",
       valor: (o) => (o.atualizacao_pct != null ? `${o.atualizacao_pct}%`
-        : o.bases_vinculadas === 0 ? "aguardando vínculo" : "sem prazo definido") },
+        : o.datasets_no_portal === 0 ? "sem bases no portal" : "sem prazo definido") },
+    { titulo: "Periodicidade não informada", valor: (o) => o.periodicidade_nao_informada },
     ...(lgpdVisivel ? [{ titulo: "Riscos LGPD (recursos varridos)",
       valor: (o: Organizacao) => (o.riscos_lgpd == null ? "não varrido" : `${o.riscos_lgpd} de ${o.lgpd_recursos_analisados}`) }] : []),
     { titulo: "Índice de atenção",
@@ -301,20 +304,30 @@ function Linha({ o, onAbrir, lgpdVisivel, criterio }: {
   );
 }
 
-/** Coluna Atualização: % dentro do prazo pela periodicidade do PDA vigente (ADR-0023). */
+/** Coluna Atualização: % dentro do prazo pela periodicidade do campo "Atualização" do CKAN, entre
+ * todas as bases publicadas do órgão (ADR-0037); periodicidade não informada vem à parte. */
 function Atualizacao({ o }: { o: Organizacao }) {
+  const naoInformada = o.periodicidade_nao_informada > 0 && (
+    <span className="badge badge-amber" style={{ marginLeft: 4 }}
+      title="Bases com o campo “Atualização” vazio ou inválido no CKAN (metadado obrigatório não conforme)">
+      {o.periodicidade_nao_informada} sem periodicidade
+    </span>
+  );
   if (o.atualizacao_pct == null) {
-    return o.bases_vinculadas === 0
-      ? <Pendente>aguardando vínculo</Pendente>
-      : <Pendente>sem prazo definido</Pendente>;
+    return <>{o.datasets_no_portal === 0
+      ? <Pendente>sem bases no portal</Pendente>
+      : <Pendente>sem prazo definido</Pendente>}{naoInformada}</>;
   }
   const atrasadas = o.atualizacoes_atrasadas ?? 0;
   const classe = atrasadas === 0 ? "badge-green" : o.atualizacao_pct >= 50 ? "badge-amber" : "badge-red";
   return (
-    <span className={`badge ${classe}`}
-      title={`${o.atualizacoes_avaliadas - atrasadas} de ${o.atualizacoes_avaliadas} base(s) com prazo dentro da periodicidade do PDA; ${atrasadas} atrasada(s)`}>
-      {o.atualizacao_pct}%
-    </span>
+    <>
+      <span className={`badge ${classe}`}
+        title={`${o.atualizacoes_avaliadas - atrasadas} de ${o.atualizacoes_avaliadas} base(s) publicada(s) dentro da periodicidade declarada no CKAN; ${atrasadas} atrasada(s)`}>
+        {o.atualizacao_pct}%
+      </span>
+      {naoInformada}
+    </>
   );
 }
 
@@ -352,7 +365,7 @@ export function explicarIndice(o: Organizacao, c: CriterioAtencao): string {
 export function IndiceAtencao({ o, criterio }: { o: Organizacao; criterio: CriterioAtencao }) {
   if (!o.indice_atencao) {
     return (
-      <span title="Sem risco LGPD (nenhum recurso varrido) e sem atualização avaliada (nenhuma base vinculada com prazo)">
+      <span title="Sem risco LGPD (nenhum recurso varrido) e sem atualização avaliada (nenhuma base publicada com prazo)">
         <Pendente>sem dados</Pendente>
       </span>
     );

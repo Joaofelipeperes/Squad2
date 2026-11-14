@@ -7,7 +7,7 @@
 | **User stories** | US5 (PBI-07 a PBI-11), US23 (PBI-71, PBI-74), US19 (PBI-58) |
 | **Backend** | `backend/app/modules/inventario/` · cliente em `backend/app/integrations/ckan/client.py` |
 | **Frontend** | `frontend/src/modules/datasets/` · botão e data da coleta em `frontend/src/app/layout/Topbar.tsx` |
-| **Última atualização** | 12/11/2026 |
+| **Última atualização** | 13/11/2026 |
 
 ## Propósito
 Espelha diariamente o inventário do portal (organizações, datasets, recursos e metadados) num banco
@@ -84,9 +84,13 @@ Referência visual: `#screen-datasets` do Protótipo V1.
 - `recursos_atuais(ds) -> list[Recurso]` e `condicao_recurso_atual()` (mesma regra em SQL): só os
   recursos ainda presentes no pacote do dataset. Recurso apagado do CKAN fica no banco (achados LGPD
   e correções apontam para ele), mas não conta para publicação nem atualização.
-- `periodicidade_declarada(extras, pkg)` — periodicidade informada pelo órgão. Procura nos extras,
-  sem diferenciar acento/maiúsculas/espaços, `periodicidade` e depois `Atualização` (chave usada
-  no portal de Goiás); cai no campo `periodicidade` do pacote.
+- `periodicidade_declarada(extras)` — texto do campo customizado **"Atualização"** (chave comparada
+  sem acento/maiúsculas/espaços, ex.: "Atualização "), espaços colapsados; vazio ou ausente → None.
+  Só esse campo vale (critério da GEDA, ADR-0037): sem fallback para `periodicidade` nem para o
+  pacote. A normalização para o domínio fica em `atualizacoes.regras.periodicidade_ckan`.
+- `datasets_publicados(db, user)` (service) — datasets ativos com recursos, no escopo do usuário
+  (`InventarioDao.datasets_ativos_visiveis`); `organizacoes(db)` — organizações por `id`. Usados
+  pelo indicador de atualização (`atualizacoes.listagem`).
 - `extras_como_dict(extras)` · `snapshot_payload(pkg)` · `hash_payload(payload)`.
 
 `integrations/ckan/client.py`: `CkanClient.action`, `.organizations()`, `.iter_datasets()`,
@@ -119,7 +123,8 @@ Diagrama e dicionário de dados completos: [MER](../banco/mer.md) · regras: [co
 | consome | pda | `GET /pda/datasets/{id}/bases` (pelo frontend) — prazo, periodicidade e situação PDA no detalhe |
 | consome | pda | `service.datasets_vinculados_ao_vigente(db)` — tipo de base (prevista × espontânea) na tela Datasets |
 | é consumido por | pda | `Dataset` (vínculo da base prevista pelo ID, `ativo_no_portal`), `Recurso` (recursos válidos e última atualização), `Organizacao` (órgão da base) |
-| é consumido por | atualizacoes, metadados | `Dataset`, `Recurso` |
+| é consumido por | atualizacoes | `service.datasets_publicados`, `recursos_atuais`, `organizacoes`, `regras.periodicidade_declarada` e `regras.tipo_de_base` — indicador de atualização sobre todos os datasets publicados (ADR-0037); `TipoBaseBadge` (frontend, `datasets/formato.tsx`) na tela Monitoramento de Atualizações |
+| é consumido por | metadados | `Dataset`, `Recurso` |
 | é consumido por | lgpd | `Recurso` (varredura, url_type para anonimização) |
 | é consumido por | rastreabilidade | `Dataset` (lista de datasets cuja auditoria é lida, inclusive os que saíram do portal), `Recurso` (nome do recurso nos eventos); `Coleta`, `DatasetSnapshot` (diff entre coletas, complemento futuro) |
 | consome | rastreabilidade | tela: `HistoricoRecente` (`GET /rastreabilidade/eventos?dataset=<ID do CKAN>`) — "Histórico recente" no detalhe do dataset |
@@ -164,8 +169,6 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   periodicidade declarada só aparecem depois de uma coleta nova (a de 08/10/2026 é anterior).
 - Confirmar com a GEDA o critério de dicionário de dados (PBI-11), inclusive o novo "nome começa com
   dicionário" (ex.: "DICIONARIO CONVENIOS CONCEDIDOS DGPP"); "DICIONARI0" (com zero) não é detectado.
-- `periodicidade_declarada` lida do extra `periodicidade`, mas no portal real a chave observada é
-  `Atualização` (coleta de 07/10/2026) — hoje o campo fica vazio; ajustar a leitura (US9/US10).
 
 ## Histórico de alterações
 | Data | Alteração | Autor |
@@ -195,3 +198,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 10/11/2026 | Detalhe do dataset agrupado em seções (faixa-resumo com situação no portal, tipo de base, situação PDA e números-chave; Identificação, Vínculo com o PDA, Atualização, Publicação e recursos, Descrição e Histórico), com os componentes compartilhados `shared/ui/Detalhe.tsx`. Sem mudança de dados nem de API | João |
 | 11/11/2026 | Correção: a coleta das 03:00 de 10/11 falhou porque o portal devolveu uma página HTML com HTTP 200 no `package_search` (firewall/balanceador F5) e o cliente desistia na hora. `organization_list` e `package_search` agora tratam corpo não-JSON como falha passageira e repetem com espera crescente (`repetir_nao_json` em `CkanClient.action`); o início do corpo recebido vai para o log. Actions de auditoria continuam sem repetir. Testes em `test_inventario.py` | Victor |
 | 12/11/2026 | Segurança (ADR-0036): `GET /coletas/ultima` não devolve `solicitada_por` a quem não tem `inventario.acessar`; `limite` de `GET /coletas` validado (1 a 500). Na tela Datasets, o link do recurso só é montado para endereço `http`/`https` (`shared/ui/url.ts`) | Victor |
+| 13/11/2026 | Critério da GEDA (ADR-0037): `regras.periodicidade_declarada(extras)` lê **só** o campo "Atualização" (sai o fallback para `periodicidade` e para o pacote); `service.datasets_publicados` e `service.organizacoes` (+ `InventarioDao.datasets_ativos_visiveis`) para o indicador de atualização; `TipoBaseBadge` passa para `datasets/formato.tsx` e é reutilizado em Atualizações | Victor |

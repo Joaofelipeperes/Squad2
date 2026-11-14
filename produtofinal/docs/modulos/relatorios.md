@@ -7,7 +7,7 @@
 | **User stories** | US20 (PBI-60, PBI-61, PBI-77) |
 | **Backend** | `backend/app/modules/relatorios/` |
 | **Frontend** | `frontend/src/modules/relatorios/` |
-| **Última atualização** | 12/11/2026 |
+| **Última atualização** | 13/11/2026 |
 
 ## Propósito
 Substitui o controle manual em planilhas da GEDA por relatórios exportáveis com as mesmas colunas.
@@ -33,7 +33,7 @@ que ele conta**:
 | Resumo do órgão (`resumo`) | os indicadores da tela Organizações | `painel.acessar` |
 | Bases previstas no PDA (`bases`) | todas as bases do PDA vigente: situação, prazo, periodicidade, dataset do portal (título; "vínculo pendente"/"fora do portal") e data de publicação — as que pedem ação primeiro | `pda.acessar` |
 | Bases em atraso (`bases-em-atraso`) e Bases próximas do prazo (`bases-proximas`) | quais são | `pda.acessar` |
-| Atualização das bases (`atualizacao`) | cada base vinculada: periodicidade, última atualização, se é estimada, vencimento e situação (ADR-0023) — atrasadas primeiro | `atualizacoes.acessar` |
+| Atualização dos datasets (`atualizacao`) | cada dataset publicado do órgão (do PDA ou espontâneo): tipo de base, campo "Atualização" do CKAN, última atualização, se é estimada, vencimento e situação (ADR-0037) — atrasados primeiro | `atualizacoes.acessar` |
 | Datasets no portal (`datasets`) e Datasets sem recurso (`sem-recurso`) | título, criação no CKAN, recursos válidos, formatos, última atualização, tipo de base | `inventario.acessar` |
 | Recursos válidos (`recursos`) e Recursos em formato fechado (`formatos`) | dataset, recurso, formato (aberto ou não) e última atualização | `inventario.acessar` |
 | Possíveis dados pessoais em aberto (`dados-pessoais`) | prioridade, dataset, arquivo, tipo, coluna, primeira linha, células e situação — **nunca o valor** | `lgpd.acessar` |
@@ -49,9 +49,9 @@ O mesmo relatório abre do **detalhe do órgão em Organizações** (botão **Ge
 | Relatório (`id`) | Módulo de origem (permissão exigida) | Conteúdo |
 |---|---|---|
 | Cumprimento do PDA (`pda`) | pda (`pda.acessar`) | Bases do PDA vigente: órgão, situação, prazo, periodicidade, vínculo, dataset, recursos válidos, formatos, publicação |
-| Atualizações (`atualizacoes`) | atualizacoes (`atualizacoes.acessar`) | Bases vinculadas do PDA vigente com atualização **Atrasada** ou **Próxima do vencimento** (ADR-0023); atrasadas primeiro |
+| Atualizações (`atualizacoes`) | atualizacoes (`atualizacoes.acessar`) | Datasets publicados (do PDA ou espontâneos) com atualização **Atrasada**, **Próxima do vencimento** ou **Periodicidade não informada** (ADR-0037), nessa ordem; colunas Sigla, Órgão, Dataset, Tipo de base, Atualização (CKAN), Última atualização, Data estimada, Vencimento e Situação |
 | Dados Pessoais (`lgpd`) | lgpd (`lgpd.acessar`) | Achados com status `revisar`, por prioridade e confiança; só localização e tipo, nunca o valor |
-| Por Órgão (`orgaos`) | painel (`painel.acessar`) | Mesmos indicadores da tela Organizações, com Riscos LGPD e recursos varridos (só com `lgpd.acessar`) e o índice de atenção (faixa e valor, ADR-0030) |
+| Por Órgão (`orgaos`) | painel (`painel.acessar`) | Mesmos indicadores da tela Organizações (inclui "Publicadas fora do prazo", ADR-0038, e "Periodicidade não informada", ADR-0037), com Riscos LGPD e recursos varridos (só com `lgpd.acessar`) e o índice de atenção (faixa e valor, ADR-0030) |
 | Datasets sem Recurso (`sem-recurso`) | inventario (`inventario.acessar`) | Datasets ativos sem recurso válido (PBI-51): órgão, título do dataset, ID no CKAN e criação |
 | Formatos não Abertos (`formatos`) | inventario (`inventario.acessar`) | Recursos atuais fora do parâmetro `formatos_abertos` (PBI-53) |
 
@@ -112,8 +112,8 @@ por órgão.
 | Direção | Módulo | O quê |
 |---|---|---|
 | consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)` e `hoje_local()`: bases previstas, situação e prazos, **sempre do PDA vigente** |
-| consome | atualizacoes | `regras.vencimento_atualizacao` e situações (`ATRASADO`, `PROXIMO_DO_VENCIMENTO`) |
-| consome | painel | `organizacoes(db, user)` (relatório por órgão) e `situacao_atualizacao(base, hoje)` |
+| consome | atualizacoes | `listagem.situacoes_dos_datasets` (todos os datasets publicados com a situação, ADR-0037) e as situações de `regras` |
+| consome | painel | `organizacoes(db, user)` (relatório por órgão) |
 | é consumido por | painel | tela Organizações usa `RelatorioOrgaoModal` (relatório detalhado) no detalhe do órgão |
 | consome | lgpd | `listar_achados(db, user, status="revisar")` |
 | consome | metadados | `datasets_sem_recurso(db)`, `recursos_formato_fechado(db, formatos_abertos)`, `recursos_validos(db)` e `regras.eh_formato_aberto` |
@@ -157,3 +157,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 09/11/2026 | Interações: a tela Riscos de Dados Pessoais (`lgpd`) também usa `POST /tabela/exportar` (sem mudança no código do módulo) | Humberto |
 | 09/11/2026 | **Relatório de um órgão detalhado** (pedido da GEDA): o órgão é escolhido digitando (busca com sugestões) e sai **um** relatório — o resumo e, para cada número, a lista do que ele conta (bases, em atraso, próximas do prazo, atualização, datasets, sem recurso, recursos, formato fechado, dados pessoais em aberto), cada seção conforme a permissão do módulo de origem. Sai a marcação de relatórios (`?relatorios=`) e o `GerarRelatorioOrgaoModal` | Humberto |
 | 12/11/2026 | Segurança (ADR-0036): exportação de tabela com tetos (célula até 2.000 caracteres; PDF até 5.000 linhas e 1,5 milhão de caracteres; acima disso 422) — um pedido grande ocupava a API por minutos; XLSX grava como texto o valor que começa com `=`; CSV antepõe apóstrofo ao texto que começa com `= + - @` (`core/exportacao.py::sem_formula`) | Victor |
+| 13/11/2026 | Critérios da GEDA (ADR-0037 e ADR-0038): Relatório de Atualizações e seção "Atualização dos datasets" passam a cobrir todos os datasets publicados (do PDA ou espontâneos) pela periodicidade do campo "Atualização" do CKAN, com tipo de base e a periodicidade não informada; Por Órgão ganha "Publicadas fora do prazo" e "Periodicidade não informada"; ordem das bases do PDA com "Publicado fora do prazo" | Victor |

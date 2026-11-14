@@ -12,7 +12,11 @@ from app.modules.lgpd.models import Achado
 from app.modules.relatorios import regras
 from tests.conftest import SENHA, login
 from tests.test_painel_organizacoes import _hoje, inventario  # noqa: F401 (fixtures)
-from tests.test_painel_visao_geral import PDA, so_dicionario  # noqa: F401 (fixtures)
+from tests.test_painel_visao_geral import (  # noqa: F401 (fixtures)
+    PDA,
+    _mensal_ds_a,
+    so_dicionario,
+)
 
 API = "/api/v1/relatorios"
 IDS = ["pda", "atualizacoes", "lgpd", "orgaos", "sem-recurso", "formatos"]
@@ -70,10 +74,15 @@ def test_pda_e_atualizacoes(client, gerente, com_pda):
     assert corpo["referencia"] == "PDA teste" and corpo["total"] == 6
     leitos = next(x for x in linhas if x["Base prevista"] == "Leitos")
     assert leitos["Situação"] == "Próximo do prazo" and leitos["Prazo de abertura"] == "31/10/2026"
-    # Atualizações: só a vinculada atrasada (Indicadores, 01/09 + 30 dias)
+    # Atualizações (ADR-0037): todos os publicados, do PDA ou espontâneos, que pedem ação —
+    # atrasados primeiro (Indicadores, 01/09 + 30 dias), depois periodicidade não informada
+    _mensal_ds_a()
     _, linhas = _previa(client, gerente, "atualizacoes")
-    assert [(x["Base prevista"], x["Situação"], x["Vencimento"]) for x in linhas] == [
-        ("Indicadores", "Atrasado", "01/10/2026")]
+    assert [(x["Dataset"], x["Tipo de base"], x["Situação"]) for x in linhas] == [
+        ("Indicadores", "Prevista no PDA", "Atrasado"),
+        ("Escolas", "Espontânea", "Periodicidade não informada"),
+        ("Leitos", "Espontânea", "Periodicidade não informada")]
+    assert linhas[0]["Vencimento"] == "01/10/2026" and linhas[0]["Atualização (CKAN)"] == "Mensal"
 
 
 def test_lgpd_so_pendentes_de_revisao(client, gerente, achados):
@@ -174,6 +183,7 @@ SECOES = ["resumo", "bases", "bases-em-atraso", "bases-proximas", "atualizacao",
 def test_relatorio_detalhado_do_orgao(client, gerente, com_pda, achados):
     """Cada número do resumo vira a lista do que ele conta, só do órgão escolhido."""
     from tests.conftest import SES
+    _mensal_ds_a()
     r = _orgao(client, gerente, SES)
     assert r.status_code == 200, r.text
     corpo = r.json()
@@ -189,9 +199,11 @@ def test_relatorio_detalhado_do_orgao(client, gerente, com_pda, achados):
         "Antigo (fora do portal)", "", "", "Indicadores"]
     assert _coluna(corpo, "bases-em-atraso", "Base prevista") == ["Antiga"]
     assert _coluna(corpo, "bases-proximas", "Base prevista") == ["Leitos"]
-    # Atualização: só as vinculadas, atrasadas primeiro
-    assert _coluna(corpo, "atualizacao", "Base prevista") == ["Indicadores", "Antiga"]
-    assert _coluna(corpo, "atualizacao", "Situação") == ["Atrasado", "Sem informação"]
+    # Atualização: todos os datasets publicados do órgão (ADR-0037), atrasados primeiro; o
+    # dataset fora do portal não entra
+    assert _coluna(corpo, "atualizacao", "Dataset") == ["Indicadores", "Leitos"]
+    assert _coluna(corpo, "atualizacao", "Situação") == ["Atrasado", "Periodicidade não informada"]
+    assert _coluna(corpo, "atualizacao", "Tipo de base") == ["Prevista no PDA", "Espontânea"]
     # Portal: datasets ativos e recursos válidos (sem dicionário, sem recurso apagado)
     assert _coluna(corpo, "datasets", "Dataset") == ["Indicadores", "Leitos"]
     assert _coluna(corpo, "sem-recurso", "Dataset") == []

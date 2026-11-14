@@ -52,21 +52,16 @@ def extras_como_dict(extras: list[dict] | None) -> dict:
     return {e.get("key"): e.get("value") for e in (extras or []) if e.get("key")}
 
 
-# Chaves de extras que guardam a periodicidade declarada, em ordem de preferência.
-# No portal de Goiás o extra usado é "Atualização" (ex.: "Mensal", "Anual").
-_CHAVES_PERIODICIDADE = ("periodicidade", "atualizacao", "frequencia de atualizacao")
-
-
-def periodicidade_declarada(extras: dict, pkg: dict | None = None) -> str | None:
-    """Periodicidade informada pelo órgão, procurada nos extras sem diferenciar acento,
-    maiúsculas ou espaços (o portal usa "Atualização"). Cai no campo `periodicidade` do pacote."""
-    normalizados = {_normalizar_texto(k): v for k, v in (extras or {}).items() if k}
-    for chave in _CHAVES_PERIODICIDADE:
-        valor = normalizados.get(chave)
-        if isinstance(valor, str) and valor.strip():
-            return " ".join(valor.split())
-    valor = (pkg or {}).get("periodicidade")
-    return " ".join(valor.split()) if isinstance(valor, str) and valor.strip() else None
+def periodicidade_declarada(extras: dict | None) -> str | None:
+    """Texto do campo customizado "Atualização" do dataset, como o órgão preencheu (espaços
+    colapsados); vazio ou ausente → None. A chave é procurada sem diferenciar acento, maiúsculas
+    ou espaços ("Atualização ", "atualizacao"). Critério da GEDA (13/11/2026, ADR-0037): a
+    periodicidade vem EXCLUSIVAMENTE desse campo — sem fallback para outras chaves nem para
+    campos do pacote."""
+    for chave, valor in (extras or {}).items():
+        if chave and _normalizar_texto(chave) == "atualizacao":
+            return " ".join(valor.split()) if isinstance(valor, str) and valor.strip() else None
+    return None
 
 
 def snapshot_payload(pkg: dict) -> dict:

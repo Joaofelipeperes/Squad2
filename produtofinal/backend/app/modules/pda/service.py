@@ -18,7 +18,7 @@ from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.exc import IntegrityError
@@ -88,13 +88,17 @@ def _transacao(dao: PdaDao) -> Iterator[None]:
 
 
 # ------------------------------------------------------------------ contexto de cálculo
+def fuso_local() -> tzinfo:
+    """Fuso da aplicação (America/Sao_Paulo)."""
+    try:
+        return ZoneInfo(get_settings().timezone)
+    except ZoneInfoNotFoundError:  # SO sem base de fusos: Brasília é UTC-3 fixo desde 2019
+        return timezone(timedelta(hours=-3))
+
+
 def hoje_local() -> date:
     """Data de hoje no fuso da aplicação (America/Sao_Paulo)."""
-    try:
-        fuso = ZoneInfo(get_settings().timezone)
-    except ZoneInfoNotFoundError:  # SO sem base de fusos: Brasília é UTC-3 fixo desde 2019
-        fuso = timezone(timedelta(hours=-3))
-    return datetime.now(fuso).date()
+    return datetime.now(fuso_local()).date()
 
 
 def janela_alerta_dias(db: Session) -> int:
@@ -568,7 +572,9 @@ class BaseCalculada:
     dataset_name_planilha: str | None
     dataset_id_ckan_planilha: str | None
     dataset_ativo: bool | None
-    data_publicacao: datetime | None  # metadata_created do dataset vinculado e ativo
+    # Criação no CKAN do PRIMEIRO recurso válido do dataset vinculado e ativo (ADR-0038): criar o
+    # dataset sem recurso não é publicar
+    data_publicacao: datetime | None
     recursos_validos: int
     formatos: tuple[str, ...]  # formatos dos recursos válidos, sem repetição
     ultima_atualizacao: datetime | None
@@ -586,6 +592,15 @@ def orgao_chave(organizacao_id: int | None, orgao_sigla: str) -> str:
     return "sigla:" + regras.chave_sigla(orgao_sigla)
 
 
+def _primeira_publicacao(ds: Dataset) -> datetime | None:
+    """ADR-0038 — criação no CKAN do PRIMEIRO recurso do dataset que não é dicionário de dados,
+    inclusive os já retirados do pacote (ficam no banco): trocar o arquivo depois não muda a data
+    em que a base foi publicada. Recurso excluído logicamente não conta."""
+    criados = [_utc(r.created_ckan) for r in ds.recursos
+               if r.created_ckan and not r.eh_dicionario_dados and not r.deleted]
+    return min(criados) if criados else None
+
+
 def calcular_base(base: BasePrevista, plano_nome: str, hoje: date, janela_dias: int
                   ) -> BaseCalculada:
     ds = base.dataset if base.dataset_id else None
@@ -594,6 +609,7 @@ def calcular_base(base: BasePrevista, plano_nome: str, hoje: date, janela_dias: 
     validos = [r for r in recursos if not r.eh_dicionario_dados]  # dicionário nunca conta
     ultima = ultima_atualizacao_real(recursos)
     ativo = ds.ativo_no_portal if ds is not None else None
+    publicacao = _primeira_publicacao(ds) if ds is not None and ativo and validos else None
     return BaseCalculada(
         id=base.id, plano_id=base.plano_id, plano_nome=plano_nome, orgao_sigla=base.orgao_sigla,
         orgao_chave=orgao_chave(base.organizacao_id, base.orgao_sigla),
@@ -613,15 +629,16 @@ def calcular_base(base: BasePrevista, plano_nome: str, hoje: date, janela_dias: 
         dataset_titulo=ds.titulo if ds is not None else None,
         dataset_name_planilha=base.dataset_name_planilha,
         dataset_id_ckan_planilha=base.dataset_id_ckan_planilha, dataset_ativo=ativo,
-        data_publicacao=(_utc(ds.metadata_created)
-                         if ds is not None and ativo and ds.metadata_created else None),
+        data_publicacao=publicacao,
         recursos_validos=len(validos),
         formatos=tuple(sorted({r.formato for r in validos if r.formato})),
         ultima_atualizacao=ultima.data,
         ultima_atualizacao_estimada=ultima.estimada,
         situacao=regras.situacao_base(vinculada=ds is not None, dataset_ativo=ativo,
                                       recursos_validos=len(validos), prazo=base.prazo_abertura,
-                                      hoje=hoje, janela_dias=janela_dias),
+                                      hoje=hoje, janela_dias=janela_dias,
+                                      publicado_em=(publicacao.astimezone(fuso_local()).date()
+                                                    if publicacao else None)),
         flag_prazo=regras.flag_prazo(base.prazo_abertura, hoje, janela_dias),
         classificacao=base.classificacao,
     )

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { AtualizacaoLinha, AtualizacoesLista, FiltrosAtualizacoes } from "./api";
 import { FILTROS_VAZIOS, atualizacoesApi } from "./api";
 import { DatasetDetalheModal } from "@/modules/datasets/DatasetDetalheModal";
+import { TipoBaseBadge } from "@/modules/datasets/formato";
 import { fmtData, fmtDataHora } from "@/modules/pda/formato";
 import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
 import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
@@ -11,11 +12,12 @@ import { PageLede } from "@/shared/ui/PageLede";
 import type { Ordenadores } from "@/shared/ui/tabela";
 import { ColunaOrdenavel, Paginacao, dataOrdenavel, useTabela } from "@/shared/ui/tabela";
 
-type Coluna = "dataset" | "orgao" | "periodicidade" | "atualizado" | "dias" | "prazo" | "situacao";
+type Coluna = "dataset" | "orgao" | "tipo" | "periodicidade" | "atualizado" | "dias" | "prazo" | "situacao";
 
 const ORDENADORES: Ordenadores<AtualizacaoLinha, Coluna> = {
   dataset: (d) => d.dataset_titulo,
   orgao: (d) => d.orgao_sigla,
+  tipo: (d) => d.tipo_base,
   periodicidade: (d) => d.periodicidade,
   atualizado: (d) => dataOrdenavel(d.ultima_atualizacao),
   dias: (d) => d.dias_desde_atualizacao,
@@ -23,10 +25,13 @@ const ORDENADORES: Ordenadores<AtualizacaoLinha, Coluna> = {
   situacao: (d) => d.situacao,
 };
 
+const NAO_INFORMADA = "Periodicidade não informada";
+
 /**
  * Tela "Monitoramento de Atualizações" (US9/US10) — referência visual: #screen-updates do
- * Protótipo V1. Datasets vinculados às bases do PDA vigente; a situação usa a periodicidade do
- * PDA e o `last_modified` do RECURSO (ADR-0023), nunca o `metadata_modified` do dataset.
+ * Protótipo V1. TODOS os datasets publicados no portal, previstos no PDA ou espontâneos (ADR-0037):
+ * o vínculo com o PDA só identifica o tipo de base. A periodicidade vem do campo "Atualização" do
+ * CKAN e a última atualização do `last_modified` do RECURSO, nunca do `metadata_modified`.
  */
 export default function AtualizacoesPage() {
   const [filtros, setFiltros] = useState<FiltrosAtualizacoes>(FILTROS_VAZIOS);
@@ -50,28 +55,32 @@ export default function AtualizacoesPage() {
   const dados = lista.data;
   const tabela = useTabela(dados?.datasets, ORDENADORES);
   const col = { ordem: tabela.ordem, onOrdenar: tabela.ordenarPor };
+  const r = dados?.resumo;
 
   return (
     <section className="screen">
       <PageLede titulo="Monitoramento de Atualizações">
-        Avaliação da atualização real do conteúdo dos recursos publicados.
+        Atualização real do conteúdo de todas as bases publicadas no portal, previstas no PDA ou espontâneas,
+        pela periodicidade declarada no campo “Atualização” do CKAN.
       </PageLede>
 
-      {dados && dados.plano_nome === null && (
-        <div className="inline-msg err" role="status" style={{ marginBottom: 18 }}>
-          Não há PDA vigente: a periodicidade de cada dataset vem do PDA. Importe ou defina um PDA vigente
-          em "Monitoramento PDA".
-        </div>
-      )}
-
       <div className="kpi-grid">
-        <Cartao cor="green" icone="fa-check" valor={dados?.resumo.atualizados} rotulo="Atualizados no período" />
-        <Cartao cor="red" icone="fa-triangle-exclamation" valor={dados?.resumo.atrasados} rotulo="Em atraso" />
-        <Cartao cor="amber" icone="fa-hourglass-half" valor={dados?.resumo.proximos_do_vencimento}
+        <Cartao cor="green" icone="fa-check" valor={r?.atualizados} rotulo="Atualizados no período" />
+        <Cartao cor="red" icone="fa-triangle-exclamation" valor={r?.atrasados} rotulo="Em atraso" />
+        <Cartao cor="amber" icone="fa-hourglass-half" valor={r?.proximos_do_vencimento}
           rotulo="Próximos do vencimento" />
-        <Cartao cor="blue" icone="fa-circle-question" valor={dados?.resumo.sem_informacao}
-          rotulo="Sem periodicidade definida" />
+        <Cartao cor="blue" icone="fa-circle-exclamation" valor={r?.periodicidade_nao_informada}
+          rotulo="Periodicidade não informada"
+          dica="Campo “Atualização” vazio ou com valor inválido no CKAN: metadado obrigatório não conforme." />
       </div>
+      {r && (
+        <p className="help-texto" style={{ margin: "-12px 0 18px" }}>
+          {r.sem_atualizacao_periodica} declarada(s) sem atualização periódica (válido, fica fora do prazo)
+          {r.sem_data > 0 && ` · ${r.sem_data} sem data de atualização (nenhum recurso válido)`}
+          {" · "}{r.previstas_no_pda} prevista(s) no PDA{dados?.plano_nome ? ` (${dados.plano_nome})` : ""} e{" "}
+          {r.espontaneas} espontânea(s)
+        </p>
+      )}
 
       <div className="panel">
         <div className="filters-bar">
@@ -83,6 +92,8 @@ export default function AtualizacoesPage() {
           </div>
           <Filtro id="at-filtro-orgao" rotulo="Órgão" valor={filtros.orgao} onMudar={set("orgao")}
             opcoes={dados?.opcoes.orgaos ?? []} classe="filter-field-limitado" />
+          <Filtro id="at-filtro-tipo-base" rotulo="Tipo de base" valor={filtros.tipo_base} onMudar={set("tipo_base")}
+            opcoes={(dados?.opcoes.tipos_base ?? []).map((t) => ({ valor: t, rotulo: t }))} />
           <Filtro id="at-filtro-periodicidade" rotulo="Periodicidade" valor={filtros.periodicidade}
             onMudar={set("periodicidade")}
             opcoes={(dados?.opcoes.periodicidades ?? []).map((p) => ({ valor: p, rotulo: p }))} />
@@ -92,8 +103,8 @@ export default function AtualizacoesPage() {
             <button type="button" className="btn btn-ghost btn-sm" onClick={limpar}>Limpar filtros</button>
             <ExportarTabela titulo="Monitoramento de Atualizações" colunas={EXPORTACAO} linhas={tabela.todas}
               filtros={descreverFiltros([
-                ["PDA", dados?.plano_nome], ["Dataset", filtros.dataset],
-                ["Órgão", rotuloDe(dados?.opcoes.orgaos, filtros.orgao)],
+                ["Dataset", filtros.dataset],
+                ["Órgão", rotuloDe(dados?.opcoes.orgaos, filtros.orgao)], ["Tipo de base", filtros.tipo_base],
                 ["Periodicidade", filtros.periodicidade], ["Situação", filtros.situacao]])} />
           </div>
         </div>
@@ -102,6 +113,7 @@ export default function AtualizacoesPage() {
             <thead><tr>
               <ColunaOrdenavel coluna="dataset" {...col}>Dataset</ColunaOrdenavel>
               <ColunaOrdenavel coluna="orgao" {...col}>Órgão</ColunaOrdenavel>
+              <ColunaOrdenavel coluna="tipo" {...col}>Tipo de base</ColunaOrdenavel>
               <ColunaOrdenavel coluna="periodicidade" {...col}>Periodicidade</ColunaOrdenavel>
               <ColunaOrdenavel coluna="atualizado" primeira="desc" {...col}>Último recurso atualizado</ColunaOrdenavel>
               <ColunaOrdenavel coluna="dias" primeira="desc" {...col}>Dias desde atualização</ColunaOrdenavel>
@@ -110,30 +122,30 @@ export default function AtualizacoesPage() {
             </tr></thead>
             <tbody>
               {lista.isError ? (
-                <tr><td colSpan={7} style={{ padding: 18 }}>
+                <tr><td colSpan={8} style={{ padding: 18 }}>
                   <div className="inline-msg err" role="alert">
                     Não foi possível carregar as atualizações: {lista.error.message}
                   </div>
                 </td></tr>
               ) : !dados ? (
-                <tr><td colSpan={7} className="table-empty">Carregando…</td></tr>
+                <tr><td colSpan={8} className="table-empty">Carregando…</td></tr>
               ) : dados.total === 0 ? (
-                <tr><td colSpan={7} className="table-empty">
+                <tr><td colSpan={8} className="table-empty">
                   <i className="fa-solid fa-inbox" style={{ marginRight: 8 }} />
-                  Nenhum dataset vinculado ao PDA vigente para monitorar.
+                  Nenhum dataset publicado no portal para monitorar. Rode a coleta do CKAN.
                 </td></tr>
               ) : dados.datasets.length === 0 ? (
-                <tr><td colSpan={7} className="table-empty">Nenhum registro para os filtros selecionados.</td></tr>
+                <tr><td colSpan={8} className="table-empty">Nenhum registro para os filtros selecionados.</td></tr>
               ) : (
-                tabela.itens.map((d) => <Linha key={d.base_id} d={d} onAbrir={setDetalhe} />)
+                tabela.itens.map((d) => <Linha key={d.dataset_id} d={d} onAbrir={setDetalhe} />)
               )}
             </tbody>
           </table>
         </div>
         {dados && (
           <Paginacao id="at" {...tabela.paginacao} carregando={lista.isPlaceholderData}
-            resumo={<><strong>{dados.datasets.length}</strong> dataset(s) encontrado(s) de {dados.total} monitorados
-              {dados.plano_nome ? ` no ${dados.plano_nome}` : ""}</>} />
+            resumo={<><strong>{dados.datasets.length}</strong> dataset(s) encontrado(s) de {dados.total} publicados no
+              portal</>} />
         )}
       </div>
 
@@ -142,11 +154,21 @@ export default function AtualizacoesPage() {
   );
 }
 
+/** "Não informada" com o texto do CKAN quando o órgão preencheu algo inválido. */
+function dicaPeriodicidade(d: AtualizacaoLinha): string | undefined {
+  if (d.periodicidade !== NAO_INFORMADA) return undefined;
+  return d.periodicidade_declarada
+    ? `Valor inválido no campo “Atualização” do CKAN: “${d.periodicidade_declarada}”`
+    : "Campo “Atualização” vazio no CKAN";
+}
+
 /** Colunas do Excel/PDF: as mesmas da tabela, com os valores como a tela mostra. */
 const EXPORTACAO: ColunaExportacao<AtualizacaoLinha>[] = [
   { titulo: "Dataset", valor: (d) => d.dataset_titulo },
   { titulo: "Órgão", valor: (d) => d.orgao_sigla },
+  { titulo: "Tipo de base", valor: (d) => d.tipo_base },
   { titulo: "Periodicidade", valor: (d) => d.periodicidade },
+  { titulo: "Atualização no CKAN", valor: (d) => d.periodicidade_declarada ?? "" },
   { titulo: "Último recurso atualizado",
     valor: (d) => fmtDataHora(d.ultima_atualizacao) + (d.ultima_atualizacao && d.ultima_atualizacao_estimada ? " (est.)" : "") },
   { titulo: "Dias desde atualização", valor: (d) => d.dias_desde_atualizacao },
@@ -154,9 +176,11 @@ const EXPORTACAO: ColunaExportacao<AtualizacaoLinha>[] = [
   { titulo: "Situação", valor: (d) => d.situacao },
 ];
 
-function Cartao({ cor, icone, valor, rotulo }: { cor: string; icone: string; valor?: number; rotulo: string }) {
+function Cartao({ cor, icone, valor, rotulo, dica }: {
+  cor: string; icone: string; valor?: number; rotulo: string; dica?: string;
+}) {
   return (
-    <div className="kpi-card">
+    <div className="kpi-card" title={dica}>
       <div className="kpi-top"><div className={`kpi-icon ${cor}`}><i className={`fa-solid ${icone}`} /></div></div>
       <div className="kpi-value">{valor ?? "—"}</div>
       <div className="kpi-label">{rotulo}</div>
@@ -179,10 +203,13 @@ function Filtro({ id, rotulo, valor, opcoes, onMudar, classe }: {
   );
 }
 
+// "Periodicidade não informada" é não conformidade de metadado (âmbar); "Sem atualização periódica"
+// é declaração válida do órgão e "Sem data de atualização" não tem como ser avaliada (cinza).
 const CLASSE_SITUACAO: Record<string, string> = {
   "Atualizado": "badge-green",
   "Próximo do vencimento": "badge-amber",
   "Atrasado": "badge-red",
+  [NAO_INFORMADA]: "badge-amber",
 };
 
 function Linha({ d, onAbrir }: { d: AtualizacaoLinha; onAbrir: (id: number) => void }) {
@@ -193,7 +220,8 @@ function Linha({ d, onAbrir }: { d: AtualizacaoLinha; onAbrir: (id: number) => v
     <tr tabIndex={0} onClick={() => onAbrir(d.dataset_id)} onKeyDown={teclado}>
       <td className="cell-strong" title={d.dataset_name ?? undefined}>{d.dataset_titulo}</td>
       <td title={d.orgao_nome ?? undefined}>{d.orgao_sigla}</td>
-      <td>{d.periodicidade}</td>
+      <td><TipoBaseBadge tipo={d.tipo_base} /></td>
+      <td title={dicaPeriodicidade(d)}>{d.periodicidade}</td>
       <td className="cell-muted">
         {fmtDataHora(d.ultima_atualizacao)}
         {d.ultima_atualizacao && d.ultima_atualizacao_estimada && (

@@ -53,8 +53,9 @@ CATALOGO: tuple[Definicao, ...] = (
               "Situação das bases previstas no Plano de Dados Abertos vigente, por órgão e prazo.",
               "fa-clipboard-check", "pda.acessar"),
     Definicao("atualizacoes", "Relatório de Atualizações",
-              "Bases vinculadas com atualização em atraso ou próxima do vencimento, pela "
-              "periodicidade do PDA e o last_modified dos recursos.",
+              "Datasets publicados (do PDA ou espontâneos) com atualização em atraso, próxima do "
+              "vencimento ou periodicidade não informada, pelo campo Atualização do CKAN e o "
+              "last_modified dos recursos.",
               "fa-rotate", "atualizacoes.acessar"),
     Definicao("lgpd", "Relatório de Dados Pessoais",
               "Sinalizações de possíveis dados pessoais pendentes de revisão humana, por "

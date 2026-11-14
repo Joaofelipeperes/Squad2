@@ -253,28 +253,42 @@ def orgao_por_evidencia(pares: Iterable[tuple[str, int | None]]) -> dict[str, in
 
 # ------------------------------------------------------------------ situação e prazo
 
-PUBLICADO = "Publicado"
+PUBLICADO = "Publicado no prazo"
+PUBLICADO_FORA_DO_PRAZO = "Publicado fora do prazo"
 SEM_RECURSO = "Sem recurso"
 EM_ATRASO = "Em atraso"
 PRAZO_VENCIDO = "Prazo vencido"
 PROXIMO_DO_PRAZO = "Próximo do prazo"
 EM_DIA = "Em dia"
 NAO_PUBLICADO = "Não publicado"
-SITUACOES: tuple[str, ...] = (PUBLICADO, EM_DIA, EM_ATRASO, PRAZO_VENCIDO, PROXIMO_DO_PRAZO,
-                              NAO_PUBLICADO, SEM_RECURSO)
+SITUACOES: tuple[str, ...] = (PUBLICADO, PUBLICADO_FORA_DO_PRAZO, EM_DIA, EM_ATRASO, PRAZO_VENCIDO,
+                              PROXIMO_DO_PRAZO, NAO_PUBLICADO, SEM_RECURSO)
+# Situações em que a base está publicada (vinculada, ativa e com recurso válido)
+PUBLICADAS: tuple[str, ...] = (PUBLICADO, PUBLICADO_FORA_DO_PRAZO)
 
 
 def situacao_base(*, vinculada: bool, dataset_ativo: bool | None, recursos_validos: int,
-                  prazo: date | None, hoje: date, janela_dias: int) -> str:
+                  prazo: date | None, hoje: date, janela_dias: int,
+                  publicado_em: date | None = None) -> str:
     """PBI-19 — situação da base prevista quanto ao PRAZO DE ABERTURA (ressalva CGE-GO 17/09).
 
     `recursos_validos` exclui dicionário de dados. Dataset inativo no portal (excluído/privado,
     PBI-15) conta como não publicado. "Em atraso" só com vínculo (dataset conferido e fora do
     portal); sem vínculo e com o prazo vencido é "Prazo vencido": não há como saber se a base já
     foi publicada.
+
+    Base publicada (ADR-0038): `publicado_em` = dia (fuso local) do PRIMEIRO recurso publicado no
+    portal (sem dicionário de dados, inclusive o que já saiu do pacote) — criar o dataset sem
+    recurso não é publicar. Depois do prazo → "Publicado fora do prazo"; até o prazo, inclusive,
+    → "Publicado no prazo". Vale também para base que já existia
+    antes do plano. Sem prazo no plano ou sem data do recurso não há atraso a apontar → "no prazo".
     """
     if vinculada and dataset_ativo:
-        return PUBLICADO if recursos_validos >= 1 else SEM_RECURSO
+        if recursos_validos < 1:
+            return SEM_RECURSO
+        if prazo is not None and publicado_em is not None and publicado_em > prazo:
+            return PUBLICADO_FORA_DO_PRAZO
+        return PUBLICADO
     if prazo is None:
         return NAO_PUBLICADO
     if prazo < hoje:

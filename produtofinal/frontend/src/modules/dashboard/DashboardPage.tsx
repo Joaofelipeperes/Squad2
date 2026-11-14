@@ -24,7 +24,8 @@ const pctTexto = (parte: number, todo: number) => {
 // Cores de status do design system (sempre acompanhadas do rótulo da situação). Cada situação tem
 // um tom próprio: "Prazo vencido" (atraso não confirmado) é cinza escuro; "Não publicado", cinza claro.
 const COR_SITUACAO: Record<string, string> = {
-  "Publicado": "var(--green-600)",
+  "Publicado no prazo": "var(--green-600)",
+  "Publicado fora do prazo": "var(--blue-500)",
   "Em dia": "var(--green-600)",
   "Em atraso": "var(--red-600)",
   "Prazo vencido": "var(--gray-700)",
@@ -33,15 +34,16 @@ const COR_SITUACAO: Record<string, string> = {
   "Sem recurso": "var(--amber-600)",
 };
 
-// Status das atualizações (ADR-0023): cor de status + ícone + rótulo; "não se aplica" hachurado
+// Status das atualizações (ADR-0037): cor de status + ícone + rótulo; "sem prazo" hachurado.
+// "Periodicidade não informada" (metadado não conforme) nunca se confunde com "Sem atualização periódica".
 const FATIA_ATUALIZACAO: Record<string, Omit<Fatia, "rotulo" | "total">> = {
   "Atualizado": { cor: "var(--green-600)", icone: "fa-circle-check" },
   "Próximo do vencimento": { cor: "var(--amber-400)", icone: "fa-clock" },
   "Atrasado": { cor: "var(--red-600)", icone: "fa-triangle-exclamation" },
-  "Sem periodicidade definida": { cor: "var(--gray-500)", icone: "fa-minus", hachurada: true },
-  "Sem informação": { cor: "var(--gray-300)", icone: "fa-circle-question" },
+  "Sem atualização periódica": { cor: "var(--gray-500)", icone: "fa-minus", hachurada: true },
+  "Periodicidade não informada": { cor: "var(--amber-600)", icone: "fa-circle-exclamation" },
+  "Sem data de atualização": { cor: "var(--gray-300)", icone: "fa-circle-question" },
 };
-const AGUARDANDO_VINCULO = "Aguardando vínculo";
 
 /** Estado de um indicador de problema: a cor vem do valor, não do indicador. */
 type Estado = "grave" | "atencao" | "ok" | "pendente";
@@ -65,8 +67,13 @@ function problemas(k: Kpis): Problema[] {
       destino: `/pda?situacao=${encodeURIComponent("Em atraso")}` },
     { rotulo: "Atualizações em atraso", valor: k.atualizacoes_em_atraso,
       estado: estado(k.atualizacoes_em_atraso, "atencao"),
-      nota: k.atualizacoes_em_atraso == null ? "Nenhuma base vinculada ao portal ainda"
-        : "Recurso sem atualização dentro da periodicidade do PDA",
+      nota: k.atualizacoes_em_atraso == null ? "Nenhum dataset publicado no portal ainda"
+        : "Bases publicadas fora da periodicidade declarada no CKAN",
+      destino: "/atualizacoes" },
+    { rotulo: "Periodicidade não informada", valor: k.periodicidade_nao_informada,
+      estado: estado(k.periodicidade_nao_informada, "atencao"),
+      nota: k.periodicidade_nao_informada == null ? "Nenhum dataset publicado no portal ainda"
+        : "Campo “Atualização” vazio ou inválido no CKAN",
       destino: "/atualizacoes" },
   ];
   if (k.possiveis_dados_pessoais != null) {
@@ -225,6 +232,12 @@ function CumprimentoPda({ d }: { d: VisaoGeral }) {
                 de {fmt.format(d.kpis.bases_previstas)}). “Prazo vencido” é a base ainda sem vínculo cuja meta já
                 passou: o atraso só se confirma depois do vínculo.
               </p>
+              <p>
+                A publicação conta do primeiro recurso válido no portal (criar o dataset sem arquivo não é publicar).
+                Depois do prazo do plano, a base fica como “Publicado fora do prazo”
+                {d.kpis.bases_publicadas_fora_do_prazo > 0
+                  && ` (${fmt.format(d.kpis.bases_publicadas_fora_do_prazo)} de ${fmt.format(d.kpis.bases_publicadas)} publicadas)`}.
+              </p>
             </ComoCalculamos>
           </>
         ) : (
@@ -238,39 +251,40 @@ function CumprimentoPda({ d }: { d: VisaoGeral }) {
 }
 
 function StatusAtualizacoes({ d }: { d: VisaoGeral }) {
-  const aguardando = d.situacoes_atualizacao.find((c) => c.rotulo === AGUARDANDO_VINCULO)?.total ?? 0;
   const fatias: Fatia[] = d.situacoes_atualizacao
-    .filter((c) => c.rotulo !== AGUARDANDO_VINCULO)
     .map((c) => ({ ...c, ...(FATIA_ATUALIZACAO[c.rotulo] ?? { cor: "var(--gray-500)", icone: "fa-circle" }) }));
-  const avaliadas = fatias.reduce((s, f) => s + f.total, 0);
+  const publicados = fatias.reduce((s, f) => s + f.total, 0);
+  const porTipo = d.atualizacao_por_tipo.filter((t) => t.total > 0)
+    .map((t) => `${fmt.format(t.total)} ${t.rotulo === "Espontânea" ? "espontânea(s)" : "no PDA"}`);
   return (
     <div className="panel" style={{ marginBottom: 0 }}>
       <div className="panel-head">
         <div>
           <h2>Status das atualizações</h2>
           <div className="sub">
-            {qtd(avaliadas, "base vinculada", "bases vinculadas")} ao portal
-            {aguardando > 0 && ` · ${qtd(aguardando, "aguarda", "aguardam")} vínculo`}
+            {qtd(publicados, "base publicada", "bases publicadas")} no portal
+            {porTipo.length > 0 && ` · ${porTipo.join(" e ")}`}
           </div>
         </div>
         <Link className="btn btn-outline btn-sm" to="/atualizacoes">Ver atualizações</Link>
       </div>
       <div className="panel-body">
-        {avaliadas > 0 ? (
+        {publicados > 0 ? (
           <Rosca fatias={fatias} unidade={["base", "bases"]}
-            rotuloAcessivel="Bases vinculadas do PDA vigente por status de atualização" />
+            rotuloAcessivel="Bases publicadas no portal por status de atualização" />
         ) : (
-          <p className="help-texto">Nenhuma base do PDA vigente vinculada a um dataset do portal.</p>
+          <p className="help-texto">Nenhum dataset publicado no portal: rode a coleta do CKAN.</p>
         )}
         <ComoCalculamos>
           <p>
-            O prazo segue a periodicidade do PDA (Mensal = 30 dias, sem tolerância), contado da última alteração
-            do recurso no portal (<code>last_modified</code>). “Próximo do vencimento” começa em 80% do prazo.
-            Eventual e Estática não têm prazo fixo.
+            Todas as bases publicadas, previstas no PDA ou espontâneas. O prazo segue a periodicidade declarada no
+            campo “Atualização” do CKAN (Mensal = 30 dias, sem tolerância), contado da última alteração do recurso
+            no portal (<code>last_modified</code>). “Próximo do vencimento” começa em 80% do prazo.
           </p>
-          {aguardando > 0 && (
-            <p>{qtd(aguardando, "base aguardando vínculo não entra", "bases aguardando vínculo não entram")} no gráfico.</p>
-          )}
+          <p>
+            “Sem atualização periódica” é a declaração do órgão de que a base não tem periodicidade fixa (válida).
+            “Periodicidade não informada” é o campo vazio ou com valor inválido: metadado obrigatório não conforme.
+          </p>
           {d.atualizacao_estimada > 0 && (
             <p>
               {qtd(d.atualizacao_estimada, "base sem data de alteração usa", "bases sem data de alteração usam")}{" "}

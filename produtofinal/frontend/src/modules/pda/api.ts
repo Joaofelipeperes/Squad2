@@ -139,7 +139,8 @@ export const FILTROS_VAZIOS: FiltrosPda = { orgao: "", situacao: "", periodicida
 
 /** Rótulos de situação na ordem do filtro do protótipo. */
 export const SITUACOES = [
-  "Publicado", "Em dia", "Em atraso", "Prazo vencido", "Próximo do prazo", "Não publicado", "Sem recurso",
+  "Publicado no prazo", "Publicado fora do prazo", "Em dia", "Em atraso", "Prazo vencido", "Próximo do prazo",
+  "Não publicado", "Sem recurso",
 ] as const;
 
 /** Criação manual (POST /pda/planos/manual) e edição (PUT /pda/planos/{id}) de um PDA. */

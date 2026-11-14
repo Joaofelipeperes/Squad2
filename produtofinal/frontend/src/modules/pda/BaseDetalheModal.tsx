@@ -106,7 +106,7 @@ export function BaseDetalheModal({ base, onFechar, onEditar, onExcluir }: Props)
         <Secao titulo="Prazo e atualização">
           <Grade>
             <Campo rotulo="Prazo previsto (PDA)">{fmtData(b.prazo_abertura)}</Campo>
-            <Campo rotulo="Data de publicação">
+            <Campo rotulo="Data de publicação" nota="criação do primeiro recurso válido no portal">
               {b.data_publicacao ? fmtDataHora(b.data_publicacao) : "Não publicado"}
             </Campo>
             <Campo rotulo="Periodicidade" nota={periodicidadeDiferente ? `planilha: ${b.periodicidade_original}` : undefined}>

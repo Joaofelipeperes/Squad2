@@ -139,7 +139,7 @@ def _upsert_dataset(dao: InventarioDao, pkg: dict, coleta_id: int,
     ds.organizacao_id = org_por_id_ckan.get((pkg.get("organization") or {}).get("id"))
     ds.autor, ds.autor_email = pkg.get("author"), pkg.get("author_email")
     ds.licenca = pkg.get("license_id")
-    ds.periodicidade_declarada = regras.periodicidade_declarada(extras, pkg)
+    ds.periodicidade_declarada = regras.periodicidade_declarada(extras)
     ds.metadata_created = regras.parse_ckan_datetime(pkg.get("metadata_created"))
     ds.metadata_modified = regras.parse_ckan_datetime(pkg.get("metadata_modified"))
     ds.extras, ds.ativo_no_portal, ds.ultima_coleta_id = extras, True, coleta_id
@@ -287,3 +287,15 @@ def obter_dataset(db: Session, dataset_id: int, user: UsuarioAtual) -> DatasetDe
                              created=_utc(r.created_ckan), last_modified=_utc(r.last_modified),
                              eh_dicionario_dados=r.eh_dicionario_dados) for r in recursos],
         recursos_removidos=len(ds.recursos) - len(atuais))
+
+
+# ------------------------------------------------------------------ consumo por outros módulos
+def datasets_publicados(db: Session, user: UsuarioAtual) -> list[Dataset]:
+    """Datasets ativos no portal, com recursos carregados, no escopo de órgão do usuário. Base do
+    indicador de atualização (módulo atualizacoes, ADR-0037). Use `recursos_atuais` nos recursos."""
+    return InventarioDao.de(db, user).datasets_ativos_visiveis(user)
+
+
+def organizacoes(db: Session) -> dict[int, Organizacao]:
+    """Organizações do inventário por `id` (rótulos de órgão em outros módulos)."""
+    return InventarioDao(db).organizacoes()

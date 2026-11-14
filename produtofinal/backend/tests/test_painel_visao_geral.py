@@ -35,6 +35,13 @@ def _situacoes(corpo, chave="situacoes_pda"):
     return {c["rotulo"]: c["total"] for c in corpo[chave]}
 
 
+def _mensal_ds_a():
+    """"Indicadores" (ds-a) com "Mensal" no campo Atualização do CKAN: atrasada em 18/10/2026."""
+    with SessionLocal() as db:
+        db.get(Dataset, 1).extras = {"Atualização": "Mensal"}
+        db.commit()
+
+
 def test_visao_geral_sem_pda(client, gerente, so_dicionario):
     corpo = client.get(API, headers=gerente).json()
     assert corpo["plano"] is None and corpo["hoje"] == "2026-10-18"
@@ -44,16 +51,21 @@ def test_visao_geral_sem_pda(client, gerente, so_dicionario):
     # Inventário: só datasets ativos; recursos atuais sem dicionário (r1, r2, r5, r6)
     assert (k["datasets_publicados"], k["datasets_fora_do_portal"]) == (3, 1)
     assert k["recursos_monitorados"] == 4 and k["datasets_sem_recurso"] == 1
-    assert k["atualizacoes_em_atraso"] is None
+    # Atualização (ADR-0037): todos os publicados entram, mesmo sem PDA; nenhum tem o campo
+    # "Atualização" no CKAN, então os 3 ficam como "Periodicidade não informada"
+    assert k["atualizacoes_em_atraso"] == 0 and k["periodicidade_nao_informada"] == 3
     assert k["possiveis_dados_pessoais"] == 0  # gerente vê o módulo lgpd; nenhum achado
     assert set(_situacoes(corpo).values()) == {0}
-    assert set(_situacoes(corpo, "situacoes_atualizacao").values()) == {0}
+    a = _situacoes(corpo, "situacoes_atualizacao")
+    assert a.pop("Periodicidade não informada") == 3 and set(a.values()) == {0}
+    assert _situacoes(corpo, "atualizacao_por_tipo") == {"Prevista no PDA": 0, "Espontânea": 3}
     assert [a["item"] for a in corpo["alertas"]] == ["Escolas"]
     assert corpo["alertas"][0]["tipo"] == "Inventário"
     assert corpo["alertas"][0]["destino"] == "/datasets"
 
 
 def test_visao_geral_com_pda_vigente(client, gerente, so_dicionario):
+    _mensal_ds_a()
     r = client.post("/api/v1/pda/planos", headers=gerente, data={"nome": "PDA teste"},
                     files={"arquivo": ("pda.csv", PDA.encode(), "text/csv")})
     assert r.status_code == 201, r.text
@@ -64,7 +76,8 @@ def test_visao_geral_com_pda_vigente(client, gerente, so_dicionario):
     assert k["bases_em_atraso"] == 1 and k["bases_prazo_vencido"] == 2
     assert k["orgaos_no_pda"] == 3  # SES, SEDUC e a sigla XYZ sem organização
     s = _situacoes(corpo)
-    assert (s["Publicado"], s["Em atraso"], s["Prazo vencido"]) == (1, 1, 2)
+    assert (s["Publicado no prazo"], s["Em atraso"], s["Prazo vencido"]) == (1, 1, 2)
+    assert s["Publicado fora do prazo"] == 0 and k["bases_publicadas_fora_do_prazo"] == 0
     assert (s["Próximo do prazo"], s["Em dia"], s["Sem recurso"]) == (1, 1, 0)
     # Alertas: atraso confirmado, depois prazo próximo, depois inventário; prazo vencido sem
     # vínculo não vira alerta
@@ -73,10 +86,13 @@ def test_visao_geral_com_pda_vigente(client, gerente, so_dicionario):
         ("Próximo do prazo", "Leitos"), ("Dataset sem recurso", "Escolas")]
     atrasada = corpo["alertas"][1]
     assert atrasada["tipo"] == "Atualização" and atrasada["prazo"] == "2026-10-01"  # 01/09 + 30
-    # Atualização pela periodicidade do PDA: só as vinculadas são avaliadas
+    assert atrasada["destino"] == "/atualizacoes"
+    # Atualização de TODOS os publicados pelo campo do CKAN (ADR-0037), não só os vinculados
     a = _situacoes(corpo, "situacoes_atualizacao")
-    assert (a["Atrasado"], a["Sem informação"], a["Aguardando vínculo"]) == (1, 1, 4)
-    assert a["Atualizado"] == 0 and k["atualizacoes_em_atraso"] == 1
+    assert (a["Atrasado"], a["Periodicidade não informada"], a["Atualizado"]) == (1, 2, 0)
+    assert sum(a.values()) == 3 and "Aguardando vínculo" not in a
+    assert k["atualizacoes_em_atraso"] == 1 and k["periodicidade_nao_informada"] == 2
+    assert _situacoes(corpo, "atualizacao_por_tipo") == {"Prevista no PDA": 1, "Espontânea": 2}
     assert corpo["alertas"][0]["destino"].startswith("/pda?orgao=")
     assert corpo["total_alertas"] == 4
     assert corpo["alertas_por_tipo"] == {"PDA": 2, "Atualização": 1, "Inventário": 1}
@@ -91,6 +107,7 @@ def test_alertas_ate_10_por_tipo(monkeypatch, client, gerente, so_dicionario):
     """Um tipo numeroso não esconde os outros: até 10 de cada tipo, com o total por tipo."""
     from app.modules.painel import service
     monkeypatch.setattr(service, "ALERTAS_MAXIMO", 1)
+    _mensal_ds_a()
     client.post("/api/v1/pda/planos", headers=gerente, data={"nome": "PDA teste"},
                 files={"arquivo": ("pda.csv", PDA.encode(), "text/csv")})
     corpo = client.get(API, headers=gerente).json()

@@ -7,7 +7,7 @@
 | **User stories** | US19 (PBI-56 a PBI-59, PBI-75, PBI-76, PBI-84), US27 (exibição do ranking) |
 | **Backend** | `backend/app/modules/painel/` |
 | **Frontend** | `frontend/src/modules/dashboard/` · `frontend/src/modules/organizacoes/` |
-| **Última atualização** | 10/11/2026 |
+| **Última atualização** | 13/11/2026 |
 
 ## Propósito
 Consolida os indicadores dos eixos numa visão gerencial por órgão, usada pela GEDA e pela
@@ -28,7 +28,9 @@ rotina da GEDA (crítica de design de 09/11/2026): primeiro o que pede conferên
   onde a barra a esconde, aparece no fim da introdução (PBI-58).
 - **Indicadores de problema** numa faixa só, cada um é um link para a lista já filtrada: **Bases
   atrasadas** (só entre as vinculadas; abre `/pda?situacao=Em atraso`), **Atualizações em atraso**
-  (ADR-0023; abre `/atualizacoes`), **Possíveis dados pessoais** (só com `lgpd.acessar`; abre
+  (entre todas as bases publicadas, ADR-0037; abre `/atualizacoes`), **Periodicidade não
+  informada** (campo "Atualização" do CKAN vazio ou inválido; abre `/atualizacoes`), **Possíveis
+  dados pessoais** (só com `lgpd.acessar`; abre
   `/lgpd`) e **Datasets sem recurso** (PBI-51; abre `/datasets`). A cor vem do valor: vermelho ou
   âmbar com valor > 0, verde com 0, cinza com "—" e o motivo (nunca 0) quando não há base vinculada.
 - **Inventário** numa linha discreta (não cartões): Órgãos monitorados (com bases no PDA), Bases
@@ -41,13 +43,15 @@ rotina da GEDA (crítica de design de 09/11/2026): primeiro o que pede conferên
   à lista da aba. Ordem de prioridade: base em atraso confirmado → **atualização atrasada** (tipo
   "Atualização", prazo = vencimento pela periodicidade) → base vinculada sem recurso → base próxima
   do prazo → dataset sem recurso (inventário). "Prazo vencido" sem vínculo não vira alerta.
-- **Cumprimento do PDA por situação**: barras horizontais com as 7 situações do PDA vigente (um tom
-  de status para cada situação + rótulo; dica com quantidade e % ao passar o mouse; o % também é
-  lido pelo leitor de tela).
-- **Status das atualizações** (rosca, `Rosca.tsx`): bases **vinculadas** do PDA vigente por situação
-  de atualização (ADR-0023) — Atualizado, Próximo do vencimento, Atrasado, Sem periodicidade
-  definida (hachurado) e Sem informação; legenda fixa com ícone, rótulo, quantidade e %; atalho
-  **Ver atualizações**.
+- **Cumprimento do PDA por situação**: barras horizontais com as 8 situações do PDA vigente, com
+  "Publicado no prazo" e "Publicado fora do prazo" separados pela data do primeiro recurso
+  (ADR-0038) (um tom de status para cada situação + rótulo; dica com quantidade e % ao passar o
+  mouse; o % também é lido pelo leitor de tela).
+- **Status das atualizações** (rosca, `Rosca.tsx`): **todas** as bases publicadas no portal (do PDA
+  ou espontâneas, com a contagem de cada tipo no subtítulo) por situação de atualização pela
+  periodicidade do campo "Atualização" do CKAN (ADR-0037) — Atualizado, Próximo do vencimento,
+  Atrasado, Sem atualização periódica (hachurado), Periodicidade não informada e Sem data de
+  atualização; legenda fixa com ícone, rótulo, quantidade e %; atalho **Ver atualizações**.
 - **Possíveis dados pessoais** (só com `lgpd.acessar`, via `<Pode>` e no backend): barras por tipo
   (sem falso positivo), situação da triagem (Revisar, Confirmado, Falso positivo, Tratado),
   recursos com achados de N analisados e atalho **Ver dados pessoais** (`/lgpd`). Sem a permissão,
@@ -68,10 +72,12 @@ rotina da GEDA (crítica de design de 09/11/2026): primeiro o que pede conferên
   vinculada) | **Em atraso** (só entre as bases **vinculadas**: prazo vencido e dataset fora do
   portal; **aguardando vínculo** quando o órgão não tem base vinculada, porque sem vínculo não há
   como saber se a base já foi publicada; com vínculo parcial, "N de M vinculada(s)") |
-  **Atualização** (% das bases vinculadas com prazo definido que estão dentro da periodicidade do PDA
-  — Atualizado ou Próximo do vencimento, ADR-0023; badge verde sem atrasadas, âmbar ≥ 50%, vermelho
-  abaixo; "aguardando vínculo" sem base vinculada; "sem prazo definido" quando só há Eventual,
-  Estática ou bases sem data) | **Riscos LGPD** (recursos com possível dado pessoal aguardando
+  **Atualização** (% das bases **publicadas** do órgão, do PDA ou espontâneas, com prazo definido
+  que estão dentro da periodicidade do campo "Atualização" do CKAN — Atualizado ou Próximo do
+  vencimento, ADR-0037; badge verde sem atrasadas, âmbar ≥ 50%, vermelho abaixo; "sem bases no
+  portal" sem dataset ativo; "sem prazo definido" quando só há "Sem atualização periódica",
+  periodicidade não informada ou bases sem data; selo âmbar "N sem periodicidade" ao lado quando
+  há periodicidade não informada) | **Riscos LGPD** (recursos com possível dado pessoal aguardando
   revisão ou confirmado, "N de M varridos"; badge âmbar com risco, verde sem; "não varrido" sem
   recurso varrido; "sem acesso" sem `lgpd.acessar`) | **Índice de atenção** (ADR-0030: faixa e
   valor 0–100, vermelho Alto, âmbar Médio, verde Baixo; dica com a conta; "sem dados" sem nenhum
@@ -118,13 +124,17 @@ no_pda, espontaneas, por_orgao (`[{rotulo, total}]`).
 ## Serviços e métodos
 `dao.py` — `PainelDao(Dao)` (ADR-0019): `organizacoes_visiveis`, `datasets_ativos_por_orgao`, `recursos_validos_por_orgao`, `orgao_de_cada_dataset`, `datasets_por_situacao(user)`, `recursos_validos(user)` e `datasets_ativos(user)` (Dashboard). Só leitura; registros excluídos não contam.
 
-- `kpis(db, user, bases, *, orgaos, datasets, recursos, sem_recurso) -> KpisOut` — PBI-56.
+- `kpis(db, user, bases, *, orgaos, datasets, recursos, sem_recurso, atualizacao) -> KpisOut` —
+  PBI-56; `atualizacao` = contagem dos datasets publicados por situação de atualização (cartões
+  "Atualizações em atraso" e "Periodicidade não informada"); "Bases publicadas" soma no prazo e
+  fora do prazo, e `bases_publicadas_fora_do_prazo` vem à parte (ADR-0038).
 - `visao_geral(db, user) -> VisaoGeralOut` — US19/PBI-56: bases do PDA vigente
   (`pda.bases_do_plano`), inventário no escopo do usuário, `metadados.datasets_sem_recurso`,
   `espontaneas(ativos, bases, orgs) -> EspontaneasOut` (ADR-0026, função pura) e
   `lgpd.service.resumo_dados_pessoais` (só com `lgpd.acessar`).
-  `situacao_atualizacao(base, hoje)` (sem vínculo → Aguardando vínculo; dataset fora do portal →
-  Sem informação; senão `atualizacoes.regras.situacao_periodicidade`) e `inventario.ultima_coleta`.
+  Situação de atualização de todos os datasets publicados por
+  `atualizacoes.listagem.situacoes_dos_datasets` (ADR-0037; também `atualizacao_por_tipo`, Prevista
+  no PDA × Espontânea) e `inventario.ultima_coleta`.
   Testes em `tests/test_painel_visao_geral.py`.
 - `criterio_atencao(db) -> regras.CriterioAtencao` — pesos e faixas do índice, dos Parâmetros.
 - `regras.indice_atencao(risco_lgpd_pct, atraso_pct, criterio)` (pura, ADR-0004) — média ponderada
@@ -132,8 +142,10 @@ no_pda, espontaneas, por_orgao (`[{rotulo, total}]`).
   `regras.pct`. ADR-0030.
 - `organizacoes(db, user) -> OrganizacoesOut` — US19: inventário (datasets ativos, recursos atuais
   sem dicionário, formatos fechados via `metadados.recursos_formato_fechado` e o parâmetro
-  `formatos_abertos`) + `pda.bases_do_plano` do PDA vigente, agrupado por `orgao_chave`. Testes em
-  `tests/test_painel_organizacoes.py`.
+  `formatos_abertos`) + `pda.bases_do_plano` do PDA vigente, agrupado por `orgao_chave`; a
+  atualização (`atualizacao_pct`, `atualizacoes_atrasadas`, `atualizacoes_avaliadas`,
+  `periodicidade_nao_informada`) vem de `atualizacoes.listagem.situacoes_dos_datasets` (todos os
+  datasets publicados do órgão, ADR-0037). Testes em `tests/test_painel_organizacoes.py`.
 
 ## Modelo de dados
 Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores por coleta (a decidir).
@@ -148,11 +160,11 @@ Sem tabelas próprias. Séries temporais podem exigir uma tabela de indicadores 
 |---|---|---|
 | consome | inventario | contagens e última coleta; `Organizacao`, `Dataset`, `Recurso` e `condicao_recurso_atual()` (Organizações) |
 | consome | pda | `plano_vigente(db)` + `bases_do_plano(db, plano.id, user)`: bases previstas, vinculadas, publicadas e metas por órgão, **sempre do PDA vigente** (Organizações); `regras` (situações, `chave_sigla`); `hoje_local()` |
-| consome | atualizacoes | `regras.situacao_periodicidade` e `vencimento_atualizacao` (status das atualizações, cartão e alertas do Dashboard; coluna Atualização e cartão do detalhe em Organizações) |
+| consome | atualizacoes | `listagem.situacoes_dos_datasets` e `regras` (ADR-0037: status das atualizações, cartões e alertas do Dashboard; coluna Atualização e seção Atualização do detalhe em Organizações) |
 | consome | lgpd | `service.resumo_dados_pessoais(db, user)` — cartão e gráfico "Possíveis dados pessoais" do Dashboard (só com `lgpd.acessar`); `service.riscos_por_orgao(db, user)` — coluna Riscos LGPD, cartão do detalhe e componente LGPD do índice de atenção em Organizações (só com `lgpd.acessar`); ranking de exposição (US27) a implementar |
 | consome | metadados | completude média; `recursos_formato_fechado(db, formatos_abertos)` e `regras.normalizar_formato` (Organizações); `datasets_sem_recurso(db)` (Dashboard) |
 | consome | parametros | `formatos_abertos`; `peso_lgpd_indice_atencao`, `peso_atualizacao_indice_atencao`, `indice_atencao_limite_medio`, `indice_atencao_limite_alto` (ADR-0030) |
-| é consumido por | relatorios | `organizacoes(db, user)` (relatório por órgão) e `situacao_atualizacao(base, hoje)` (relatório de atualizações) |
+| é consumido por | relatorios | `organizacoes(db, user)` (relatório por órgão) |
 | consome | rastreabilidade | tela: `HistoricoRecente` (`GET /rastreabilidade/eventos?orgao=<id>`) — "Últimas alterações" no detalhe do órgão em Organizações |
 | consome | relatorios | tela: `RelatorioOrgaoModal` (`relatorios/RelatorioOrgao.tsx`) no detalhe do órgão em Organizações — prévia e exportação do relatório detalhado do órgão (`/relatorios/por-orgao/{organizacao_id}/…`) |
 | consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
@@ -205,3 +217,4 @@ Decisões registradas: [ADR-0007](../adr/0007-prototipo-v1-referencia-das-telas.
 | 09/11/2026 | Organizações: **Gerar relatório** no detalhe do órgão abre direto o relatório detalhado do órgão (sem marcação de relatórios) | Humberto |
 | 10/11/2026 | Detalhe da organização agrupado em seções: índice de atenção em destaque no topo e depois Publicação no PDA, Atualização, Formatos, Dados pessoais (LGPD) e Últimas alterações (`shared/ui/Detalhe.tsx`). Sem mudança de dados nem de API | João |
 | 10/11/2026 | Detalhe da organização alinhado ao protótipo (`prototipos/detalhes-agrupados.html`): índice de atenção com valor, faixa e barra no topo; seções com um indicador por cartão (Publicação no PDA, Atualização, Formatos, Dados pessoais). Retirada a numeração à esquerda do título das seções em todas as janelas de detalhe (`shared/ui/Detalhe.tsx`) | João |
+| 13/11/2026 | Critérios da GEDA (ADR-0037 e ADR-0038): atualização sobre **todas** as bases publicadas (do PDA ou espontâneas) pelo campo "Atualização" do CKAN — rosca com as novas situações e a contagem por tipo de base, cartão "Periodicidade não informada", alerta de atualização leva a `/atualizacoes`; Organizações calcula o % sobre os datasets do órgão e mostra a periodicidade não informada à parte; "Publicado" vira "Publicado no prazo" × "Publicado fora do prazo" (`bases_publicadas_fora_do_prazo`); sai `situacao_atualizacao`/"Aguardando vínculo" | Victor |

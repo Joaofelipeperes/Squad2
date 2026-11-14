@@ -65,6 +65,11 @@ class InventarioDao(Dao):
     def datasets_visiveis(self, user: UsuarioAtual) -> list[Dataset]:
         return self.buscar_lista(self._consulta_datasets(user))
 
+    def datasets_ativos_visiveis(self, user: UsuarioAtual) -> list[Dataset]:
+        """Datasets ATIVOS no portal (publicados), com recursos em lote, no escopo do usuário."""
+        return self.buscar_lista(
+            self._consulta_datasets(user).where(Dataset.ativo_no_portal.is_(True)))
+
     def dataset_visivel(self, dataset_id: int, user: UsuarioAtual) -> Dataset | None:
         return self.buscar_um(self._consulta_datasets(user).where(Dataset.id == dataset_id))
 

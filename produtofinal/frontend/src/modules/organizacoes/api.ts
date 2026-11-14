@@ -13,12 +13,16 @@ export interface Organizacao {
   formatos_fechados: Record<string, number>; // "" = sem formato informado
   bases_previstas: number;
   bases_vinculadas: number;
-  bases_publicadas: number;
+  bases_publicadas: number; // no prazo + fora do prazo
+  bases_publicadas_fora_do_prazo: number; // 1º recurso depois do prazo do plano (ADR-0038)
   bases_em_atraso: number | null; // só entre as vinculadas; null = nenhuma base vinculada
   bases_proximas_do_prazo: number;
-  atualizacao_pct: number | null; // % das bases vinculadas com prazo que estão em dia (ADR-0023)
+  // Atualização de TODAS as bases publicadas do órgão (PDA ou espontâneas) pelo campo "Atualização"
+  // do CKAN (ADR-0037)
+  atualizacao_pct: number | null; // % das bases com prazo que estão em dia; null = nenhuma com prazo
   atualizacoes_atrasadas: number | null;
-  atualizacoes_avaliadas: number; // bases vinculadas com periodicidade de prazo definido
+  atualizacoes_avaliadas: number; // bases publicadas com periodicidade de prazo definido
+  periodicidade_nao_informada: number; // campo "Atualização" vazio ou inválido (não conforme)
   // Riscos LGPD (só com lgpd.acessar): recursos com possível dado pessoal aguardando revisão ou
   // confirmado; null = sem acesso ao módulo ou nenhum recurso do órgão varrido
   riscos_lgpd: number | null;

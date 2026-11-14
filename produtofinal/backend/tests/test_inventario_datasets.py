@@ -148,7 +148,9 @@ def test_bases_do_pda_vinculadas_ao_dataset(client, gerente, analista, inventari
     assert len(bases) == 1
     b = bases[0]
     assert b["nome_previsto"] == "Indicadores" and b["prazo_abertura"] == "2025-03-31"
-    assert b["periodicidade"] == "Mensal" and b["situacao"] == "Publicado"
+    # 1º recurso válido criado em 01/09/2026, depois do prazo de 31/03/2025 (ADR-0038)
+    assert b["periodicidade"] == "Mensal" and b["situacao"] == "Publicado fora do prazo"
+    assert b["data_publicacao"].startswith("2026-09-01")
     # Sem vínculo pelo ID → nenhuma base (nunca casa pelo nome "Leitos")
     assert client.get(f"/api/v1/pda/datasets/{VAZIO}/bases", headers=analista).json() == []
 

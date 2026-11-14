@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import UsuarioAtual
 from app.core.permissoes import P
+from app.modules.atualizacoes import listagem as atualizacoes
 from app.modules.atualizacoes import regras as regras_atualizacao
 from app.modules.inventario.models import Organizacao
+from app.modules.inventario.regras import TIPOS_DE_BASE
 from app.modules.inventario.service import ultima_coleta
 from app.modules.lgpd.service import resumo_dados_pessoais, riscos_por_orgao
 from app.modules.metadados import regras as regras_metadados
@@ -31,36 +33,21 @@ from app.modules.pda.regras import (
     EM_ATRASO,
     PRAZO_VENCIDO,
     PROXIMO_DO_PRAZO,
-    PUBLICADO,
+    PUBLICADAS,
+    PUBLICADO_FORA_DO_PRAZO,
     SEM_RECURSO,
     SITUACOES,
     chave_sigla,
     normalizar_texto,
 )
 
-AGUARDANDO_VINCULO = "Aguardando vínculo"
 ATUALIZACAO_ATRASADA = "Atualização atrasada"
 ALERTAS_MAXIMO = 10  # por tipo de alerta
 TIPOS_DE_ALERTA = ("PDA", "Atualização", "Inventário")
-# Situações de atualização com prazo definido (entram no % de Organizações)
-_COM_PRAZO = (regras_atualizacao.ATUALIZADO, regras_atualizacao.PROXIMO_DO_VENCIMENTO,
-              regras_atualizacao.ATRASADO)
 # Prioridade dos alertas (menor primeiro); "Prazo vencido" sem vínculo não é alerta: o atraso
 # não está confirmado (ver pda.md)
 _PRIORIDADE = {EM_ATRASO: 0, ATUALIZACAO_ATRASADA: 1, SEM_RECURSO: 2, PROXIMO_DO_PRAZO: 3,
                "Dataset sem recurso": 4}
-
-
-def situacao_atualizacao(base, hoje: date) -> str:
-    """Situação de atualização de uma base do PDA vigente (ADR-0023): sem vínculo → "Aguardando
-    vínculo"; dataset fora do portal → "Sem informação"; senão a regra por periodicidade do
-    módulo atualizacoes sobre a última atualização real do dataset vinculado."""
-    if not base.dataset_id:
-        return AGUARDANDO_VINCULO
-    if not base.dataset_ativo:
-        return regras_atualizacao.SEM_INFORMACAO
-    return regras_atualizacao.situacao_periodicidade(
-        base.periodicidade, base.ultima_atualizacao, hoje, base.periodicidade_original)
 
 
 ORGAOS_NO_GRAFICO = 10  # bases espontâneas por órgão: os 10 com mais; o resto em "Outros"
@@ -90,30 +77,38 @@ def espontaneas(ativos: list[tuple[int, int | None]], bases: list,
 
 
 def kpis(db: Session, user: UsuarioAtual, bases: list, *, orgaos: int, datasets: dict[bool, int],
-         recursos: int, sem_recurso: int, atualizacoes_atrasadas: int,
+         recursos: int, sem_recurso: int, atualizacao: Counter,
          dados_pessoais: int | None = None) -> KpisOut:
     """PBI-56 — cartões da Visão Geral a partir das bases do PDA vigente e do inventário.
-    Atualizações em atraso só entre as bases vinculadas (None sem nenhuma); dados pessoais (lgpd)
-    fica None."""
+    `atualizacao` = datasets publicados por situação de atualização (ADR-0037: todos, do PDA ou
+    espontâneos); sem nenhum dataset os indicadores de atualização ficam None. Dados pessoais
+    (lgpd) fica None sem acesso."""
     vinculadas = [b for b in bases if b.dataset_id]
+    com_datasets = sum(atualizacao.values()) > 0
     return KpisOut(
         orgaos_monitorados=orgaos, orgaos_no_pda=len({b.orgao_chave for b in bases}),
         bases_previstas=len(bases), bases_vinculadas=len(vinculadas),
-        bases_publicadas=sum(1 for b in bases if b.situacao == PUBLICADO),
+        bases_publicadas=sum(1 for b in bases if b.situacao in PUBLICADAS),
+        bases_publicadas_fora_do_prazo=sum(1 for b in bases
+                                           if b.situacao == PUBLICADO_FORA_DO_PRAZO),
         bases_em_atraso=(sum(1 for b in vinculadas if b.situacao == EM_ATRASO)
                          if vinculadas else None),
         bases_prazo_vencido=sum(1 for b in bases if b.situacao == PRAZO_VENCIDO),
         datasets_publicados=datasets.get(True, 0), datasets_fora_do_portal=datasets.get(False, 0),
         recursos_monitorados=recursos, datasets_sem_recurso=sem_recurso,
-        atualizacoes_em_atraso=atualizacoes_atrasadas if vinculadas else None,
+        atualizacoes_em_atraso=(atualizacao[regras_atualizacao.ATRASADO]
+                                if com_datasets else None),
+        periodicidade_nao_informada=(atualizacao[regras_atualizacao.PERIODICIDADE_NAO_INFORMADA]
+                                     if com_datasets else None),
         possiveis_dados_pessoais=dados_pessoais)
 
 
 def visao_geral(db: Session, user: UsuarioAtual) -> VisaoGeralOut:
-    """US19 — tela Visão Geral (Dashboard): cartões, bases do PDA VIGENTE por situação do PDA e
-    por situação de atualização (periodicidade do PDA, ADR-0023), bases espontâneas (ADR-0026),
-    possíveis dados pessoais (resumo do módulo lgpd, só com `lgpd.acessar`) e alertas prioritários.
-    Tudo no escopo de órgão do usuário e a partir da última coleta (`ultima_coleta`, PBI-58)."""
+    """US19 — tela Visão Geral (Dashboard): cartões, bases do PDA VIGENTE por situação do PDA,
+    TODOS os datasets publicados por situação de atualização (periodicidade do campo
+    "Atualização" do CKAN, ADR-0037), bases espontâneas (ADR-0026), possíveis dados pessoais
+    (resumo do módulo lgpd, só com `lgpd.acessar`) e alertas prioritários. Tudo no escopo de órgão
+    do usuário e a partir da última coleta (`ultima_coleta`, PBI-58)."""
     dao = PainelDao.de(db, user)
     hoje = pda.hoje_local()
     orgs = dao.organizacoes_visiveis(user)
@@ -124,21 +119,19 @@ def visao_geral(db: Session, user: UsuarioAtual) -> VisaoGeralOut:
                    if not user.restrito_a_orgao or d.organizacao_id in orgs]
 
     por_situacao = Counter(b.situacao for b in bases)
-    atualizacao = {b.id: situacao_atualizacao(b, hoje) for b in bases}
-    por_atualizacao = Counter(atualizacao.values())
-    rotulos_atualizacao = [*regras_atualizacao.SITUACOES_ATUALIZACAO, AGUARDANDO_VINCULO]
-    estimadas = sum(1 for b in bases if b.dataset_id and b.ultima_atualizacao_estimada)
+    publicados = atualizacoes.situacoes_dos_datasets(db, user, hoje)
+    por_atualizacao = Counter(d.situacao for d in publicados)
+    estimadas = sum(1 for d in publicados
+                    if d.ultima_atualizacao and d.ultima_atualizacao_estimada)
 
     alertas = [AlertaOut(tipo="PDA", orgao=b.orgao_nome or b.orgao_sigla, item=b.nome_previsto,
                          situacao=b.situacao, prazo=b.prazo_abertura,
                          destino=f"/pda?orgao={b.orgao_chave}")
                for b in bases if b.situacao in _PRIORIDADE]
-    alertas += [AlertaOut(tipo="Atualização", orgao=b.orgao_nome or b.orgao_sigla,
-                          item=b.nome_previsto, situacao=ATUALIZACAO_ATRASADA,
-                          prazo=regras_atualizacao.vencimento_atualizacao(
-                              b.periodicidade, b.ultima_atualizacao, b.periodicidade_original),
-                          destino=f"/pda?orgao={b.orgao_chave}")
-                for b in bases if atualizacao[b.id] == regras_atualizacao.ATRASADO]
+    alertas += [AlertaOut(tipo="Atualização", orgao=d.orgao_nome or d.orgao_sigla,
+                          item=d.dataset_titulo, situacao=ATUALIZACAO_ATRASADA,
+                          prazo=d.prazo_esperado, destino="/atualizacoes")
+                for d in publicados if d.situacao == regras_atualizacao.ATRASADO]
     alertas += [AlertaOut(tipo="Inventário",
                           orgao=orgs[d.organizacao_id].titulo if d.organizacao_id in orgs else None,
                           item=d.titulo or d.name or "", situacao="Dataset sem recurso", prazo=None,
@@ -159,11 +152,14 @@ def visao_geral(db: Session, user: UsuarioAtual) -> VisaoGeralOut:
         ultima_coleta=coleta.finalizada_em if coleta else None,
         kpis=kpis(db, user, bases, orgaos=len(orgs), datasets=dao.datasets_por_situacao(user),
                   recursos=len(recursos), sem_recurso=len(sem_recurso),
-                  atualizacoes_atrasadas=por_atualizacao.get(regras_atualizacao.ATRASADO, 0),
+                  atualizacao=por_atualizacao,
                   dados_pessoais=lgpd.aguardando_revisao if lgpd else None),
         situacoes_pda=[ContagemOut(rotulo=s, total=por_situacao.get(s, 0)) for s in SITUACOES],
         situacoes_atualizacao=[ContagemOut(rotulo=r, total=por_atualizacao.get(r, 0))
-                               for r in rotulos_atualizacao],
+                               for r in regras_atualizacao.SITUACOES_ATUALIZACAO],
+        atualizacao_por_tipo=[ContagemOut(rotulo=t, total=sum(1 for d in publicados
+                                                               if d.tipo_base == t))
+                              for t in TIPOS_DE_BASE],
         atualizacao_estimada=estimadas, alertas=primeiros, total_alertas=len(alertas),
         alertas_por_tipo={t: por_tipo.get(t, 0) for t in TIPOS_DE_ALERTA},
         espontaneas=espontaneas(dao.datasets_ativos(user), bases, orgs), dados_pessoais=lgpd)
@@ -181,8 +177,8 @@ def criterio_atencao(db: Session) -> regras.CriterioAtencao:
 def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     """US19 — tela Organizações: por órgão, o inventário do portal (datasets ativos, recursos e
     recursos em formato fechado) e as bases do PDA VIGENTE (previstas, vinculadas, publicadas,
-    em atraso entre as vinculadas, próximas do prazo e atualização pela periodicidade do PDA —
-    ADR-0023), riscos LGPD (só com `lgpd.acessar`: o painel não amplia o acesso) e o índice de
+    em atraso entre as vinculadas e próximas do prazo), a atualização de TODOS os datasets
+    publicados do órgão pela periodicidade do campo "Atualização" do CKAN (ADR-0037), riscos LGPD (só com `lgpd.acessar`: o painel não amplia o acesso) e o índice de
     atenção (ADR-0030). Respeita o escopo de órgão do usuário.
     Indicadores que dependem de vínculo ou de dado ainda inexistente vêm como None."""
     dao = PainelDao.de(db, user)
@@ -204,6 +200,9 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     por_chave: dict[str, list] = defaultdict(list)
     for b in bases:
         por_chave[b.orgao_chave].append(b)
+    situacoes_por_chave: dict[str, list[str]] = defaultdict(list)
+    for d in atualizacoes.situacoes_dos_datasets(db, user, hoje):
+        situacoes_por_chave[d.orgao_chave].append(d.situacao)
     lgpd_visivel = user.pode(P.LGPD_ACESSAR)
     riscos = riscos_por_orgao(db, user) if lgpd_visivel else {}
     criterio = criterio_atencao(db)
@@ -211,8 +210,8 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
     def linha(chave: str, organizacao: Organizacao | None) -> OrganizacaoOut:
         bs = por_chave.get(chave, [])
         vinculadas = [b for b in bs if b.dataset_id]
-        situacoes = [situacao_atualizacao(b, hoje) for b in vinculadas]
-        avaliadas = [x for x in situacoes if x in _COM_PRAZO]
+        situacoes = situacoes_por_chave.get(chave, [])
+        avaliadas = [x for x in situacoes if x in regras_atualizacao.COM_PRAZO]
         atrasadas = avaliadas.count(regras_atualizacao.ATRASADO)
         siglas = Counter(chave_sigla(b.orgao_sigla) for b in bs)
         nome = organizacao.titulo.strip() if organizacao else chave.removeprefix("sigla:")
@@ -229,7 +228,9 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
             formatos_fechados=dict(fechados[org_id].most_common()) if org_id else {},
             bases_previstas=len(bs),
             bases_vinculadas=len(vinculadas),
-            bases_publicadas=sum(1 for b in bs if b.situacao == PUBLICADO),
+            bases_publicadas=sum(1 for b in bs if b.situacao in PUBLICADAS),
+            bases_publicadas_fora_do_prazo=sum(1 for b in bs
+                                               if b.situacao == PUBLICADO_FORA_DO_PRAZO),
             bases_em_atraso=(sum(1 for b in vinculadas if b.situacao == EM_ATRASO)
                              if vinculadas else None),
             bases_proximas_do_prazo=sum(1 for b in bs if b.situacao == PROXIMO_DO_PRAZO),
@@ -237,6 +238,8 @@ def organizacoes(db: Session, user: UsuarioAtual) -> OrganizacoesOut:
                              if avaliadas else None),
             atualizacoes_atrasadas=atrasadas if avaliadas else None,
             atualizacoes_avaliadas=len(avaliadas),
+            periodicidade_nao_informada=situacoes.count(
+                regras_atualizacao.PERIODICIDADE_NAO_INFORMADA),
             riscos_lgpd=risco.recursos_em_aberto if risco else None,
             lgpd_recursos_analisados=risco.recursos_analisados if risco else 0,
             lgpd_aguardando_revisao=risco.aguardando_revisao if risco else 0,

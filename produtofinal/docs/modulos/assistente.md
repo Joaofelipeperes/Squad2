@@ -7,7 +7,7 @@
 | **User stories** | US28 (PBI-96, PBI-97) |
 | **Backend** | `backend/app/modules/assistente/` |
 | **Frontend** | `frontend/src/modules/assistente/` (widget global) |
-| **Última atualização** | 04/11/2026 |
+| **Última atualização** | 13/11/2026 |
 
 ## Propósito
 Responde em linguagem natural perguntas rápidas sobre órgãos, datasets, arquivos (recursos), prazos do
@@ -102,3 +102,4 @@ Decisão em análise: [ADR-0020](../adr/0020-claude-haiku-no-assistente.md) (Cla
 | 23/10/2026 | Contexto por dataset/arquivo citado, listas por intenção (como no Protótipo V1), PDA vigente e contagem LGPD; histórico curto da conversa; resposta com fontes; widget com sugestões, indicador de digitação e formatação do protótipo | Squad 2 |
 | 27/10/2026 | Merge com `desenvolvimento`: contexto lido pelo `AssistenteDao` (`datasets_visiveis`, `achados_por_dataset`; saem `datasets_ativos` e `recursos_validos`); chaves internas e fontes pelo `id` próprio (ADR-0018), ficha com o `id_ckan`; data de criação do recurso em `created_ckan` | Luiza |
 | 04/11/2026 | Chat: retiradas as sugestões de perguntas prontas; fica só o campo para digitar | Luiza |
+| 13/11/2026 | Próximos prazos de abertura: as duas situações de base publicada (`pda.regras.PUBLICADAS`, ADR-0038) ficam fora da lista, como o antigo "Publicado" | Victor |

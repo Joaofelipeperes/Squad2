@@ -61,29 +61,24 @@ def ultima_atualizacao_real(recursos: Iterable[object] | None) -> UltimaAtualiza
     return UltimaAtualizacao(None, False)
 
 
-# ------------------------------------------------------------------ situação por periodicidade
-# PBI-27/28 — regra decidida em 28/10/2026 (ADR-0023). A periodicidade que vale é a da base no PDA
-# VIGENTE; "Mensal" = 30 dias, sem tolerância.
-ATUALIZADO = "Atualizado"
-PROXIMO_DO_VENCIMENTO = "Próximo do vencimento"
-ATRASADO = "Atrasado"
-SEM_INFORMACAO = "Sem informação"
-SEM_PERIODICIDADE = "Sem periodicidade definida"
-SITUACOES_ATUALIZACAO: tuple[str, ...] = (ATUALIZADO, PROXIMO_DO_VENCIMENTO, ATRASADO,
-                                          SEM_INFORMACAO, SEM_PERIODICIDADE)
+# ------------------------------------------------------------------ periodicidade declarada no CKAN
+# ADR-0037 (critérios da GEDA de 13/11/2026, substitui a ADR-0023): a periodicidade de atualização
+# vem SÓ do campo customizado "Atualização" do dataset no CKAN, para todas as bases publicadas no
+# portal — previstas no PDA ou espontâneas. A periodicidade da planilha do PDA não entra aqui.
+SEM_ATUALIZACAO_PERIODICA = "Sem atualização periódica"  # declaração válida do órgão
+PERIODICIDADE_NAO_INFORMADA = "Periodicidade não informada"  # campo vazio ou inválido: não conforme
 
-# Prazo, em dias, de cada periodicidade do domínio do PDA
+# Prazo, em dias, de cada periodicidade aceita no campo "Atualização"
 DIAS_POR_PERIODICIDADE: dict[str, int] = {
     "Diária": 1, "Semanal": 7, "Quinzenal": 15, "Mensal": 30, "Bimestral": 60, "Trimestral": 90,
     "Quadrimestral": 120, "Semestral": 180, "Anual": 365, "Bienal": 730, "Quadrienal": 1460,
     "Quinquenal": 1825,
 }
-# Sem prazo fixo: muda só quando acontece algo (Eventual) ou não muda mais (Estática)
-SEM_PRAZO = frozenset({"Eventual", "Estática"})
-MULTIPLA = "Múltipla"
-# "Próximo do vencimento" a partir de 80% do prazo (faltando 20% ou menos)
-FRACAO_ALERTA = 0.8
-
+# Valor que o órgão escolhe no portal quando a base não tem periodicidade fixa
+VALOR_CKAN_SEM_PERIODICIDADE = "Não possui atualização periódica"
+# Domínio do indicador, na ordem dos filtros
+PERIODICIDADES: tuple[str, ...] = (*DIAS_POR_PERIODICIDADE, SEM_ATUALIZACAO_PERIODICA,
+                                   PERIODICIDADE_NAO_INFORMADA)
 
 
 def _chave(texto: str) -> str:
@@ -92,46 +87,70 @@ def _chave(texto: str) -> str:
     return re.sub(r"[^a-z]", "", sem_acento.lower())
 
 
-_CHAVE_PERIODICIDADE = {_chave(p): p for p in DIAS_POR_PERIODICIDADE} | {"diario": "Diária"}
+# O próprio rótulo do domínio também é aceito, para a normalização ser idempotente
+_VALORES_CKAN = ({_chave(p): p for p in DIAS_POR_PERIODICIDADE}
+                 | {_chave(VALOR_CKAN_SEM_PERIODICIDADE): SEM_ATUALIZACAO_PERIODICA,
+                    _chave(SEM_ATUALIZACAO_PERIODICA): SEM_ATUALIZACAO_PERIODICA})
 
 
-def prazo_em_dias(periodicidade: str | None, original: str | None = None) -> int | None:
-    """Dias do prazo de atualização. "Múltipla" (ex.: "Mensal/Trimestral/Semestral") usa a MENOR
-    periodicidade citada no texto original, a mais exigente. Sem prazo fixo ou sem informação →
-    None."""
-    if periodicidade in DIAS_POR_PERIODICIDADE:
-        return DIAS_POR_PERIODICIDADE[periodicidade]
-    if periodicidade != MULTIPLA:
-        return None
-    partes = re.split(r"[/,;|+]|\s+e\s+|\s+ou\s+", original or "")
-    dias = [DIAS_POR_PERIODICIDADE[p] for parte in partes
-            if (p := _CHAVE_PERIODICIDADE.get(_chave(parte)))]
-    return min(dias) if dias else None
+def periodicidade_ckan(declarada: object) -> str:
+    """Campo "Atualização" do CKAN → valor do domínio (`PERIODICIDADES`).
+
+    Aceita os valores do portal sem diferenciar maiúsculas, acentos, espaços e pontuação
+    (' Mensal ', 'Não possui atualização periódica\t'). "Não possui atualização periódica" →
+    "Sem atualização periódica" (declaração válida). Vazio, ausente ou qualquer outro texto →
+    "Periodicidade não informada": nunca chuta e nunca confunde com "sem atualização periódica".
+    """
+    if not isinstance(declarada, str):
+        return PERIODICIDADE_NAO_INFORMADA
+    return _VALORES_CKAN.get(_chave(declarada), PERIODICIDADE_NAO_INFORMADA)
 
 
-def vencimento_atualizacao(periodicidade: str | None, ultima: datetime | None,
-                           original: str | None = None) -> date | None:
+# ------------------------------------------------------------------ situação de atualização
+# PBI-27/28. Prazo da periodicidade sem tolerância; "Próximo do vencimento" a partir de 80% do prazo.
+ATUALIZADO = "Atualizado"
+PROXIMO_DO_VENCIMENTO = "Próximo do vencimento"
+ATRASADO = "Atrasado"
+SEM_DATA = "Sem data de atualização"  # periodicidade válida, mas nenhum recurso válido com data
+SITUACOES_ATUALIZACAO: tuple[str, ...] = (ATUALIZADO, PROXIMO_DO_VENCIMENTO, ATRASADO,
+                                          SEM_ATUALIZACAO_PERIODICA, PERIODICIDADE_NAO_INFORMADA,
+                                          SEM_DATA)
+# Situações com prazo avaliado: só elas entram no % de atualização e no índice de atenção
+COM_PRAZO: tuple[str, ...] = (ATUALIZADO, PROXIMO_DO_VENCIMENTO, ATRASADO)
+FRACAO_ALERTA = 0.8
+
+
+def prazo_em_dias(periodicidade: str | None) -> int | None:
+    """Dias do prazo de atualização; sem prazo fixo ou periodicidade não informada → None."""
+    return DIAS_POR_PERIODICIDADE.get(periodicidade_ckan(periodicidade))
+
+
+def vencimento_atualizacao(periodicidade: str | None, ultima: datetime | None) -> date | None:
     """Data até a qual a próxima atualização é esperada (última atualização + prazo)."""
-    dias = prazo_em_dias(periodicidade, original)
+    dias = prazo_em_dias(periodicidade)
     if dias is None or ultima is None:
         return None
     return ultima.date() + timedelta(days=dias)
 
 
-def situacao_periodicidade(periodicidade: str | None, ultima: datetime | None, hoje: date,
-                           original: str | None = None) -> str:
-    """PBI-27/28 — situação da atualização de uma base pela periodicidade do PDA vigente.
+def situacao_periodicidade(periodicidade: str | None, ultima: datetime | None,
+                           hoje: date) -> str:
+    """PBI-27/28 — situação de atualização de um dataset publicado (ADR-0037).
 
-    Eventual/Estática → "Sem periodicidade definida". Sem prazo conhecido ou sem data de
-    atualização → "Sem informação". Senão, com `d` = dias desde a última atualização real:
-    `d > prazo` → "Atrasado"; `d >= 80% do prazo` → "Próximo do vencimento"; senão "Atualizado".
-    Ex.: Mensal (30 dias) → atualizado até 23 dias, próximo de 24 a 30, atrasado a partir de 31.
+    `periodicidade` = campo "Atualização" do CKAN (cru ou já passado por `periodicidade_ckan`).
+    Ordem: "Sem atualização periódica" (declaração válida, sem prazo); "Periodicidade não
+    informada" (vazio ou inválido, não conforme — vale mesmo com data de atualização); "Sem data
+    de atualização" (periodicidade válida, nenhum recurso válido com data). Senão, com `d` = dias
+    desde a última atualização real: `d > prazo` → "Atrasado"; `d >= 80% do prazo` → "Próximo do
+    vencimento"; senão "Atualizado". Ex.: Mensal (30 dias) → atualizado até 23 dias, próximo de
+    24 a 30, atrasado a partir de 31.
     """
-    if periodicidade in SEM_PRAZO:
-        return SEM_PERIODICIDADE
-    dias = prazo_em_dias(periodicidade, original)
-    if dias is None or ultima is None:
-        return SEM_INFORMACAO
+    valor = periodicidade_ckan(periodicidade)
+    if valor in (SEM_ATUALIZACAO_PERIODICA, PERIODICIDADE_NAO_INFORMADA):
+        return valor
+    dias = DIAS_POR_PERIODICIDADE[valor]
+    if ultima is None:
+        return SEM_DATA
     decorridos = (hoje - ultima.date()).days
     if decorridos > dias:
         return ATRASADO

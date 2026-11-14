@@ -151,15 +151,18 @@ def adm_com_dataset():
                        metadata_created=datetime(2022, 9, 19, 12, 0, tzinfo=UTC)))
         db.add_all([
             Recurso(id=1, id_ckan="r-atual", dataset_id=FOLHA, nome="folha.csv", formato="CSV",
-                    ultima_coleta_id=2, last_modified=datetime(2026, 9, 26, tzinfo=UTC)),
+                    ultima_coleta_id=2, last_modified=datetime(2026, 9, 26, tzinfo=UTC),
+                    created_ckan=datetime(2022, 9, 20, 10, 0, tzinfo=UTC)),
             Recurso(id=2, id_ckan="r-xlsx", dataset_id=FOLHA, nome="folha.xlsx", formato="XLSX",
-                    ultima_coleta_id=2, last_modified=datetime(2026, 9, 20, tzinfo=UTC)),
+                    ultima_coleta_id=2, last_modified=datetime(2026, 9, 20, tzinfo=UTC),
+                    created_ckan=datetime(2023, 1, 5, tzinfo=UTC)),
             Recurso(id=3, id_ckan="r-dic", dataset_id=FOLHA, nome="Dicionário de dados",
                     formato="PDF", eh_dicionario_dados=True, ultima_coleta_id=2),
             # apagado do CKAN: não veio na última coleta do dataset → não conta
             Recurso(id=4, id_ckan="r-apagado", dataset_id=FOLHA, nome="antigo.csv",
                     formato="ODS", ultima_coleta_id=1,
-                    last_modified=datetime(2026, 10, 5, tzinfo=UTC)),
+                    last_modified=datetime(2026, 10, 5, tzinfo=UTC),
+                    created_ckan=datetime(2021, 1, 1, tzinfo=UTC)),
         ])
         db.commit()
 
@@ -179,11 +182,12 @@ def test_recurso_apagado_formatos_e_data_de_publicacao(client, gerente, adm_com_
     texto = f"{CAB}\nSEAD;Folha de Pagamento;Mensal;{URL}folha-de-pagamento\n"
     _importar(client, gerente, "PDA SEAD", texto)
     base = client.get(f"{API}/bases", headers=gerente).json()["bases"][0]
-    assert base["situacao"] == "Publicado"
+    assert base["situacao"] == "Publicado no prazo"  # sem prazo no plano: não há atraso
     assert base["recursos_validos"] == 2          # sem o dicionário e sem o recurso apagado
     assert base["formatos"] == ["CSV", "XLSX"]
     assert base["ultima_atualizacao"].startswith("2026-09-26")  # não a do recurso apagado
-    assert base["data_publicacao"].startswith("2022-09-19")
+    # ADR-0038: 1º recurso publicado (não a criação do dataset), contando o que já saiu do pacote
+    assert base["data_publicacao"].startswith("2021-01-01")
 
 
 def test_resumo_avisa_coluna_de_prazo_ausente(client, gerente):

@@ -156,7 +156,7 @@ def test_importar_xlsx(client, gerente, inventario):
             resumo["sem_vinculo"]) == (3, 1, 0)
 
     bases = _por_nome(_bases(client, gerente))
-    assert bases["Escolas estaduais"]["situacao"] == "Publicado"
+    assert bases["Escolas estaduais"]["situacao"] == "Publicado no prazo"
     assert bases["Escolas estaduais"]["descricao"] == "Escolas\nda rede"
     assert bases["Obras"]["dataset_ativo"] is False  # PBI-15: sumiu do portal
     assert bases["Obras"]["situacao"] == "Em atraso"  # vinculada e fora do portal: atraso confirmado
@@ -242,7 +242,7 @@ def test_lista_situacoes_opcoes_e_filtros(client, gerente, inventario):
     assert corpo["total_previstas"] == 4
     assert [b["orgao_sigla"] for b in corpo["bases"]] == ["AGEHAB", "SEDUC", "SEDUC", "SES"]
     bases = _por_nome(corpo)
-    assert bases["Escolas estaduais"]["situacao"] == "Publicado"
+    assert bases["Escolas estaduais"]["situacao"] == "Publicado no prazo"
     assert bases["Matrículas"]["situacao"] == "Em dia"
     assert bases["Leitos hospitalares"]["situacao"] == "Próximo do prazo"
     assert bases["Leitos hospitalares"]["flag_prazo"] == "proximo"
@@ -265,7 +265,7 @@ def test_lista_situacoes_opcoes_e_filtros(client, gerente, inventario):
         assert c["total_previstas"] == 4  # contador "de M previstas" ignora filtros
         return sorted(b["nome_previsto"] for b in c["bases"])
 
-    assert nomes(situacao="Publicado") == ["Escolas estaduais"]
+    assert nomes(situacao="Publicado no prazo") == ["Escolas estaduais"]
     assert nomes(orgao=str(SEDUC)) == ["Escolas estaduais", "Matrículas"]
     assert nomes(orgao="sigla:AGEHAB") == ["Programas habitacionais"]
     assert nomes(periodicidade="Mensal") == ["Escolas estaduais", "Matrículas"]
@@ -290,7 +290,7 @@ def test_detalhe_da_base(client, gerente, inventario):
     assert b["ultima_atualizacao"].startswith("2026-09-01T08:00:00")  # não a do dicionário
     assert b["ultima_atualizacao_estimada"] is False
     assert b["plano_nome"] == "PDA 2025-2027" and b["prazo_abertura"] is None
-    assert b["situacao"] == "Publicado" and b["classificacao"] == "pda"
+    assert b["situacao"] == "Publicado no prazo" and b["classificacao"] == "pda"
     assert client.get(f"{API}/bases/9999", headers=gerente).status_code == 404
 
 
@@ -318,7 +318,7 @@ def test_vincular_resolve_pendente_sem_recalcular_resolvido(client, gerente, inv
     assert bases["Escolas estaduais"]["dataset_name"] == "escolas-renomeado"  # name atual
     mat = bases["Matrículas"]
     assert mat["vinculo"] == "resolvido" and mat["dataset_id"] == MATRICULAS
-    assert mat["situacao"] == "Publicado"
+    assert mat["situacao"] == "Publicado no prazo"
     assert mat["ultima_atualizacao_estimada"] is True  # sem last_modified → created
     planos = client.get(f"{API}/planos", headers=gerente).json()
     assert (planos[0]["vinculos_resolvidos"], planos[0]["vinculos_pendentes"]) == (2, 0)

@@ -27,17 +27,20 @@ class OrganizacaoOut(BaseModel):
     # PDA vigente
     bases_previstas: int
     bases_vinculadas: int  # com dataset vinculado pelo ID
-    bases_publicadas: int  # situação "Publicado" (só existe com vínculo)
+    bases_publicadas: int  # "Publicado no prazo" + "Publicado fora do prazo" (só com vínculo)
+    bases_publicadas_fora_do_prazo: int = 0  # 1º recurso depois do prazo do plano (ADR-0038)
     # "Em atraso" só entre as bases VINCULADAS (dataset fora do portal e prazo vencido): sem vínculo
     # não há como saber se a base já foi publicada. None = órgão sem nenhuma base vinculada.
     bases_em_atraso: int | None
     bases_proximas_do_prazo: int  # situação "Próximo do prazo" (planejamento; não acusa atraso)
     # Pendentes
-    # Atualização pela periodicidade do PDA (ADR-0023), entre as bases vinculadas com prazo definido
-    # (Atualizado, Próximo do vencimento ou Atrasado); None = nenhuma base avaliada
+    # Atualização de TODOS os datasets publicados do órgão (do PDA ou espontâneos) pela periodicidade
+    # do campo "Atualização" do CKAN (ADR-0037), entre os que têm prazo (Atualizado, Próximo do
+    # vencimento ou Atrasado); "Sem atualização periódica" fica fora. None = nenhum avaliado
     atualizacao_pct: float | None = None  # % dentro do prazo (Atualizado + Próximo do vencimento)
     atualizacoes_atrasadas: int | None = None
     atualizacoes_avaliadas: int = 0
+    periodicidade_nao_informada: int = 0  # datasets com o campo "Atualização" vazio ou inválido
     # Riscos LGPD (módulo lgpd, só com `lgpd.acessar`): recursos com possível dado pessoal
     # aguardando revisão ou confirmado. None = sem acesso ao lgpd ou nenhum recurso do órgão varrido
     riscos_lgpd: int | None = None
@@ -78,14 +81,17 @@ class KpisOut(BaseModel):
     orgaos_no_pda: int  # órgãos com ao menos uma base no PDA vigente
     bases_previstas: int
     bases_vinculadas: int
-    bases_publicadas: int
+    bases_publicadas: int  # no prazo + fora do prazo
+    bases_publicadas_fora_do_prazo: int = 0  # 1º recurso depois do prazo do plano (ADR-0038)
     bases_em_atraso: int | None  # só entre as vinculadas; None = nenhuma base vinculada
     bases_prazo_vencido: int  # sem vínculo e com prazo vencido: atraso NÃO confirmado
     datasets_publicados: int  # ativos no portal
     datasets_fora_do_portal: int  # excluídos ou privados depois de coletados
     recursos_monitorados: int  # atuais, sem dicionário, de datasets ativos
     datasets_sem_recurso: int  # PBI-51
-    atualizacoes_em_atraso: int | None = None  # entre as vinculadas (ADR-0023); None = nenhuma
+    # Entre TODOS os datasets publicados (ADR-0037); None = nenhum dataset no portal
+    atualizacoes_em_atraso: int | None = None
+    periodicidade_nao_informada: int | None = None  # campo "Atualização" vazio ou inválido
     possiveis_dados_pessoais: int | None = None  # achados aguardando revisão; None sem lgpd.acessar
 
 
@@ -121,10 +127,11 @@ class VisaoGeralOut(BaseModel):
     ultima_coleta: datetime | None  # fim da última coleta concluída (PBI-58)
     kpis: KpisOut
     situacoes_pda: list[ContagemOut]  # bases do PDA vigente por situação (ordem do filtro)
-    # bases do PDA vigente por situação de atualização (periodicidade do PDA, ADR-0023), mais
-    # "Aguardando vínculo" para as bases sem dataset
+    # TODOS os datasets publicados por situação de atualização (campo "Atualização" do CKAN,
+    # ADR-0037), na ordem do filtro
     situacoes_atualizacao: list[ContagemOut]
-    atualizacao_estimada: int  # bases vinculadas cuja data veio da criação (sem last_modified)
+    atualizacao_por_tipo: list[ContagemOut] = []  # datasets publicados: Prevista no PDA × Espontânea
+    atualizacao_estimada: int  # datasets cuja data veio da criação do recurso (sem last_modified)
     alertas: list[AlertaOut]  # os mais prioritários de cada tipo (até 10 por tipo)
     total_alertas: int
     alertas_por_tipo: dict[str, int]  # "PDA" | "Atualização" | "Inventário" → total

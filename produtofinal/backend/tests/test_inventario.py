@@ -14,7 +14,7 @@ def _pkg(i, org):
     return {
         "id": f"d{i}", "name": f"dataset-{i}", "title": f"Dataset {i}",
         "organization": {"id": org}, "metadata_modified": "2026-09-20T10:00:00",
-        "extras": [{"key": "periodicidade", "value": "Mensal"}],
+        "extras": [{"key": "Atualização", "value": "Mensal"}],
         "resources": [
             {"id": f"r{i}a", "name": "dados.csv", "format": "csv", "url_type": "upload",
              "last_modified": "2026-09-01T08:00:00"},
@@ -104,10 +104,12 @@ def test_periodicidade_usa_extra_atualizacao_do_portal():
     # chave real do portal de Goiás, com acento, maiúscula e espaços sobrando
     assert regras.periodicidade_declarada({"Atualização": " Mensal "}) == "Mensal"
     assert regras.periodicidade_declarada({"atualizacao": "Anual"}) == "Anual"
-    # "periodicidade" tem preferência quando existe
-    assert regras.periodicidade_declarada({"Atualização": "Anual", "periodicidade": "Mensal"}) == "Mensal"
-    # sem extra: usa o campo do pacote; sem nada: None
-    assert regras.periodicidade_declarada({}, {"periodicidade": "Semestral"}) == "Semestral"
+    assert regras.periodicidade_declarada({"Atualização ": " \tNão possui atualização periódica "}) == (
+        "Não possui atualização periódica")
+    # ADR-0037: só o campo "Atualização" vale — outras chaves não são usadas; vazio ou ausente → None
+    assert regras.periodicidade_declarada({"Atualização": "Anual", "periodicidade": "Mensal"}) == "Anual"
+    assert regras.periodicidade_declarada({"periodicidade": "Mensal"}) is None
+    assert regras.periodicidade_declarada({"Atualização": "  "}) is None
     assert regras.periodicidade_declarada({"Fonte": "DGPC"}) is None
 
 

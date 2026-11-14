@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.deps import UsuarioAtual
 from app.core.permissoes import P
+from app.modules.atualizacoes import listagem as atualizacoes
 from app.modules.atualizacoes import regras as regras_atualizacao
 from app.modules.inventario import regras as regras_inventario
 from app.modules.inventario.service import listar_datasets
@@ -37,6 +38,7 @@ from app.modules.pda.regras import (
     PRAZO_VENCIDO,
     PROXIMO_DO_PRAZO,
     PUBLICADO,
+    PUBLICADO_FORA_DO_PRAZO,
     SEM_RECURSO,
     normalizar_texto,
 )
@@ -119,26 +121,29 @@ def _pda(db: Session, user: UsuarioAtual, orgao: int | None = None) -> Tabela:
 
 
 def _atualizacoes(db: Session, user: UsuarioAtual, orgao: int | None = None) -> Tabela:
-    """Bases vinculadas do PDA vigente em atraso ou próximas do vencimento (ADR-0023); atrasadas
-    primeiro, depois pelo vencimento."""
-    plano, bases = _bases_vigentes(db, user, orgao)
+    """Datasets publicados (previstos no PDA ou espontâneos) que pedem ação na atualização
+    (ADR-0037): atrasados, próximos do vencimento e com periodicidade não informada; nessa ordem,
+    depois pelo vencimento."""
+    plano = pda.plano_vigente(db)
     hoje = pda.hoje_local()
-    alvo = (regras_atualizacao.ATRASADO, regras_atualizacao.PROXIMO_DO_VENCIMENTO)
-    linhas = []
-    for b in bases:
-        situacao = painel.situacao_atualizacao(b, hoje)
-        if situacao not in alvo:
-            continue
-        vencimento = regras_atualizacao.vencimento_atualizacao(
-            b.periodicidade, b.ultima_atualizacao, b.periodicidade_original)
-        linhas.append([b.orgao_sigla, b.orgao_nome, b.nome_previsto, b.dataset_titulo,
-                       b.periodicidade, b.ultima_atualizacao,
-                       b.ultima_atualizacao_estimada, vencimento, situacao])
+    alvo = (regras_atualizacao.ATRASADO, regras_atualizacao.PROXIMO_DO_VENCIMENTO,
+            regras_atualizacao.PERIODICIDADE_NAO_INFORMADA)
+    linhas = [[d.orgao_sigla, d.orgao_nome, d.dataset_titulo, d.tipo_base,
+               d.periodicidade_declarada or "—", d.ultima_atualizacao,
+               d.ultima_atualizacao_estimada, d.prazo_esperado, d.situacao]
+              for d in _datasets_atualizacao(db, user, orgao, hoje) if d.situacao in alvo]
     linhas.sort(key=lambda x: (alvo.index(x[8]), x[7] or hoje, normalizar_texto(x[0])))
     return Tabela(
-        colunas=["Sigla", "Órgão", "Base prevista", "Dataset no portal", "Periodicidade",
+        colunas=["Sigla", "Órgão", "Dataset", "Tipo de base", "Atualização (CKAN)",
                  "Última atualização", "Data estimada", "Vencimento", "Situação"],
         linhas=linhas, referencia=plano.nome if plano else None)
+
+
+def _datasets_atualizacao(db: Session, user: UsuarioAtual, orgao: int | None = None,
+                          hoje: date | None = None) -> list[atualizacoes.DatasetAtualizacao]:
+    """Datasets publicados com a situação de atualização (ADR-0037); `orgao` = id da organização."""
+    dados = atualizacoes.situacoes_dos_datasets(db, user, hoje)
+    return dados if orgao is None else [d for d in dados if d.orgao_chave == str(orgao)]
 
 
 def _lgpd(db: Session, user: UsuarioAtual, orgao: int | None = None) -> Tabela:
@@ -163,14 +168,16 @@ def _orgaos(db: Session, user: UsuarioAtual, orgao: int | None = None) -> Tabela
     lgpd = dados.lgpd_visivel
     return Tabela(
         colunas=["Órgão", "Siglas no PDA", "Bases previstas", "Bases vinculadas",
-                 "Bases publicadas", "Bases em atraso", "Próximas do prazo",
-                 "Atualização no prazo (%)", "Atualizações atrasadas", "Datasets no portal",
+                 "Bases publicadas", "Publicadas fora do prazo", "Bases em atraso",
+                 "Próximas do prazo", "Atualização no prazo (%)", "Atualizações atrasadas",
+                 "Periodicidade não informada", "Datasets no portal",
                  "Recursos válidos", "Recursos em formato fechado"]
         + (["Riscos LGPD (recursos)", "Recursos varridos"] if lgpd else [])
         + ["Índice de atenção", "Índice de atenção (0-100)"],
         linhas=[[o.nome, ", ".join(o.siglas), o.bases_previstas, o.bases_vinculadas,
-                 o.bases_publicadas, o.bases_em_atraso, o.bases_proximas_do_prazo,
-                 o.atualizacao_pct, o.atualizacoes_atrasadas, o.datasets_no_portal,
+                 o.bases_publicadas, o.bases_publicadas_fora_do_prazo, o.bases_em_atraso,
+                 o.bases_proximas_do_prazo, o.atualizacao_pct, o.atualizacoes_atrasadas,
+                 o.periodicidade_nao_informada, o.datasets_no_portal,
                  o.recursos_validos, o.recursos_formato_fechado]
                 + ([o.riscos_lgpd, o.lgpd_recursos_analisados] if lgpd else [])
                 + [o.indice_atencao, o.indice_atencao_valor] for o in dados.organizacoes],
@@ -259,9 +266,11 @@ def orgaos_disponiveis(db: Session, user: UsuarioAtual) -> list[OrgaoOpcaoOut]:
 # Seções do relatório detalhado do órgão (pedido da GEDA em 05/11): cada número do resumo vira a
 # lista dos itens que ele conta. Cada seção exige o acesso ao módulo de onde vêm os dados.
 _ORDEM_SITUACAO_PDA = {EM_ATRASO: 0, PROXIMO_DO_PRAZO: 1, PRAZO_VENCIDO: 2, NAO_PUBLICADO: 3,
-                       SEM_RECURSO: 4, EM_DIA: 5, PUBLICADO: 6}
+                       SEM_RECURSO: 4, EM_DIA: 5, PUBLICADO_FORA_DO_PRAZO: 6, PUBLICADO: 7}
 _ORDEM_ATUALIZACAO = {regras_atualizacao.ATRASADO: 0, regras_atualizacao.PROXIMO_DO_VENCIMENTO: 1,
-                      regras_atualizacao.ATUALIZADO: 2}
+                      regras_atualizacao.PERIODICIDADE_NAO_INFORMADA: 2,
+                      regras_atualizacao.SEM_DATA: 3, regras_atualizacao.ATUALIZADO: 4,
+                      regras_atualizacao.SEM_ATUALIZACAO_PERIODICA: 5}
 _COLUNAS_BASES = ["Base prevista", "Situação", "Prazo de abertura", "Periodicidade",
                   "Dataset no portal", "Data de publicação"]
 
@@ -309,23 +318,18 @@ def _secoes_pda(db: Session, user: UsuarioAtual, orgao: int) -> list[tuple[str, 
 
 
 def _secao_atualizacao(db: Session, user: UsuarioAtual, orgao: int) -> regras.Secao:
-    """Cada base vinculada com a situação de atualização pela periodicidade do PDA (ADR-0023):
-    atrasadas primeiro, depois pelo vencimento."""
-    plano, bases = _bases_vigentes(db, user, orgao)
-    hoje = pda.hoje_local()
-    linhas = []
-    for b in bases:
-        if not b.dataset_id:
-            continue
-        vencimento = regras_atualizacao.vencimento_atualizacao(
-            b.periodicidade, b.ultima_atualizacao, b.periodicidade_original)
-        linhas.append([b.nome_previsto, _dataset_da_base(b), b.periodicidade,
-                       _dia(b.ultima_atualizacao), b.ultima_atualizacao_estimada, vencimento,
-                       painel.situacao_atualizacao(b, hoje)])
+    """Cada dataset publicado do órgão (previsto no PDA ou espontâneo) com a situação de
+    atualização pelo campo "Atualização" do CKAN (ADR-0037): atrasados primeiro, depois pelo
+    vencimento."""
+    plano = pda.plano_vigente(db)
+    linhas = [[d.dataset_titulo, d.tipo_base, d.periodicidade_declarada or "—",
+               _dia(d.ultima_atualizacao), d.ultima_atualizacao_estimada, d.prazo_esperado,
+               d.situacao]
+              for d in _datasets_atualizacao(db, user, orgao)]
     linhas.sort(key=lambda x: (_ORDEM_ATUALIZACAO.get(x[6], 9), x[5] or date.max,
                                normalizar_texto(x[0])))
-    return regras.Secao("Atualização das bases",
-                        ["Base prevista", "Dataset no portal", "Periodicidade",
+    return regras.Secao("Atualização dos datasets",
+                        ["Dataset", "Tipo de base", "Atualização (CKAN)",
                          "Última atualização", "Data estimada", "Vencimento", "Situação"],
                         linhas, plano.nome if plano else "Nenhum PDA vigente")
 

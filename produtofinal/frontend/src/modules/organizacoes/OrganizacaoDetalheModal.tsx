@@ -84,7 +84,7 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, cri
                 <div style={{ marginTop: 4 }}><IndiceAtencao o={o} criterio={criterio} /></div>
               </div>
               <p className="explicacao">
-                Sem risco LGPD (nenhum recurso varrido) e sem atualização avaliada (nenhuma base vinculada com prazo).
+                Sem risco LGPD (nenhum recurso varrido) e sem atualização avaliada (nenhuma base publicada com prazo).
               </p>
             </>
           )}
@@ -94,7 +94,8 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, cri
           <div className="det-kpis">
             <Kpi n={o.bases_previstas} rotulo="Bases previstas" />
             <Kpi n={vinculado ? o.bases_publicadas : PENDENTE} rotulo="Bases publicadas"
-              nota={vinculado ? undefined : "aguardando vínculo"} />
+              nota={!vinculado ? "aguardando vínculo"
+                : o.bases_publicadas_fora_do_prazo > 0 ? `${o.bases_publicadas_fora_do_prazo} fora do prazo` : undefined} />
             <Kpi n={vinculado ? o.bases_previstas - o.bases_publicadas : PENDENTE} rotulo="Bases não publicadas"
               nota={vinculado ? undefined : "aguardando vínculo"} />
             <Kpi n={o.bases_em_atraso ?? PENDENTE} rotulo="Bases em atraso" alerta={!!o.bases_em_atraso}
@@ -106,12 +107,16 @@ export function OrganizacaoDetalheModal({ org, formatosAbertos, lgpdVisivel, cri
         </Secao>
 
         <Secao titulo="Atualização"
-          nota={vinculado ? `de ${o.atualizacoes_avaliadas} base(s) com prazo` : "aguardando vínculo"}>
+          nota={o.datasets_no_portal > 0
+            ? `${o.datasets_no_portal} base(s) publicada(s), do PDA ou espontâneas; periodicidade do campo “Atualização” do CKAN`
+            : "nenhuma base publicada no portal"}>
           <div className="det-kpis">
             <Kpi n={o.atualizacoes_atrasadas ?? PENDENTE} rotulo="Atualizações atrasadas" alerta={!!o.atualizacoes_atrasadas}
-              nota={o.atualizacoes_atrasadas == null && vinculado ? "sem base com prazo definido" : undefined} />
+              nota={o.atualizacoes_atrasadas == null && o.datasets_no_portal > 0 ? "sem base com prazo definido" : undefined} />
             <Kpi n={o.atualizacao_pct != null ? `${o.atualizacao_pct}%` : PENDENTE} rotulo="em dia" />
             <Kpi n={o.atualizacoes_avaliadas} rotulo="Bases com prazo definido" />
+            <Kpi n={o.periodicidade_nao_informada} rotulo="Periodicidade não informada"
+              alerta={o.periodicidade_nao_informada > 0} nota="campo vazio ou inválido no CKAN" />
           </div>
         </Secao>
 

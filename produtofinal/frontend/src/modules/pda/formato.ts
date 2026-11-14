@@ -26,7 +26,8 @@ export function plural(n: number, singular: string, pluralForma: string): string
 
 /** Classe do badge por situação — mesmo mapa do statusBadge() do protótipo V1. */
 const CLASSE_SITUACAO: Record<string, string> = {
-  "Publicado": "badge-green",
+  "Publicado no prazo": "badge-green",
+  "Publicado fora do prazo": "badge-blue", // publicada, mas o 1º recurso saiu depois do prazo (ADR-0038)
   "Em dia": "badge-green",
   "Em atraso": "badge-red",
   "Prazo vencido": "badge-gray", // sem vínculo: atraso não confirmado

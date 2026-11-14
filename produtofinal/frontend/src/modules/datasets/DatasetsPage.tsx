@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { DatasetLinha, DatasetsLista, FiltrosDatasets } from "./api";
 import { FILTROS_VAZIOS, datasetsApi } from "./api";
 import { DatasetDetalheModal } from "./DatasetDetalheModal";
-import { SituacaoPortalBadge, abreviarId, fmtDataHora } from "./formato";
+import { SituacaoPortalBadge, TipoBaseBadge, abreviarId, fmtDataHora } from "./formato";
 import type { ColunaExportacao } from "@/shared/ui/ExportarTabela";
 import { ExportarTabela, descreverFiltros, rotuloDe } from "@/shared/ui/ExportarTabela";
 import { PageLede } from "@/shared/ui/PageLede";
@@ -161,11 +161,6 @@ function Filtro({ id, rotulo, valor, opcoes, onMudar, classe, dica }: {
       </select>
     </div>
   );
-}
-
-function TipoBaseBadge({ tipo }: { tipo: string | null }) {
-  if (!tipo) return <span className="cell-muted" title="Fora do portal e sem vínculo com o PDA vigente">—</span>;
-  return <span className={`badge ${tipo === "Espontânea" ? "badge-amber" : "badge-blue"}`}>{tipo}</span>;
 }
 
 function Linha({ d, onAbrir }: { d: DatasetLinha; onAbrir: (id: number) => void }) {

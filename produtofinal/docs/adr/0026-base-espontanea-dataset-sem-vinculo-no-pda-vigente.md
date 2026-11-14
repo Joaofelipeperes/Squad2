@@ -56,3 +56,4 @@ Apresentar à Paloma (GEDA) junto com o Dashboard; ajustes viram revisões desta
 | Data | Revisão | Autor |
 |---|---|---|
 | 05/11/2026 | A tela Datasets passa a mostrar e filtrar o tipo de base (Prevista no PDA × Espontânea) com esta mesma definição (`inventario.regras.tipo_de_base`; vínculo pelo ID com o PDA vigente via `pda.service.datasets_vinculados_ao_vigente`) | Victor |
+| 13/11/2026 | Validada pela Paloma (GEDA): a "planilha de referência" é a tabela do PDA com o ID único do CKAN, e todo dataset sem registro do PDA vinculado é espontâneo, inclusive enquanto a base do PDA ainda não foi vinculada. O tipo de base passa a aparecer também no Monitoramento de Atualizações, que agora cobre todas as bases publicadas (ADR-0037) | Victor |

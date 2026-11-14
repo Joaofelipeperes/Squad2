@@ -7,14 +7,16 @@ export interface Kpis {
   orgaos_no_pda: number;
   bases_previstas: number;
   bases_vinculadas: number;
-  bases_publicadas: number;
+  bases_publicadas: number; // no prazo + fora do prazo
+  bases_publicadas_fora_do_prazo: number; // 1º recurso publicado depois do prazo do plano (ADR-0038)
   bases_em_atraso: number | null; // só entre as vinculadas; null = nenhuma vinculada
   bases_prazo_vencido: number; // sem vínculo e com prazo vencido (atraso não confirmado)
   datasets_publicados: number;
   datasets_fora_do_portal: number;
   recursos_monitorados: number;
   datasets_sem_recurso: number;
-  atualizacoes_em_atraso: number | null; // entre as vinculadas (ADR-0023); null = nenhuma
+  atualizacoes_em_atraso: number | null; // entre todos os datasets publicados (ADR-0037); null = nenhum
+  periodicidade_nao_informada: number | null; // campo "Atualização" do CKAN vazio ou inválido
   possiveis_dados_pessoais: number | null; // achados aguardando revisão; null sem lgpd.acessar
 }
 
@@ -53,9 +55,10 @@ export interface VisaoGeral {
   ultima_coleta: string | null;
   kpis: Kpis;
   situacoes_pda: Contagem[];
-  /** Bases do PDA vigente pela periodicidade do PDA, mais "Aguardando vínculo" (sem dataset). */
+  /** Todos os datasets publicados pela periodicidade do campo "Atualização" do CKAN (ADR-0037). */
   situacoes_atualizacao: Contagem[];
-  atualizacao_estimada: number; // bases vinculadas cuja data veio da criação (sem last_modified)
+  atualizacao_por_tipo: Contagem[]; // datasets publicados: "Prevista no PDA" × "Espontânea"
+  atualizacao_estimada: number; // datasets cuja data veio da criação do recurso (sem last_modified)
   alertas: Alerta[]; // até 10 de cada tipo, na ordem de prioridade
   total_alertas: number;
   alertas_por_tipo: Record<string, number>;

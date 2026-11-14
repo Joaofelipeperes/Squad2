@@ -7,7 +7,7 @@
 | **User stories** | US6 (PBI-12 a PBI-15), US7 (PBI-16 a PBI-18, PBI-82), US8 (PBI-19 a PBI-22, PBI-80) |
 | **Backend** | `backend/app/modules/pda/` · migrações `b7e2c41d9a63_pda_planos_e_bases_previstas.py` e `c3f8a2d15e70_pda_nome_unico_sem_maiusculas.py` |
 | **Frontend** | `frontend/src/modules/pda/` · upload multipart por `api.upload` em `frontend/src/shared/api/client.ts` |
-| **Última atualização** | 10/11/2026 |
+| **Última atualização** | 13/11/2026 |
 
 ## Propósito
 Importa a planilha do PDA (Plano de Dados Abertos), cruza cada base prevista com os datasets
@@ -64,8 +64,8 @@ podem ficar cadastrados; o **vigente** rege a tela e os indicadores e relatório
   base com IDs diferentes) e linhas sem ID; caixa **Sobrescrever** (desmarcada) para as bases com
   outro ID → **Gravar N IDs** → resumo final e recarga da tabela.
 - **Modal de detalhe** (`showDatasetDetails` do protótipo): nome, órgão, unidade, ID do dataset,
-  dataset no portal, prazo, data de publicação (`metadata_created` do dataset vinculado e ativo;
-  sem vínculo, "Não publicado"), periodicidade (+ original da planilha), última atualização real,
+  dataset no portal, prazo, data de publicação (criação no CKAN do **primeiro recurso**, sem dicionário, do
+  dataset vinculado e ativo, ADR-0038; sem vínculo, "Não publicado"), periodicidade (+ original da planilha), última atualização real,
   recursos válidos, formatos dos recursos (sem repetição; formato é atributo do recurso), situação, conteúdo sigiloso, políticas públicas, PDA de origem e descrição;
   aviso se o dataset não está mais visível no portal; "Abrir no portal" (`/dataset/<ID>`). Usa os
   dados da própria linha (não chama `GET /bases/{id}`).
@@ -247,7 +247,7 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 ## Interações com outros módulos
 | Direção | Módulo | O quê |
 |---|---|---|
-| consome | inventario | `Dataset` (ID, name, título, órgão, `ativo_no_portal`, `metadata_created`), `Recurso` (`eh_dicionario_dados`, `formato`, `last_modified`, `created`) via `service.recursos_atuais(ds)` (só recursos ainda no pacote do dataset), `Organizacao` (casamento da sigla) |
+| consome | inventario | `Dataset` (ID, name, título, órgão, `ativo_no_portal`), `Recurso` (`eh_dicionario_dados`, `formato`, `last_modified`, `created` — data de publicação, ADR-0038) via `service.recursos_atuais(ds)` (só recursos ainda no pacote do dataset), `Organizacao` (casamento da sigla) |
 | consome | parametros | `obter(db, "janela_alerta_prazo_dias")` (PBI-22) |
 | consome | atualizacoes | `service.ultima_atualizacao_real(recursos)` → `UltimaAtualizacao(data, estimada)` (implementada em `atualizacoes/regras.py`) |
 | consome | acesso | `filtrar_por_orgao(stmt, BasePrevista.organizacao_id, user)` nas consultas de bases |
@@ -255,8 +255,8 @@ Em banco já existente, a Gerência GEDA não recebe `pda.gerenciar_planos` sozi
 | é consumido por | painel | `plano_vigente` + `bases_do_plano` e `regras` (situações) — cartões, gráfico por situação e alertas do Dashboard; `hoje_local()`; `dataset_id` das bases para as **bases espontâneas** (ADR-0026) |
 | é consumido por | relatorios | idem — relatório de bases não publicadas e prazos; sempre o PDA vigente |
 | é consumido por | assistente | `plano_vigente` + `bases_do_plano(db, plano.id, user)` — situação e prazo das bases (do órgão ou do dataset citado) e listas de atraso/prazo; sempre o PDA vigente e no escopo de órgão |
-| é consumido por | atualizacoes | `classificacao` para o indicador PDA × espontânea (PBI-82, previsto) |
-| é consumido por | atualizacoes | `plano_vigente` + `bases_do_plano` — periodicidade, dataset vinculado e última atualização na tela Monitoramento de Atualizações; sempre o PDA vigente e no escopo de órgão |
+| é consumido por | atualizacoes | `datasets_vinculados_ao_vigente` — tipo de base (Prevista no PDA × Espontânea) no Monitoramento de Atualizações (PBI-82, ADR-0037) |
+| é consumido por | atualizacoes | `plano_vigente` (nome do PDA que define o tipo de base) e `hoje_local()`; a periodicidade do PDA **não** é usada no indicador de atualização (ADR-0037) |
 | é consumido por | inventario (tela Datasets) | `GET /datasets/{id}/bases` — prazo, periodicidade e situação PDA no detalhe do dataset |
 | consome | relatorios | `POST /relatorios/tabela/exportar` (pelo frontend, `ExportarTabela`) — Excel e PDF da tabela da tela (ADR-0031) |
 
@@ -307,7 +307,8 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 
   | Situação | Condição | Badge |
   |---|---|---|
-  | Publicado | vinculada, dataset ativo e ≥ 1 recurso válido | verde |
+  | Publicado no prazo | vinculada, dataset ativo, ≥ 1 recurso válido e 1º recurso válido criado até o prazo (inclusive); também sem prazo no plano ou sem data do recurso (ADR-0038) | verde |
+  | Publicado fora do prazo | vinculada, dataset ativo, ≥ 1 recurso válido e 1º recurso válido criado depois do prazo (ADR-0038) | azul |
   | Sem recurso | vinculada, dataset ativo e 0 recurso válido (não conta como cumprida) | âmbar |
   | Em atraso | vinculada, dataset inativo no portal e prazo < hoje (atraso confirmado) | vermelho |
   | Prazo vencido | sem vínculo (ou vínculo pendente) e prazo < hoje: não há como saber se a base já foi publicada; dica "aguardando vínculo" | cinza |
@@ -317,7 +318,11 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 
   Não publicada = sem vínculo, vínculo pendente ou dataset inativo. `hoje` = data em
   America/Sao_Paulo; janela = `janela_alerta_prazo_dias` (PBI-22). `flag_prazo` olha só o prazo,
-  como `pdaSituacaoDeadlineFlag`.
+  como `pdaSituacaoDeadlineFlag`. **Data de publicação** (`data_publicacao`) = menor `created` no
+  CKAN entre os recursos do dataset que não são dicionário, inclusive os que já saíram do pacote
+  (trocar o arquivo não muda a data de publicação) — criar o dataset sem recurso não é publicar
+  (GEDA, 13/11/2026); vale também para base que já existia antes do plano. `regras.PUBLICADAS` reúne
+  as duas situações de base publicada.
 - **Recursos válidos** = recursos ainda presentes no pacote do dataset (`recursos_atuais`: recurso
   apagado do CKAN fica no banco, mas não conta) e que não são dicionário de dados
   (`eh_dicionario_dados`).
@@ -372,9 +377,12 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
     preserva o texto original da planilha (ex.: "Mnsal").
   Usuário restrito a órgão só altera bases do próprio órgão (`exigir_mesmo_orgao`), embora os papéis
   padrão de órgão não tenham `pda.gerenciar_planos`.
-- Bases espontâneas também devem ser monitoradas (Paloma e Júnior, 17/09). Critério (ADR-0026):
-  dataset ativo no portal que nenhuma base do PDA vigente vincula pelo ID — calculado no painel a
-  partir do inventário; `classificacao` continua sempre "pda" (sem reclassificação manual).
+- Bases espontâneas também devem ser monitoradas (Paloma e Júnior, 17/09). Critério (ADR-0026,
+  validado pela GEDA em 13/11/2026): dataset ativo no portal que nenhuma base do PDA vigente vincula
+  pelo ID — calculado a partir do inventário; `classificacao` continua sempre "pda" (sem
+  reclassificação manual). O vínculo com o PDA **não** é condição do indicador de atualização, que
+  usa a periodicidade do campo "Atualização" do CKAN (ADR-0037); a periodicidade da planilha
+  continua na tela do PDA, mas não entra nesse indicador.
 
 ## Pendências
 - **Vínculo em lote pelo ID** resolvido para a tabela fato do PDA (coluna "ID_UNICO", 23/10/2026):
@@ -402,8 +410,8 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
   entrega: conferir no backlog o escopo de cada um (o vínculo manual base a base pelo endereço, de
   13/10/2026, é candidato a atender o PBI-14).
 - Detalhe da base sem "Situação de atualização" (ressalva de 17/09: o PDA trata do prazo de
-  abertura; a situação por periodicidade do `atualizacoes` ainda é esqueleto — validar com a GEDA
-  se volta ao detalhe) e sem "Histórico recente" (entra quando a `rastreabilidade` existir).
+  abertura; a situação de atualização fica no Monitoramento de Atualizações, ADR-0037) e sem
+  "Histórico recente" (entra quando a `rastreabilidade` existir).
 - PDAs importados antes de 08/10/2026 (ex.: "PDA 2026 - 2027" no Docker) mantêm o órgão calculado
   na importação: SEAD continua partida e CASA CIVIL/GOIÁS PARCERIAS sem organização até reimportar
   o PDA (ou rodar Atualizar vínculos, que hoje só aparece com vínculo pendente).
@@ -440,3 +448,4 @@ Decisões registradas: [ADR-0006](../adr/0006-regras-de-afericao-do-inventario.m
 | 09/11/2026 | Tela: "Incluir base" sobe para a barra de ações do PDA; retirados o resumo do PDA (bases previstas, importação, vigência, arquivo) e o rótulo "Bases previstas no PDA" acima da tabela | Victor |
 | 09/11/2026 | Tela: filtro de situação também pela URL (`/pda?situacao=Em atraso`), usado pelo indicador "Bases atrasadas" da Visão Geral | Victor |
 | 10/11/2026 | Detalhe da base agrupado em seções (faixa-resumo com situação, vínculo e PDA de origem; Identificação, Vínculo com o portal, Prazo e atualização, Recursos, Classificação e Descrição), com `shared/ui/Detalhe.tsx`. Sem mudança de dados nem de API | João |
+| 13/11/2026 | Critérios da GEDA (ADR-0038): base publicada passa a "Publicado no prazo" ou "Publicado fora do prazo", comparando o dia do **primeiro recurso válido** no CKAN com o prazo do plano (também para base que já existia antes do plano); `data_publicacao` deixa de ser o `metadata_created` do dataset; `regras.PUBLICADAS`; filtro, badge e dica na tela; `datasets_vinculados_ao_vigente` passa a definir o tipo de base no Monitoramento de Atualizações (ADR-0037) | Victor |

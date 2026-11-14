@@ -102,13 +102,29 @@ HOJE = date(2026, 10, 7)
 JANELA = 30
 
 
-def _sit(vinculada=False, ativo=None, recursos=0, prazo=None):
+def _sit(vinculada=False, ativo=None, recursos=0, prazo=None, publicado_em=None):
     return situacao_base(vinculada=vinculada, dataset_ativo=ativo, recursos_validos=recursos,
-                         prazo=prazo, hoje=HOJE, janela_dias=JANELA)
+                         prazo=prazo, hoje=HOJE, janela_dias=JANELA, publicado_em=publicado_em)
+
+
+def test_publicado_no_prazo_ou_fora_do_prazo():
+    """ADR-0038: compara o dia do 1º recurso válido com o prazo do plano (inclusive)."""
+    prazo = date(2025, 3, 31)
+    assert _sit(True, True, 1, prazo, publicado_em=date(2025, 3, 31)) == "Publicado no prazo"
+    assert _sit(True, True, 1, prazo, publicado_em=date(2025, 4, 1)) == "Publicado fora do prazo"
+    # base que já existia antes do plano: publicada antes do prazo, então no prazo
+    assert _sit(True, True, 1, prazo, publicado_em=date(2019, 1, 1)) == "Publicado no prazo"
+    # sem prazo no plano ou sem data do recurso: não há atraso a apontar
+    assert _sit(True, True, 1, None, publicado_em=date(2026, 1, 1)) == "Publicado no prazo"
+    assert _sit(True, True, 1, prazo, publicado_em=None) == "Publicado no prazo"
+    # dataset sem recurso válido não é publicação, com ou sem data
+    assert _sit(True, True, 0, prazo, publicado_em=date(2025, 1, 1)) == "Sem recurso"
+    assert set(regras.PUBLICADAS) == {"Publicado no prazo", "Publicado fora do prazo"}
+    assert set(regras.PUBLICADAS) <= set(regras.SITUACOES)
 
 
 def test_situacoes():
-    assert _sit(True, True, 2, HOJE - timedelta(days=100)) == "Publicado"
+    assert _sit(True, True, 2, HOJE - timedelta(days=100)) == "Publicado no prazo"
     assert _sit(True, True, 0, HOJE - timedelta(days=100)) == "Sem recurso"
     # Sem vínculo não há como confirmar o atraso
     assert _sit(prazo=HOJE - timedelta(days=1)) == "Prazo vencido"

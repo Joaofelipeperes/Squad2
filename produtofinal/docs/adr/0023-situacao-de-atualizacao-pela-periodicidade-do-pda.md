@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Aceita |
+| **Status** | Substituída por ADR-0037 |
 | **Tipo** | Negócio |
 | **Data da decisão** | 28/10/2026 |
 | **Data do registro** | 28/10/2026 |
@@ -72,3 +72,4 @@ Apresentar à Paloma (GEDA) na próxima reunião; ajustes viram revisões desta 
 | Data | Revisão | Autor |
 |---|---|---|
 | 28/10/2026 | Renumerada de ADR-0020 para ADR-0023 no merge com a `desenvolvimento` (a ADR-0020 de lá é a do Claude Haiku no Assistente; 0021 e 0022 também já existiam) | Humberto |
+| 13/11/2026 | Substituída pela [ADR-0037](0037-indicador-de-atualizacao-sobre-todas-as-bases-publicadas.md): a GEDA definiu que o indicador cobre todas as bases publicadas (do PDA ou espontâneas) e que a periodicidade vem só do campo "Atualização" do CKAN. Os prazos por periodicidade, a ausência de tolerância e o alerta a partir de 80% continuam valendo | Victor |
