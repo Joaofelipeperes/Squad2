@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/app/auth/AuthContext";
+import { TrocarSenhaModal } from "@/app/layout/TrocarSenhaModal";
 import type { AppModule } from "@/modules/types";
 import { SECOES } from "@/modules/types";
 
@@ -9,6 +11,7 @@ function iniciais(nome: string) {
 
 export function Sidebar({ modulos, aberta = false }: { modulos: AppModule[]; aberta?: boolean }) {
   const { usuario, sair } = useAuth();
+  const [trocandoSenha, setTrocandoSenha] = useState(false);
   return (
     <aside className={`sidebar${aberta ? " aberta" : ""}`} id="menu-lateral" aria-label="Menu principal">
       <div className="brand">
@@ -54,13 +57,18 @@ export function Sidebar({ modulos, aberta = false }: { modulos: AppModule[]; abe
               <div style={{ fontWeight: 600, color: "#e6eef5" }}>{usuario.nome}</div>
               <div>{usuario.papeis.map((p) => p.nome).join(", ") || "Sem papel"}</div>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={sair} aria-label="Sair"
+            <button className="btn btn-ghost btn-sm" onClick={() => setTrocandoSenha(true)}
+                    aria-label="Trocar senha" title="Trocar senha" style={{ color: "#c4d5e3" }}>
+              <i className="fa-solid fa-key" />
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={sair} aria-label="Sair" title="Sair"
                     style={{ color: "#c4d5e3" }}>
               <i className="fa-solid fa-right-from-bracket" />
             </button>
           </div>
         )}
       </div>
+      <TrocarSenhaModal aberto={trocandoSenha} onFechar={() => setTrocandoSenha(false)} />
     </aside>
   );
 }

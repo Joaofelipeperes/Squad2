@@ -1,9 +1,16 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.integrations.ai.base import FieldSpec
 from app.integrations.ai.policy import TarefaIA
+
+
+def _url_http(valor: str | None) -> str | None:
+    """URL do provedor: só http:// ou https:// (ADR-0036). Vazio = padrão do provedor."""
+    if valor and valor.strip() and not valor.strip().lower().startswith(("http://", "https://")):
+        raise ValueError("A URL deve começar com http:// ou https://.")
+    return valor
 
 
 class TipoProvedorOut(BaseModel):
@@ -33,6 +40,8 @@ class PerfilIn(BaseModel):
     # Não secretos; gravados em `extra`. Chave fora da lista do provedor é ignorada.
     extra: dict[str, str] = Field(default_factory=dict)
 
+    _url = field_validator("base_url")(_url_http)
+
 
 class PerfilOut(BaseModel):
     id: int
@@ -60,6 +69,8 @@ class TesteConexaoIn(BaseModel):
     api_key: str | None = None
     perfil_id: int | None = None  # se informado e api_key vazio, reaproveita a chave salva
     extra: dict[str, str] = Field(default_factory=dict)
+
+    _url = field_validator("base_url")(_url_http)
 
 
 class TesteConexaoOut(BaseModel):

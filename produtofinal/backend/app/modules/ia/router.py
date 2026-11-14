@@ -1,7 +1,7 @@
 """API da página Administração › Modelos de IA. Todas as rotas exigem ia.configurar."""
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.deps import DbSession, UsuarioAtual, require
 from app.core.permissoes import P
@@ -98,8 +98,8 @@ def vincular(tarefa: TarefaIA, body: VinculoIn, db: DbSession, user: Configurado
 
 
 @router.get("/uso", response_model=list[UsoOut])
-def uso(db: DbSession, limite: int = 50):
-    return service.listar_usos(db, min(limite, 500))
+def uso(db: DbSession, limite: int = Query(50, ge=1, le=500)):
+    return service.listar_usos(db, limite)
 
 
 @router.post("/playground", response_model=PlaygroundOut)

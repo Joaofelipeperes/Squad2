@@ -43,6 +43,8 @@ from app.modules.pda.regras import (
 from app.modules.relatorios import regras
 from app.modules.relatorios.dao import RelatoriosDao
 from app.modules.relatorios.schemas import (
+    CARACTERES_MAXIMO_PDF,
+    LINHAS_MAXIMO_PDF,
     OrgaoOpcaoOut,
     PreviaOut,
     RelatorioOrgaoOut,
@@ -478,6 +480,10 @@ def exportar_tabela(dados: TabelaExportarIn) -> tuple[bytes, str, str]:
     if dados.formato == "xlsx":
         conteudo = regras.gerar_xlsx(dados.titulo, dados.colunas, dados.linhas)
     else:
+        caracteres = sum(len(v) for linha in dados.linhas for v in linha if isinstance(v, str))
+        if len(dados.linhas) > LINHAS_MAXIMO_PDF or caracteres > CARACTERES_MAXIMO_PDF:
+            raise Invalido(f"Tabela grande demais para PDF (até {LINHAS_MAXIMO_PDF} linhas). "
+                           "Filtre a tela ou exporte em Excel.")
         conteudo = regras.gerar_pdf(dados.titulo, dados.colunas, dados.linhas,
                                     referencia=dados.filtros, gerado_em=_agora_local())
     return (conteudo, regras.MIME[dados.formato],

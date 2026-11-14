@@ -41,7 +41,8 @@ x-backend: &backend
     # Primeira subida (app/instalacao.py): só cria o que ainda não existe
     GDA_PAPEIS_INICIAIS: '["administrador","gerente_geda"]'
     GDA_ADMIN_INICIAL_EMAIL: ${GDA_ADMIN_INICIAL_EMAIL:-admin@cge.go.gov.br}
-    GDA_ADMIN_INICIAL_SENHA: ${GDA_ADMIN_INICIAL_SENHA:-12345}
+    # Vazia = senha aleatória, mostrada uma vez no log da API (docker compose logs api): ADR-0036
+    GDA_ADMIN_INICIAL_SENHA: ${GDA_ADMIN_INICIAL_SENHA:-}
     GDA_IA_LOCAL_URL: http://ollama:11434
     GDA_IA_LOCAL_MODELO_CHAT: ${GDA_OLLAMA_MODELO_CHAT:-qwen2.5:7b-instruct}
     GDA_IA_LOCAL_MODELO_EMBEDDINGS: ${GDA_OLLAMA_MODELO_EMBEDDINGS:-bge-m3}

@@ -17,7 +17,7 @@ from app.modules.inventario.dao import InventarioDao
 SERVIDOR = {
     "GDA_PAPEIS_INICIAIS": '["administrador","gerente_geda"]',
     "GDA_ADMIN_INICIAL_EMAIL": "admin@cge.go.gov.br",
-    "GDA_ADMIN_INICIAL_SENHA": "12345",
+    "GDA_ADMIN_INICIAL_SENHA": "Inicial-geda-2026",
     "GDA_IA_LOCAL_URL": "http://ollama:11434",
 }
 
@@ -51,7 +51,7 @@ def test_preparar_servidor_do_zero(config, banco_vazio):
         usuarios = acesso.listar_usuarios(db)
         assert [u.email for u in usuarios] == ["admin@cge.go.gov.br"]
         assert [p.codigo for p in usuarios[0].papeis] == ["administrador"]
-        assert acesso.autenticar(db, "admin@cge.go.gov.br", "12345") is not None
+        assert acesso.autenticar(db, "admin@cge.go.gov.br", "Inicial-geda-2026") is not None
 
         perfis = sorted(p.modelo for p in ia.listar_perfis(db))
         assert perfis == ["bge-m3", "qwen2.5:7b-instruct"]
@@ -124,3 +124,15 @@ def test_segredos_gerados_uma_unica_vez(tmp_path):
     assert len(antes["secret_key"].encode()) >= 32
     assert (tmp_path / "db_senha").stat().st_mode & 0o004  # o Postgres (outro usuário) lê
     assert not (tmp_path / "secret_key").stat().st_mode & 0o044
+
+
+@pytest.mark.parametrize("senha", ["", "12345"])
+def test_admin_inicial_sem_senha_forte_recebe_senha_aleatoria(config, banco_vazio, caplog, senha):
+    """ADR-0036: senha vazia ou fraca nunca vira a senha do administrador; a gerada sai no log."""
+    config(**{**SERVIDOR, "GDA_ADMIN_INICIAL_SENHA": senha})
+    with SessionLocal() as db, caplog.at_level(logging.WARNING):
+        assert acesso.semear_admin_inicial(db) is not None
+        assert acesso.autenticar(db, "admin@cge.go.gov.br", "12345") is None
+        gerada = caplog.text.split("primeiro acesso): ")[1].split()[0]
+        assert len(gerada) >= 20
+        assert acesso.autenticar(db, "admin@cge.go.gov.br", gerada) is not None

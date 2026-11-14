@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { urlSegura } from "@/shared/ui/url";
 import type { BaseVinculada, DatasetDetalhe, Recurso } from "./api";
 import { datasetsApi } from "./api";
 import { SituacaoPortalBadge, fmtDataHora } from "./formato";
@@ -178,8 +179,8 @@ function TabelaRecursos({ recursos, removidos }: { recursos: Recurso[]; removido
                       : r.created ? `${fmtDataHora(r.created)} (est.)` : "—"}
                   </td>
                   <td>
-                    {r.url && (
-                      <a href={r.url} target="_blank" rel="noopener noreferrer" title="Abrir o recurso">
+                    {urlSegura(r.url) && (
+                      <a href={urlSegura(r.url)!} target="_blank" rel="noopener noreferrer" title="Abrir o recurso">
                         <i className="fa-solid fa-arrow-up-right-from-square" />
                       </a>
                     )}

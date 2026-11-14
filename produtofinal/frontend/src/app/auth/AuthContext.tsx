@@ -12,6 +12,8 @@ interface AuthState {
   carregando: boolean;
   entrar: (email: string, senha: string) => Promise<void>;
   sair: () => void;
+  /** Troca a própria senha; as outras sessões caem e esta segue com o token novo. */
+  trocarSenha: (senhaAtual: string, senhaNova: string) => Promise<void>;
   recarregar: () => Promise<void>;
 }
 
@@ -47,13 +49,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const sair = useCallback(() => { tokenStore.clear(); setSessao(null); }, []);
 
+  const trocarSenha = useCallback(async (senhaAtual: string, senhaNova: string) => {
+    const r = await api.post<{ access_token: string; sessao: Sessao }>(
+      "/acesso/me/senha", { senha_atual: senhaAtual, senha_nova: senhaNova });
+    tokenStore.set(r.access_token);
+    setSessao(r.sessao);
+  }, []);
+
   const valor = useMemo<AuthState>(() => {
     const permissoes = new Set(sessao?.permissoes ?? []);
     return {
       usuario: sessao?.usuario ?? null, permissoes, pode: (p) => permissoes.has(p),
-      carregando, entrar, sair, recarregar,
+      carregando, entrar, sair, trocarSenha, recarregar,
     };
-  }, [sessao, carregando, entrar, sair, recarregar]);
+  }, [sessao, carregando, entrar, sair, trocarSenha, recarregar]);
 
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

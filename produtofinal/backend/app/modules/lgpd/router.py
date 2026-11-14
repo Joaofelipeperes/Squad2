@@ -4,7 +4,7 @@ Permissões (app/core/permissoes.py): lgpd.acessar para ler, lgpd.triar para dec
 lgpd.varrer para pedir varreduras, lgpd.aprovar_correcao para gerar a prévia, publicar no CKAN,
 descartar e reverter a anonimização (US26).
 """
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi import status as http
 from fastapi.responses import FileResponse
 
@@ -67,7 +67,7 @@ def decidir(achado_id: int, body: DecisaoIn, db: DbSession,
 
 @router.get("/varreduras", response_model=VarredurasOut)
 def varreduras(db: DbSession, user: UsuarioAtual = Depends(require(P.LGPD_ACESSAR)),
-               limite: int = 30):
+               limite: int = Query(30, ge=1, le=200)):
     return service.listar_varreduras(db, user, limite)
 
 
@@ -93,7 +93,7 @@ def pedir_varredura(body: PedidoVarreduraIn, db: DbSession,
 # ------------------------------------------------------------------ anonimização (US26)
 @router.get("/correcoes", response_model=CorrecoesOut)
 def listar_correcoes(db: DbSession, user: UsuarioAtual = Depends(require(P.LGPD_ACESSAR)),
-                     limite: int = 30):
+                     limite: int = Query(30, ge=1, le=200)):
     return correcoes.listar(db, user, limite)
 
 

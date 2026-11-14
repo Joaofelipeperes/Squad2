@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     secret_key: SecretStr = SecretStr("troque-esta-chave-em-producao-dev-0000")  # só vale em dev
     encryption_key: SecretStr | None = None  # chave Fernet para cifrar segredos (chaves de IA)
     jwt_expire_minutes: int = 480
+    # Bloqueio do login por tentativas (ADR-0036): com `login_max_falhas` senhas erradas seguidas
+    # para o mesmo e-mail dentro da janela, novas tentativas recebem 429 até a janela passar.
+    login_max_falhas: int = 10
+    login_janela_minutos: int = 15
+    # Documentação interativa da API (/api/v1/docs e openapi.json). Vazio = só em dev: no
+    # servidor ela entregaria o mapa completo da API a quem não tem login (ADR-0036).
+    api_docs: bool | None = None
+    # Maior corpo de requisição aceito pela API (o nginx também corta em 6 MB)
+    corpo_maximo_bytes: int = 6 * 1024 * 1024
 
     # CKAN — leitura pela API pública. Vazio = padrão do ambiente (ckan_padrao): portal oficial
     # em produção, CKAN local do Docker em homologação e dev.
@@ -108,9 +117,11 @@ class Settings(BaseSettings):
     papeis_iniciais: list[str] = []
     # Administrador criado quando o banco não tem nenhum usuário. A senha inicial é trocada pelo
     # próprio administrador no primeiro acesso (aviso no log enquanto não for).
+
     admin_inicial_email: str | None = None
     admin_inicial_nome: str = "Administrador"
-    admin_inicial_senha: SecretStr = SecretStr("12345")
+    # Vazio = senha aleatória, mostrada UMA vez no log da API na criação (ADR-0036)
+    admin_inicial_senha: SecretStr | None = None
     # Perfis de IA local criados quando ainda não há nenhum perfil de IA (Ollama do compose).
     # O modelo externo (chave de API, ex.: Assistente) fica para o administrador configurar.
     ia_local_url: str | None = None
@@ -118,6 +129,10 @@ class Settings(BaseSettings):
     ia_local_modelo_embeddings: str = "bge-m3"
     # Worker dispara a coleta do CKAN ao iniciar se nunca houve nenhuma (depois, só no cron)
     coleta_inicial: bool = False
+
+    @property
+    def docs_habilitadas(self) -> bool:
+        return self.environment == "dev" if self.api_docs is None else self.api_docs
 
     @model_validator(mode="after")
     def _ckan_do_ambiente(self) -> "Settings":

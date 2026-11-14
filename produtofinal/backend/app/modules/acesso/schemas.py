@@ -5,7 +5,14 @@ from pydantic import BaseModel, EmailStr, Field
 
 class LoginIn(BaseModel):
     email: EmailStr
-    senha: str
+    senha: str = Field(max_length=200)
+
+
+class TrocaSenhaIn(BaseModel):
+    """Troca da própria senha. A regra da senha nova é verificada no service."""
+
+    senha_atual: str = Field(max_length=200)
+    senha_nova: str = Field(min_length=8, max_length=200)
 
 
 class PapelResumo(BaseModel):
@@ -46,7 +53,8 @@ class TokenOut(BaseModel):
 class UsuarioIn(BaseModel):
     email: EmailStr
     nome: str = Field(min_length=2, max_length=200)
-    senha: str | None = Field(None, min_length=8)  # obrigatória na criação; opcional na edição
+    # obrigatória na criação; opcional na edição
+    senha: str | None = Field(None, min_length=8, max_length=200)
     ativo: bool = True
     orgao_id: int | None = None  # organizacao.id
     papel_ids: list[int] = Field(default_factory=list)

@@ -13,8 +13,12 @@ from typing import Any
 import httpx
 
 from app.core.config import get_settings
+from app.core.rede import UrlNaoPermitida, exigir_url_externa
 
 log = logging.getLogger(__name__)
+
+
+REDIRECIONAMENTOS_MAXIMO = 5  # ao baixar o arquivo de um recurso
 
 
 class CkanError(RuntimeError):
@@ -263,13 +267,32 @@ class CkanClient:
         raise AssertionError("inalcançável")
 
     def _baixar_uma_vez(self, url: str, limite_bytes: int) -> bytes:
+        """Segue os redirecionamentos à mão (até `REDIRECIONAMENTOS_MAXIMO`), conferindo cada
+        endereço: link de recurso vem de fora e não pode levar à rede interna (ADR-0036). O
+        próprio CKAN em uso é confiável, mesmo sendo interno (CKAN local do Docker)."""
+        confiaveis = [httpx.URL(self.base_url).host]
+        for _ in range(REDIRECIONAMENTOS_MAXIMO + 1):
+            try:
+                exigir_url_externa(url, confiaveis)
+            except UrlNaoPermitida as exc:
+                raise CkanError(f"{exc} ({url})") from exc
+            conteudo, destino = self._baixar_sem_redirecionar(url, limite_bytes)
+            if destino is None:
+                return conteudo
+            url = destino
+        raise CkanError(f"Redirecionamentos demais ao baixar {url}")
+
+    def _baixar_sem_redirecionar(self, url: str, limite_bytes: int) -> tuple[bytes, str | None]:
+        """(conteúdo, None) ou, se o servidor redirecionou, (b"", novo endereço)."""
         partes, total = [], 0
         # Sem o token da auditoria: a URL pode ser um link externo ao portal.
         headers = {k: v for k, v in self._http.headers.items() if k.lower() != "authorization"}
         try:
             with httpx.Client(transport=self._transport, timeout=self._http.timeout,
-                              follow_redirects=True, headers=headers) as http, \
+                              follow_redirects=False, headers=headers) as http, \
                     http.stream("GET", url) as resp:
+                if resp.is_redirect and resp.headers.get("location"):
+                    return b"", str(resp.url.join(resp.headers["location"]))
                 if resp.status_code == 429:
                     raise CkanLimiteDeRequisicoes(
                         f"HTTP 429 ao baixar {url}", _segundos(resp.headers.get("Retry-After")))
@@ -282,4 +305,4 @@ class CkanClient:
                     partes.append(pedaco)
         except httpx.HTTPError as exc:
             raise CkanError(f"Falha ao baixar {url}: {exc}") from exc
-        return b"".join(partes)
+        return b"".join(partes), None

@@ -7,7 +7,7 @@
 | **User stories** | US14 (PBI-43 a PBI-45, PBI-85), US29 (PBI-69, PBI-70) |
 | **Backend** | `backend/app/modules/rastreabilidade/` |
 | **Frontend** | `frontend/src/modules/rastreabilidade/` |
-| **Última atualização** | 05/11/2026 |
+| **Última atualização** | 12/11/2026 |
 
 ## Propósito
 Registra inclusões, alterações, privações e exclusões de datasets, recursos e do cadastro dos
@@ -278,3 +278,4 @@ Decisões registradas: [ADR-0009](../adr/0009-fonte-da-rastreabilidade.md) (Acei
 | 29/10/2026 | Merge de `desenvolvimento`: banco só pelo `RastreabilidadeDao` (ADR-0019); `id` próprio, exclusão lógica e auditoria nas três tabelas; IDs do CKAN em `dataset_id_ckan`, `organizacao_id_ckan` e `recurso_id_ckan` (ADR-0018); `?orgao=` e escopo pelo `id` do órgão; migração `e7a4c2f9b315` (une as duas linhas do Alembic) | Victor |
 | 05/11/2026 | Linha do tempo paginada no banco (ADR-0028): `GET /eventos` troca `limite` por `pagina` e `por_pagina` (50 por padrão, até 999) e devolve `pagina`/`por_pagina`; rodapé com o total e itens por página. A tela consulta de novo sozinha enquanto a sincronização pós-coleta não termina e a API não fica em cache do navegador — dados novos sem limpar o cache (ADR-0029) | Victor |
 | 05/11/2026 | **Histórico recente** nos detalhes de dataset (Datasets, Atualizações) e de órgão (Organizações): componente `HistoricoRecente.tsx` com os 5 eventos mais recentes (`rastreabilidadeApi.recentes`, rota existente `GET /eventos?dataset=`/`?orgao=`) e atalho para a tela filtrada; a tela aceita `?busca=` e `?orgao=` na URL; teste dos filtros `dataset` e `orgao` com `por_pagina` | Humberto |
+| 12/11/2026 | Segurança (ADR-0036): o CSV do diff neutraliza valores que o Excel leria como fórmula (`core/exportacao.py::sem_formula`) | Victor |
